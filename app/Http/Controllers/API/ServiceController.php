@@ -8,12 +8,26 @@ use App\Models\Entreprise;
 use App\Models\Domaine;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
-class ServiceController extends Controller
-{
-    public function index()
-    {
-        return Service::with('entreprise', 'domaine')->get();
+
+class ServiceController extends Controller{
+    public function index(){
+    
+        $user = Auth::user();
+
+        // Vérifier si l'utilisateur a une entreprise et qu'elle est validée
+        if (!$user->entreprise || $user->entreprise->status !== 'valider') {
+            return response()->json(['message' => 'Votre entreprise doit être validée pour accéder aux services.'], 403);
+        }
+
+        // Récupérer les services de l'entreprise
+        $services = Service::with('entreprise', 'domaine')
+            ->where('entreprise_id', $user->entreprise->id)
+            ->get();
+
+        return response()->json($services);
+
     }
 
     public function store(Request $request){
