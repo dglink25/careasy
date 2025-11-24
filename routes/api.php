@@ -19,7 +19,8 @@ Route::get('entreprises', [EntrepriseController::class, 'index']);
 Route::get('entreprises/{id}', [EntrepriseController::class, 'show']);
 Route::post('entreprises', [EntrepriseController::class, 'store'])->middleware('auth:sanctum');
 
-
-Route::get('services', [ServiceController::class, 'index']);
-Route::get('services/{id}', [ServiceController::class, 'show']);
-Route::post('services', [ServiceController::class, 'store'])->middleware('auth:sanctum');
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/service', [ServiceController::class, 'store']);
+    Route::get('/service', [ServiceController::class, 'index']);
+    Route::get('/service/{id}', [ServiceController::class, 'show']);
+});

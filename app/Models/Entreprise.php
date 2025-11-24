@@ -10,7 +10,7 @@ class Entreprise extends Model{
 
     protected $fillable = [
         'name',
-        'id_prestataire',
+        'prestataire_id',
         'ifu_number',
         'ifu_file',
         'rccm_number',
@@ -22,7 +22,8 @@ class Entreprise extends Model{
         'logo',
         'certificate_number',
         'certificate_file',
-        'image_boutique'
+        'image_boutique',
+        'status'
     ];
 
     public function prestataire(){
@@ -36,4 +37,5 @@ class Entreprise extends Model{
     public function services(){
         return $this->hasMany(Service::class);
     }
+    
 }

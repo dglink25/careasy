@@ -20,6 +20,10 @@ class Service extends Model{
         'medias',
         'is_open_24h'
     ];
+    protected $casts = [
+        'medias' => 'array',
+        'is_open_24h' => 'boolean',
+    ];
 
     public function entreprise(){
         return $this->belongsTo(Entreprise::class);

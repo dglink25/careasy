@@ -20,7 +20,7 @@ class EntrepriseController extends Controller{
     public function store(Request $request){
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'id_prestataire' => 'required|exists:users,id',
+            'prestataire_id' => 'required|exists:users,id',
             'domaine_ids' => 'required|array',
             'domaine_ids.*' => 'exists:domaines,id',
             'ifu_number' => 'nullable|string',

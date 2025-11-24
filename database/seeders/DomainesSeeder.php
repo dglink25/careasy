@@ -1,4 +1,5 @@
 <?php
+
 // database/seeders/DomainesSeeder.php
 namespace Database\Seeders;
 
@@ -41,4 +42,3 @@ class DomainesSeeder extends Seeder
         }
     }
 }
-
