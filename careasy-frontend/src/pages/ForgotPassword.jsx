@@ -1,32 +1,34 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom';
+import api from '../api/axios';
 import Logo from '../components/Logo';
 import theme from '../config/theme';
 
-export default function Login() {
+export default function ForgotPassword() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const { login } = useAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
 
-    const result = await login(email, password);
-    
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.message);
+    try {
+      const response = await api.post('/forgot-password', { email });
+      setSuccess(response.data.status || 'Un email de réinitialisation a été envoyé avec succès !');
+      setEmail('');
+    } catch (err) {
+      setError(
+        err.response?.data?.message || 
+        err.response?.data?.errors?.email?.[0] ||
+        'Une erreur est survenue. Vérifiez votre adresse email.'
+      );
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
@@ -37,12 +39,25 @@ export default function Login() {
           <Logo size="lg" showText={true} />
         </div>
 
-        <h2 style={styles.title}>Connexion</h2>
-        <p style={styles.subtitle}>Accédez à votre compte CarEasy</p>
-        
+        <h2 style={styles.title}>Mot de passe oublié ?</h2>
+        <p style={styles.subtitle}>
+          Pas de souci ! Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.
+        </p>
+
         {error && (
           <div style={styles.error}>
             ⚠️ {error}
+          </div>
+        )}
+
+        {success && (
+          <div style={styles.success}>
+            <div style={styles.successIcon}>✅</div>
+            <div>
+              <p style={styles.successTitle}>Email envoyé !</p>
+              <p style={styles.successText}>{success}</p>
+              <p style={styles.successHint}>Vérifiez votre boîte de réception et vos spams.</p>
+            </div>
           </div>
         )}
 
@@ -59,37 +74,28 @@ export default function Login() {
             />
           </div>
 
-          <div style={styles.formGroup}>
-            <div style={styles.labelRow}>
-              <label style={styles.label}>Mot de passe</label>
-              <Link to="/forgot-password" style={styles.forgotLink}>
-                Mot de passe oublié ?
-              </Link>
-            </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={styles.input}
-              placeholder="••••••••"
-            />
-          </div>
-
           <button 
             type="submit" 
             disabled={loading}
             style={{...styles.button, opacity: loading ? 0.6 : 1}}
           >
-            {loading ? 'Connexion...' : 'Se connecter'}
+            {loading ? 'Envoi en cours...' : 'Envoyer le lien de réinitialisation'}
           </button>
         </form>
 
+        <div style={styles.divider} />
+
         <div style={styles.footer}>
-          <span style={styles.footerText}>Pas encore de compte ?</span>
-          <Link to="/register" style={styles.link}>
-            Créer un compte
+          <Link to="/login" style={styles.backLink}>
+            ← Retour à la connexion
           </Link>
+        </div>
+
+        <div style={styles.helpBox}>
+          <p style={styles.helpTitle}>💡 Besoin d'aide ?</p>
+          <p style={styles.helpText}>
+            Si vous ne recevez pas l'email dans les 5 minutes, vérifiez vos spams ou contactez le support.
+          </p>
         </div>
       </div>
     </div>
@@ -103,7 +109,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.background,
-    padding: '1rem',
+    padding: '2rem 1rem',
   },
   card: {
     backgroundColor: theme.colors.secondary,
@@ -111,7 +117,7 @@ const styles = {
     borderRadius: theme.borderRadius.xl,
     boxShadow: theme.shadows.xl,
     width: '100%',
-    maxWidth: '450px',
+    maxWidth: '500px',
     border: `2px solid ${theme.colors.primaryLight}`,
   },
   logoContainer: {
@@ -122,7 +128,7 @@ const styles = {
   title: {
     fontSize: '2rem',
     fontWeight: 'bold',
-    marginBottom: '0.5rem',
+    marginBottom: '0.75rem',
     textAlign: 'center',
     color: theme.colors.text.primary,
   },
@@ -131,6 +137,7 @@ const styles = {
     textAlign: 'center',
     marginBottom: '1.5rem',
     fontSize: '0.95rem',
+    lineHeight: '1.5',
   },
   error: {
     backgroundColor: theme.colors.primaryLight,
@@ -139,6 +146,36 @@ const styles = {
     borderRadius: theme.borderRadius.md,
     marginBottom: '1rem',
     border: `1px solid ${theme.colors.error}`,
+    fontSize: '0.95rem',
+  },
+  success: {
+    backgroundColor: '#D1FAE5',
+    border: `2px solid ${theme.colors.success}`,
+    borderRadius: theme.borderRadius.md,
+    padding: '1rem',
+    marginBottom: '1.5rem',
+    display: 'flex',
+    gap: '1rem',
+    alignItems: 'flex-start',
+  },
+  successIcon: {
+    fontSize: '1.5rem',
+    flexShrink: 0,
+  },
+  successTitle: {
+    fontWeight: 'bold',
+    color: theme.colors.success,
+    marginBottom: '0.25rem',
+  },
+  successText: {
+    color: theme.colors.text.primary,
+    marginBottom: '0.5rem',
+    fontSize: '0.95rem',
+  },
+  successHint: {
+    color: theme.colors.text.secondary,
+    fontSize: '0.85rem',
+    fontStyle: 'italic',
   },
   form: {
     display: 'flex',
@@ -149,11 +186,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.5rem',
-  },
-  labelRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   label: {
     fontWeight: '600',
@@ -177,30 +209,42 @@ const styles = {
     fontSize: '1rem',
     fontWeight: '600',
     cursor: 'pointer',
-    marginTop: '0.5rem',
     transition: 'all 0.3s',
     boxShadow: theme.shadows.md,
   },
+  divider: {
+    height: '1px',
+    backgroundColor: theme.colors.primaryLight,
+    margin: '1.5rem 0',
+  },
   footer: {
-    marginTop: '1.5rem',
     textAlign: 'center',
-    display: 'flex',
-    gap: '0.5rem',
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: '1rem',
   },
-  footerText: {
-    color: theme.colors.text.secondary,
-  },
-  link: {
+  backLink: {
     color: theme.colors.primary,
     textDecoration: 'none',
     fontWeight: '600',
+    fontSize: '0.95rem',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.25rem',
   },
-  forgotLink: {
-    color: theme.colors.primary,
-    textDecoration: 'none',
-    fontSize: '0.875rem',
-    fontWeight: '500',
+  helpBox: {
+    backgroundColor: theme.colors.background,
+    padding: '1rem',
+    borderRadius: theme.borderRadius.md,
+    border: `1px solid ${theme.colors.primaryLight}`,
+  },
+  helpTitle: {
+    fontWeight: '600',
+    color: theme.colors.text.primary,
+    marginBottom: '0.5rem',
+    fontSize: '0.95rem',
+  },
+  helpText: {
+    color: theme.colors.text.secondary,
+    fontSize: '0.85rem',
+    lineHeight: '1.5',
   },
 };
