@@ -1,5 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Logo from './Logo';
+import theme from '../config/theme';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -13,29 +15,33 @@ export default function Navbar() {
   return (
     <nav style={styles.nav}>
       <div style={styles.container}>
-        <Link to="/" style={styles.logo}>
-          CareEasy
-        </Link>
+        {/* Logo CarEasy */}
+        <Logo size="md" showText={true} />
         
         <div style={styles.menu}>
           {user ? (
             <>
               <Link to="/dashboard" style={styles.link}>
-                Dashboard
+                Tableau de bord
               </Link>
-              <span style={styles.userName}>
-                Bonjour, {user.name}
-              </span>
-              <button onClick={handleLogout} style={styles.button}>
+              <div style={styles.userInfo}>
+                <span style={styles.userName}>
+                  👤 {user.name}
+                </span>
+              </div>
+              <button onClick={handleLogout} style={styles.buttonLogout}>
                 Déconnexion
               </button>
             </>
           ) : (
             <>
-              <Link to="/login" style={styles.link}>
+              <Link to="/" style={styles.link}>
+                Accueil
+              </Link>
+              <Link to="/login" style={styles.buttonSecondary}>
                 Connexion
               </Link>
-              <Link to="/register" style={styles.button}>
+              <Link to="/register" style={styles.buttonPrimary}>
                 Inscription
               </Link>
             </>
@@ -48,9 +54,10 @@ export default function Navbar() {
 
 const styles = {
   nav: {
-    backgroundColor: '#2563eb',
+    backgroundColor: theme.colors.secondary,
     padding: '1rem 0',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    boxShadow: theme.shadows.md,
+    borderBottom: `3px solid ${theme.colors.primary}`,
   },
   container: {
     maxWidth: '1200px',
@@ -60,33 +67,59 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  logo: {
-    color: 'white',
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
-    textDecoration: 'none',
-  },
   menu: {
     display: 'flex',
     gap: '1rem',
     alignItems: 'center',
   },
   link: {
-    color: 'white',
+    color: theme.colors.text.primary,
     textDecoration: 'none',
     padding: '0.5rem 1rem',
+    fontWeight: '500',
+    transition: 'color 0.3s',
+  },
+  userInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
   },
   userName: {
-    color: 'white',
+    color: theme.colors.text.primary,
+    fontWeight: '500',
   },
-  button: {
-    backgroundColor: 'white',
-    color: '#2563eb',
+  buttonPrimary: {
+    backgroundColor: theme.colors.primary,
+    color: theme.colors.text.white,
     border: 'none',
-    padding: '0.5rem 1rem',
-    borderRadius: '0.375rem',
+    padding: '0.625rem 1.5rem',
+    borderRadius: theme.borderRadius.md,
     cursor: 'pointer',
     textDecoration: 'none',
     display: 'inline-block',
+    fontWeight: '600',
+    transition: 'all 0.3s',
+  },
+  buttonSecondary: {
+    backgroundColor: 'transparent',
+    color: theme.colors.primary,
+    border: `2px solid ${theme.colors.primary}`,
+    padding: '0.5rem 1.5rem',
+    borderRadius: theme.borderRadius.md,
+    cursor: 'pointer',
+    textDecoration: 'none',
+    display: 'inline-block',
+    fontWeight: '600',
+    transition: 'all 0.3s',
+  },
+  buttonLogout: {
+    backgroundColor: theme.colors.text.primary,
+    color: theme.colors.text.white,
+    border: 'none',
+    padding: '0.625rem 1.5rem',
+    borderRadius: theme.borderRadius.md,
+    cursor: 'pointer',
+    fontWeight: '600',
+    transition: 'all 0.3s',
   },
 };
