@@ -13,10 +13,12 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     const token = localStorage.getItem('token');
-    if (token) {
+    const savedUser = localStorage.getItem('user');
+    
+    if (token && savedUser) {
       try {
-        const response = await api.get('/user');
-        setUser(response.data);
+        // ⚠️ Utilise les données sauvegardées au lieu d'appeler /user
+        setUser(JSON.parse(savedUser));
       } catch (error) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
