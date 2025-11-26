@@ -26,9 +26,10 @@ class RegisteredUserController extends Controller
         ]);
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->string('password')),
+            'name'      => $request->name,
+            'email'     => $request->email,
+            'password'  => Hash::make($request->string('password')),
+            'role'      => 'prestataire',
         ]);
 
         $token = $user->createToken('api_token')->plainTextToken;
@@ -38,9 +39,9 @@ class RegisteredUserController extends Controller
         Auth::login($user);
 
         return response()->json([
-            'message' => 'User registered successfully',
-            'user' => $user,
-            'token' => $token,
+            'message'   => 'User registered successfully',
+            'user'      => $user,
+            'token'     => $token,
         ], 201);
 
     }
