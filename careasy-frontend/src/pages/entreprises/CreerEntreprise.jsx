@@ -116,7 +116,7 @@ export default function CreerEntreprise() {
 
       await entrepriseApi.createEntreprise(submitData);
       
-      setSuccess('✅ Entreprise créée avec succès ! Redirection en cours...');
+      setSuccess(' Entreprise créée avec succès ! Redirection en cours...');
       setTimeout(() => {
         navigate('/mes-entreprises');
       }, 2000);
@@ -162,7 +162,7 @@ export default function CreerEntreprise() {
         {/* Messages */}
         {error && (
           <div style={styles.error}>
-            ⚠️ {error}
+             {error}
           </div>
         )}
 
@@ -176,7 +176,7 @@ export default function CreerEntreprise() {
         <form onSubmit={handleSubmit} style={styles.form}>
           {/* Section 1: Informations générales */}
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>📋 Informations générales</h2>
+            <h2 style={styles.sectionTitle}> Informations générales</h2>
             
             <div style={styles.formGroup}>
               <label style={styles.label}>
@@ -273,7 +273,7 @@ export default function CreerEntreprise() {
 
           {/* Section 3: Dirigeant */}
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>👤 Informations du dirigeant</h2>
+            <h2 style={styles.sectionTitle}> Informations du dirigeant</h2>
             
             <div style={styles.formRow}>
               <div style={styles.formGroup}>
@@ -385,7 +385,7 @@ export default function CreerEntreprise() {
 
         {/* Info box */}
         <div style={styles.infoBox}>
-          <div style={styles.infoIcon}>💡</div>
+          <div style={styles.infoIcon}></div>
           <div>
             <h3 style={styles.infoTitle}>À savoir</h3>
             <p style={styles.infoText}>
