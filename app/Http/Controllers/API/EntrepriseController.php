@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
 class EntrepriseController extends Controller{
-    // Retourne les données du formulaire
     
     public function getFormData(){
         return response()->json([
