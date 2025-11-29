@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
     
     if (token && savedUser) {
       try {
-        // ⚠️ Utilise les données sauvegardées au lieu d'appeler /user
+        //  Utilise les données sauvegardées au lieu d'appeler /user
         setUser(JSON.parse(savedUser));
       } catch (error) {
         localStorage.removeItem('token');

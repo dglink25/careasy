@@ -30,9 +30,9 @@ export default function MesEntreprises() {
 
   const getStatusBadge = (status) => {
     const badges = {
-      pending: { emoji: '🟡', text: 'En attente', color: theme.colors.warning },
-      validated: { emoji: '✅', text: 'Validée', color: theme.colors.success },
-      rejected: { emoji: '❌', text: 'Rejetée', color: theme.colors.error },
+      pending: { emoji: '', text: 'En attente', color: theme.colors.warning },
+      validated: { emoji: '', text: 'Validée', color: theme.colors.success },
+      rejected: { emoji: '', text: 'Rejetée', color: theme.colors.error },
     };
     const badge = badges[status] || badges.pending;
     
@@ -85,7 +85,7 @@ export default function MesEntreprises() {
         {/* Statistiques */}
         <div style={styles.statsGrid}>
           <div style={styles.statCard}>
-            <div style={styles.statIcon}>🏢</div>
+            <div style={styles.statIcon}></div>
             <div>
               <div style={styles.statNumber}>{stats.total}</div>
               <div style={styles.statLabel}>Total</div>
@@ -93,7 +93,7 @@ export default function MesEntreprises() {
           </div>
           
           <div style={{...styles.statCard, borderColor: theme.colors.warning}}>
-            <div style={styles.statIcon}>🟡</div>
+            <div style={styles.statIcon}></div>
             <div>
               <div style={{...styles.statNumber, color: theme.colors.warning}}>{stats.pending}</div>
               <div style={styles.statLabel}>En attente</div>
@@ -101,7 +101,7 @@ export default function MesEntreprises() {
           </div>
           
           <div style={{...styles.statCard, borderColor: theme.colors.success}}>
-            <div style={styles.statIcon}>✅</div>
+            <div style={styles.statIcon}></div>
             <div>
               <div style={{...styles.statNumber, color: theme.colors.success}}>{stats.validated}</div>
               <div style={styles.statLabel}>Validées</div>
@@ -109,7 +109,7 @@ export default function MesEntreprises() {
           </div>
           
           <div style={{...styles.statCard, borderColor: theme.colors.error}}>
-            <div style={styles.statIcon}>❌</div>
+            <div style={styles.statIcon}></div>
             <div>
               <div style={{...styles.statNumber, color: theme.colors.error}}>{stats.rejected}</div>
               <div style={styles.statLabel}>Rejetées</div>
@@ -167,7 +167,7 @@ export default function MesEntreprises() {
         {/* Liste des entreprises */}
         {filteredEntreprises.length === 0 ? (
           <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>🏢</div>
+            <div style={styles.emptyIcon}></div>
             <h3 style={styles.emptyTitle}>Aucune entreprise trouvée</h3>
             <p style={styles.emptyText}>
               {filter === 'all' 
@@ -199,7 +199,7 @@ export default function MesEntreprises() {
                       style={styles.logo}
                     />
                   ) : (
-                    <div style={styles.logoPlaceholder}>🏢</div>
+                    <div style={styles.logoPlaceholder}></div>
                   )}
                   {getStatusBadge(entreprise.status)}
                 </div>
@@ -209,12 +209,12 @@ export default function MesEntreprises() {
                   <h3 style={styles.cardTitle}>{entreprise.name}</h3>
                   
                   <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>👤 PDG:</span>
+                    <span style={styles.infoLabel}> PDG:</span>
                     <span style={styles.infoValue}>{entreprise.pdg_full_name}</span>
                   </div>
 
                   <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>🏷️ IFU:</span>
+                    <span style={styles.infoLabel}> IFU:</span>
                     <span style={styles.infoValue}>{entreprise.ifu_number}</span>
                   </div>
 
@@ -237,7 +237,7 @@ export default function MesEntreprises() {
                 {/* Footer */}
                 <div style={styles.cardFooter}>
                   <span style={styles.date}>
-                    📅 Créée le {new Date(entreprise.created_at).toLocaleDateString('fr-FR')}
+                     Créée le {new Date(entreprise.created_at).toLocaleDateString('fr-FR')}
                   </span>
                   <span style={styles.viewLink}>Voir détails →</span>
                 </div>
