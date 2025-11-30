@@ -74,6 +74,18 @@ class EntrepriseController extends Controller{
                 $data['image_boutique'] = $request->file('image_boutique')->store('uploads/boutiques', 'public');
             }
 
+            if ($request->hasFile('ifu_file')) {
+                $data['ifu_file'] = $request->file('ifu_file')->store('uploads/logos', 'public');
+            }
+
+            if ($request->hasFile('rccm_file')) {
+                $data['rccm_file'] = $request->file('rccm_file')->store('uploads/logos', 'public');
+            }
+
+            if ($request->hasFile('certificate_file')) {
+                $data['certificate_file'] = $request->file('certificate_file')->store('uploads/logos', 'public');
+            }
+
             $entreprise = Entreprise::create($data);
             $entreprise->domaines()->sync($request->domaine_ids);
 
@@ -84,7 +96,8 @@ class EntrepriseController extends Controller{
                 'entreprise' => $entreprise
             ], 201);
 
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             DB::rollBack();
 
             return response()->json([
