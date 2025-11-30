@@ -20,7 +20,8 @@ export default function MesEntreprises() {
       const data = await entrepriseApi.getMesEntreprises();
       setEntreprises(data);
       setError('');
-    } catch (err) {
+    } 
+    catch (err) {
       setError('Erreur lors du chargement des entreprises');
       console.error(err);
     } finally {
@@ -78,7 +79,7 @@ export default function MesEntreprises() {
             </p>
           </div>
           <Link to="/entreprises/creer" style={styles.createButton}>
-            ➕ Créer une entreprise
+            Créer une entreprise
           </Link>
         </div>
 
@@ -177,7 +178,7 @@ export default function MesEntreprises() {
             </p>
             {filter === 'all' && (
               <Link to="/entreprises/creer" style={styles.emptyButton}>
-                ➕ Créer ma première entreprise
+                Créer ma première entreprise
               </Link>
             )}
           </div>
