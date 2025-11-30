@@ -27,7 +27,7 @@ class Entreprise extends Model{
     ];
 
     public function prestataire(){
-        return $this->belongsTo(User::class, 'id_prestataire');
+        return $this->belongsTo(User::class, 'prestataire_id');
     }
 
     public function domaines(){

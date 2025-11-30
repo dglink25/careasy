@@ -4,23 +4,34 @@ import { useNavigate, Link } from 'react-router-dom';
 import { entrepriseApi } from '../../api/entrepriseApi';
 import theme from '../../config/theme';
 
+const STEPS = [
+  { id: 1, title: 'Informations générales', icon: '📋' },
+  { id: 2, title: 'Documents légaux', icon: '📄' },
+  { id: 3, title: 'Dirigeant', icon: '👤' },
+  { id: 4, title: 'Localisation & Médias', icon: '📍' },
+  { id: 5, title: 'Résumé', icon: '✅' }
+];
+
 export default function CreerEntreprise() {
   const navigate = useNavigate();
+  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [domaines, setDomaines] = useState([]);
-  const [loadingDomaines, setLoadingDomaines] = useState(true);
 
   const [formData, setFormData] = useState({
     name: '',
     domaine_ids: [],
     ifu_number: '',
+    ifu_file: null,
     rccm_number: '',
+    rccm_file: null,
+    certificate_number: '',
+    certificate_file: null,
     pdg_full_name: '',
     pdg_full_profession: '',
+    role_user: '',
     siege: '',
-    certificate_number: '',
     logo: null,
     image_boutique: null,
   });
@@ -28,6 +39,9 @@ export default function CreerEntreprise() {
   const [previews, setPreviews] = useState({
     logo: null,
     image_boutique: null,
+    ifu_file: null,
+    rccm_file: null,
+    certificate_file: null,
   });
 
   useEffect(() => {
@@ -36,14 +50,10 @@ export default function CreerEntreprise() {
 
   const fetchDomaines = async () => {
     try {
-      setLoadingDomaines(true);
       const data = await entrepriseApi.getFormData();
       setDomaines(data.domaines || []);
     } catch (err) {
-      console.error('Erreur chargement domaines:', err);
       setError('Erreur lors du chargement des domaines');
-    } finally {
-      setLoadingDomaines(false);
     }
   };
 
@@ -69,7 +79,6 @@ export default function CreerEntreprise() {
     if (file) {
       setFormData(prev => ({ ...prev, [field]: file }));
       
-      // Créer preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviews(prev => ({ ...prev, [field]: reader.result }));
@@ -78,105 +87,125 @@ export default function CreerEntreprise() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const validateStep = () => {
     setError('');
-    setSuccess('');
-
-    // Validation
-    if (formData.domaine_ids.length === 0) {
-      setError('Veuillez sélectionner au moins un domaine');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
+    
+    switch (currentStep) {
+      case 1:
+        if (!formData.name.trim()) {
+          setError('Le nom de l\'entreprise est obligatoire');
+          return false;
+        }
+        if (formData.domaine_ids.length === 0) {
+          setError('Sélectionnez au moins un domaine');
+          return false;
+        }
+        break;
+      
+      case 2:
+        if (!formData.ifu_number.trim()) {
+          setError('Le numéro IFU est obligatoire');
+          return false;
+        }
+        if (!formData.ifu_file) {
+          setError('Le fichier IFU est obligatoire');
+          return false;
+        }
+        if (!formData.rccm_number.trim()) {
+          setError('Le numéro RCCM est obligatoire');
+          return false;
+        }
+        if (!formData.rccm_file) {
+          setError('Le fichier RCCM est obligatoire');
+          return false;
+        }
+        if (!formData.certificate_number.trim()) {
+          setError('Le numéro de certificat est obligatoire');
+          return false;
+        }
+        if (!formData.certificate_file) {
+          setError('Le fichier certificat est obligatoire');
+          return false;
+        }
+        break;
+      
+      case 3:
+        if (!formData.pdg_full_name.trim()) {
+          setError('Le nom du dirigeant est obligatoire');
+          return false;
+        }
+        if (!formData.pdg_full_profession.trim()) {
+          setError('La profession du dirigeant est obligatoire');
+          return false;
+        }
+        if (!formData.role_user.trim()) {
+          setError('Le rôle dans l\'entreprise est obligatoire');
+          return false;
+        }
+        break;
+      
+      case 4:
+        // Optionnel, pas de validation
+        break;
     }
+    
+    return true;
+  };
 
+  const nextStep = () => {
+    if (validateStep()) {
+      setCurrentStep(prev => Math.min(prev + 1, 5));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const prevStep = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSubmit = async () => {
     setLoading(true);
+    setError('');
 
     try {
       const submitData = new FormData();
       
-      // Ajouter tous les champs texte
+      // Texte
       Object.keys(formData).forEach(key => {
         if (key === 'domaine_ids') {
-          formData[key].forEach(id => {
-            submitData.append('domaine_ids[]', id);
-          });
-        } else if (key !== 'logo' && key !== 'image_boutique') {
+          formData[key].forEach(id => submitData.append('domaine_ids[]', id));
+        } else if (!['logo', 'image_boutique', 'ifu_file', 'rccm_file', 'certificate_file'].includes(key)) {
           submitData.append(key, formData[key]);
         }
       });
 
-      // Ajouter les fichiers
-      if (formData.logo) {
-        submitData.append('logo', formData.logo);
-      }
-      if (formData.image_boutique) {
-        submitData.append('image_boutique', formData.image_boutique);
-      }
+      // Fichiers
+      if (formData.logo) submitData.append('logo', formData.logo);
+      if (formData.image_boutique) submitData.append('image_boutique', formData.image_boutique);
+      if (formData.ifu_file) submitData.append('ifu_file', formData.ifu_file);
+      if (formData.rccm_file) submitData.append('rccm_file', formData.rccm_file);
+      if (formData.certificate_file) submitData.append('certificate_file', formData.certificate_file);
 
       await entrepriseApi.createEntreprise(submitData);
       
-      setSuccess(' Entreprise créée avec succès ! Redirection en cours...');
-      setTimeout(() => {
-        navigate('/mes-entreprises');
-      }, 2000);
+      alert('✅ Entreprise créée avec succès !');
+      navigate('/mes-entreprises');
       
     } catch (err) {
-      console.error('Erreur création:', err);
-      setError(
-        err.response?.data?.message || 
-        'Erreur lors de la création de l\'entreprise'
-      );
+      setError(err.response?.data?.message || 'Erreur lors de la création');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
     }
   };
 
-  if (loadingDomaines) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner}></div>
-          <p style={styles.loadingText}>Chargement du formulaire...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={styles.container}>
-      <div style={styles.content}>
-        {/* Header */}
-        <div style={styles.header}>
-          <Link to="/mes-entreprises" style={styles.backButton}>
-            ← Retour
-          </Link>
-          <h1 style={styles.title}>Créer une entreprise</h1>
-          <p style={styles.subtitle}>
-            Remplissez le formulaire pour créer votre entreprise. 
-            Elle sera soumise à validation par l'administration.
-          </p>
-        </div>
-
-        {/* Messages */}
-        {error && (
-          <div style={styles.error}>
-             {error}
-          </div>
-        )}
-
-        {success && (
-          <div style={styles.success}>
-            {success}
-          </div>
-        )}
-
-        {/* Formulaire */}
-        <form onSubmit={handleSubmit} style={styles.form}>
-          {/* Section 1: Informations générales */}
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}> Informations générales</h2>
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div style={styles.stepContent}>
+            <h2 style={styles.stepTitle}>📋 Informations générales</h2>
             
             <div style={styles.formGroup}>
               <label style={styles.label}>
@@ -187,7 +216,6 @@ export default function CreerEntreprise() {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                required
                 style={styles.input}
                 placeholder="Ex: Garage Auto Excellence"
               />
@@ -206,9 +234,7 @@ export default function CreerEntreprise() {
                     onClick={() => handleDomaineToggle(domaine.id)}
                     style={{
                       ...styles.domaineButton,
-                      ...(formData.domaine_ids.includes(domaine.id) 
-                        ? styles.domaineButtonActive 
-                        : {})
+                      ...(formData.domaine_ids.includes(domaine.id) ? styles.domaineButtonActive : {})
                     }}
                   >
                     {formData.domaine_ids.includes(domaine.id) ? '✓ ' : ''}
@@ -218,10 +244,12 @@ export default function CreerEntreprise() {
               </div>
             </div>
           </div>
+        );
 
-          {/* Section 2: Documents légaux */}
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}> Documents légaux</h2>
+      case 2:
+        return (
+          <div style={styles.stepContent}>
+            <h2 style={styles.stepTitle}>📄 Documents légaux</h2>
             
             <div style={styles.formRow}>
               <div style={styles.formGroup}>
@@ -233,12 +261,28 @@ export default function CreerEntreprise() {
                   name="ifu_number"
                   value={formData.ifu_number}
                   onChange={handleChange}
-                  required
                   style={styles.input}
                   placeholder="Ex: 1234567890123"
                 />
               </div>
 
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  Fichier IFU (PDF/Image) <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileChange(e, 'ifu_file')}
+                  style={styles.fileInput}
+                />
+                {previews.ifu_file && (
+                  <div style={styles.filePreview}>✅ Fichier chargé</div>
+                )}
+              </div>
+            </div>
+
+            <div style={styles.formRow}>
               <div style={styles.formGroup}>
                 <label style={styles.label}>
                   Numéro RCCM <span style={styles.required}>*</span>
@@ -248,69 +292,119 @@ export default function CreerEntreprise() {
                   name="rccm_number"
                   value={formData.rccm_number}
                   onChange={handleChange}
-                  required
                   style={styles.input}
                   placeholder="Ex: RB/COT/12/B/345"
                 />
               </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  Fichier RCCM (PDF/Image) <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileChange(e, 'rccm_file')}
+                  style={styles.fileInput}
+                />
+                {previews.rccm_file && (
+                  <div style={styles.filePreview}>✅ Fichier chargé</div>
+                )}
+              </div>
+            </div>
+
+            <div style={styles.formRow}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  Numéro de certificat <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="text"
+                  name="certificate_number"
+                  value={formData.certificate_number}
+                  onChange={handleChange}
+                  style={styles.input}
+                  placeholder="Ex: CERT-2024-12345"
+                />
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>
+                  Fichier certificat (PDF/Image) <span style={styles.required}>*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileChange(e, 'certificate_file')}
+                  style={styles.fileInput}
+                />
+                {previews.certificate_file && (
+                  <div style={styles.filePreview}>✅ Fichier chargé</div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 3:
+        return (
+          <div style={styles.stepContent}>
+            <h2 style={styles.stepTitle}>👤 Informations du dirigeant</h2>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                Nom complet du PDG <span style={styles.required}>*</span>
+              </label>
+              <input
+                type="text"
+                name="pdg_full_name"
+                value={formData.pdg_full_name}
+                onChange={handleChange}
+                style={styles.input}
+                placeholder="Ex: Jean Dupont"
+              />
             </div>
 
             <div style={styles.formGroup}>
               <label style={styles.label}>
-                Numéro de certificat <span style={styles.required}>*</span>
+                Profession du PDG <span style={styles.required}>*</span>
               </label>
               <input
                 type="text"
-                name="certificate_number"
-                value={formData.certificate_number}
+                name="pdg_full_profession"
+                value={formData.pdg_full_profession}
                 onChange={handleChange}
-                required
                 style={styles.input}
-                placeholder="Ex: CERT-2024-12345"
+                placeholder="Ex: Ingénieur mécanicien"
               />
             </div>
-          </div>
 
-          {/* Section 3: Dirigeant */}
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}> Informations du dirigeant</h2>
-            
-            <div style={styles.formRow}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  Nom complet du PDG <span style={styles.required}>*</span>
-                </label>
-                <input
-                  type="text"
-                  name="pdg_full_name"
-                  value={formData.pdg_full_name}
-                  onChange={handleChange}
-                  required
-                  style={styles.input}
-                  placeholder="Ex: Jean Dupont"
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  Profession du PDG <span style={styles.required}>*</span>
-                </label>
-                <input
-                  type="text"
-                  name="pdg_full_profession"
-                  value={formData.pdg_full_profession}
-                  onChange={handleChange}
-                  required
-                  style={styles.input}
-                  placeholder="Ex: Ingénieur mécanicien"
-                />
-              </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                Votre rôle dans l'entreprise <span style={styles.required}>*</span>
+              </label>
+              <select
+                name="role_user"
+                value={formData.role_user}
+                onChange={handleChange}
+                style={styles.select}
+              >
+                <option value="">-- Choisir un rôle --</option>
+                <option value="PDG">PDG</option>
+                <option value="Directeur Général">Directeur Général</option>
+                <option value="Gérant">Gérant</option>
+                <option value="Directeur">Directeur</option>
+                <option value="Manager">Manager</option>
+                <option value="Autre">Autre</option>
+              </select>
             </div>
           </div>
+        );
 
-          {/* Section 4: Localisation */}
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}> Localisation</h2>
+      case 4:
+        return (
+          <div style={styles.stepContent}>
+            <h2 style={styles.stepTitle}>📍 Localisation & Médias</h2>
             
             <div style={styles.formGroup}>
               <label style={styles.label}>Siège de l'entreprise</label>
@@ -323,16 +417,10 @@ export default function CreerEntreprise() {
                 placeholder="Ex: Cotonou, Akpakpa"
               />
             </div>
-          </div>
 
-          {/* Section 5: Médias */}
-          <div style={styles.section}>
-            <h2 style={styles.sectionTitle}> Médias</h2>
-            
             <div style={styles.formRow}>
               <div style={styles.formGroup}>
                 <label style={styles.label}>Logo de l'entreprise</label>
-                <p style={styles.hint}>Format: JPG, PNG (max 2MB)</p>
                 <input
                   type="file"
                   accept="image/*"
@@ -340,15 +428,12 @@ export default function CreerEntreprise() {
                   style={styles.fileInput}
                 />
                 {previews.logo && (
-                  <div style={styles.preview}>
-                    <img src={previews.logo} alt="Preview logo" style={styles.previewImage} />
-                  </div>
+                  <img src={previews.logo} alt="Logo" style={styles.preview} />
                 )}
               </div>
 
               <div style={styles.formGroup}>
                 <label style={styles.label}>Image de la boutique</label>
-                <p style={styles.hint}>Format: JPG, PNG (max 2MB)</p>
                 <input
                   type="file"
                   accept="image/*"
@@ -356,53 +441,122 @@ export default function CreerEntreprise() {
                   style={styles.fileInput}
                 />
                 {previews.image_boutique && (
-                  <div style={styles.preview}>
-                    <img src={previews.image_boutique} alt="Preview boutique" style={styles.previewImage} />
-                  </div>
+                  <img src={previews.image_boutique} alt="Boutique" style={styles.preview} />
                 )}
               </div>
             </div>
           </div>
+        );
 
-          {/* Boutons d'action */}
-          <div style={styles.actions}>
-            <Link to="/mes-entreprises" style={styles.cancelButton}>
-              Annuler
-            </Link>
-            <button 
-              type="submit" 
-              disabled={loading}
+      case 5:
+        const selectedDomaines = domaines.filter(d => formData.domaine_ids.includes(d.id));
+        
+        return (
+          <div style={styles.stepContent}>
+            <h2 style={styles.stepTitle}>✅ Résumé de votre entreprise</h2>
+            
+            <div style={styles.summary}>
+              <div style={styles.summarySection}>
+                <h3 style={styles.summaryTitle}>📋 Informations générales</h3>
+                <p><strong>Nom :</strong> {formData.name}</p>
+                <p><strong>Domaines :</strong> {selectedDomaines.map(d => d.name).join(', ')}</p>
+              </div>
+
+              <div style={styles.summarySection}>
+                <h3 style={styles.summaryTitle}>📄 Documents</h3>
+                <p><strong>IFU :</strong> {formData.ifu_number} {previews.ifu_file && '✅'}</p>
+                <p><strong>RCCM :</strong> {formData.rccm_number} {previews.rccm_file && '✅'}</p>
+                <p><strong>Certificat :</strong> {formData.certificate_number} {previews.certificate_file && '✅'}</p>
+              </div>
+
+              <div style={styles.summarySection}>
+                <h3 style={styles.summaryTitle}>👤 Dirigeant</h3>
+                <p><strong>Nom :</strong> {formData.pdg_full_name}</p>
+                <p><strong>Profession :</strong> {formData.pdg_full_profession}</p>
+                <p><strong>Votre rôle :</strong> {formData.role_user}</p>
+              </div>
+
+              <div style={styles.summarySection}>
+                <h3 style={styles.summaryTitle}>📍 Localisation & Médias</h3>
+                <p><strong>Siège :</strong> {formData.siege || 'Non renseigné'}</p>
+                <p><strong>Logo :</strong> {previews.logo ? '✅ Chargé' : 'Non fourni'}</p>
+                <p><strong>Image boutique :</strong> {previews.image_boutique ? '✅ Chargée' : 'Non fournie'}</p>
+              </div>
+
+              <div style={styles.warningBox}>
+                <strong>⚠️ Attention :</strong> Une fois soumise, votre entreprise sera envoyée 
+                à l'administration pour validation. Vous recevrez une notification par email.
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.content}>
+        <Link to="/mes-entreprises" style={styles.backButton}>← Retour</Link>
+        
+        <h1 style={styles.title}>Créer une entreprise</h1>
+
+        {/* Stepper */}
+        <div style={styles.stepper}>
+          {STEPS.map((step) => (
+            <div
+              key={step.id}
               style={{
-                ...styles.submitButton,
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer',
+                ...styles.stepIndicator,
+                ...(step.id === currentStep ? styles.stepActive : {}),
+                ...(step.id < currentStep ? styles.stepCompleted : {})
               }}
             >
-              {loading ? 'Création en cours...' : ' Créer l\'entreprise'}
-            </button>
-          </div>
-        </form>
+              <div style={{
+                ...styles.stepNumber,
+                ...(step.id === currentStep ? styles.stepNumberActive : {}),
+                ...(step.id < currentStep ? styles.stepNumberCompleted : {})
+              }}>
+                {step.id < currentStep ? '✓' : step.icon}
+              </div>
+              <div style={styles.stepLabel}>{step.title}</div>
+            </div>
+          ))}
+        </div>
 
-        {/* Info box */}
-        <div style={styles.infoBox}>
-          <div style={styles.infoIcon}></div>
-          <div>
-            <h3 style={styles.infoTitle}>À savoir</h3>
-            <p style={styles.infoText}>
-              Votre entreprise sera soumise à validation par l'administration. 
-              Vous recevrez une notification par email une fois qu'elle sera validée ou rejetée.
-              Les champs marqués d'un <span style={styles.required}>*</span> sont obligatoires.
-            </p>
-          </div>
+        {error && <div style={styles.error}>⚠️ {error}</div>}
+
+        <div style={styles.card}>
+          {renderStep()}
+        </div>
+
+        {/* Navigation */}
+        <div style={styles.navigation}>
+          {currentStep > 1 && (
+            <button onClick={prevStep} style={styles.btnSecondary}>
+              ← Précédent
+            </button>
+          )}
+          
+          <div style={{flex: 1}} />
+          
+          {currentStep < 5 ? (
+            <button onClick={nextStep} style={styles.btnPrimary}>
+              Suivant →
+            </button>
+          ) : (
+            <button 
+              onClick={handleSubmit} 
+              disabled={loading}
+              style={{...styles.btnPrimary, opacity: loading ? 0.6 : 1}}
+            >
+              {loading ? '⏳ Envoi en cours...' : '✅ Finaliser et envoyer'}
+            </button>
+          )}
         </div>
       </div>
-
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }
@@ -411,88 +565,98 @@ const styles = {
   container: {
     minHeight: '100vh',
     backgroundColor: theme.colors.background,
-    paddingTop: '2rem',
-    paddingBottom: '4rem',
+    padding: '2rem 1rem',
   },
   content: {
     maxWidth: '900px',
     margin: '0 auto',
-    padding: '0 1rem',
-  },
-  loadingContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '60vh',
-    gap: '1rem',
-  },
-  spinner: {
-    width: '50px',
-    height: '50px',
-    border: `4px solid ${theme.colors.primaryLight}`,
-    borderTop: `4px solid ${theme.colors.primary}`,
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-  },
-  loadingText: {
-    color: theme.colors.text.secondary,
-    fontSize: '1.125rem',
-  },
-  header: {
-    marginBottom: '2rem',
   },
   backButton: {
     color: theme.colors.primary,
     textDecoration: 'none',
     fontWeight: '600',
-    marginBottom: '1rem',
     display: 'inline-block',
+    marginBottom: '1rem',
   },
   title: {
-    fontSize: '2.5rem',
+    fontSize: '2rem',
     fontWeight: 'bold',
+    marginBottom: '2rem',
     color: theme.colors.text.primary,
-    marginBottom: '0.5rem',
   },
-  subtitle: {
-    color: theme.colors.text.secondary,
-    fontSize: '1.125rem',
-    lineHeight: '1.6',
-  },
-  error: {
-    backgroundColor: '#FEE2E2',
-    color: theme.colors.error,
-    padding: '1rem',
-    borderRadius: theme.borderRadius.md,
-    marginBottom: '2rem',
-    border: `2px solid ${theme.colors.error}`,
-  },
-  success: {
-    backgroundColor: '#D1FAE5',
-    color: theme.colors.success,
-    padding: '1rem',
-    borderRadius: theme.borderRadius.md,
-    marginBottom: '2rem',
-    border: `2px solid ${theme.colors.success}`,
-  },
-  form: {
+  stepper: {
     display: 'flex',
-    flexDirection: 'column',
-    gap: '2rem',
+    justifyContent: 'space-between',
+    marginBottom: '2rem',
+    gap: '0.5rem',
+    flexWrap: 'wrap',
   },
-  section: {
-    backgroundColor: theme.colors.secondary,
-    padding: '2rem',
-    borderRadius: theme.borderRadius.xl,
-    border: `2px solid ${theme.colors.primaryLight}`,
-    boxShadow: theme.shadows.sm,
+  stepIndicator: {
+    flex: 1,
+    minWidth: '100px',
+    textAlign: 'center',
+    opacity: 0.4,
+    transition: 'all 0.3s',
   },
-  sectionTitle: {
+  stepActive: {
+    opacity: 1,
+  },
+  stepCompleted: {
+    opacity: 1,
+  },
+  stepNumber: {
+    width: '50px',
+    height: '50px',
+    borderRadius: '50%',
+    backgroundColor: theme.colors.primaryLight,
+    margin: '0 auto 0.5rem',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     fontSize: '1.5rem',
     fontWeight: 'bold',
-    color: theme.colors.primary,
+    border: `2px solid ${theme.colors.primaryLight}`,
+    transition: 'all 0.3s',
+  },
+  stepNumberActive: {
+    backgroundColor: theme.colors.primary,
+    color: '#fff',
+    borderColor: theme.colors.primary,
+  },
+  stepNumberCompleted: {
+    backgroundColor: theme.colors.success,
+    color: '#fff',
+    borderColor: theme.colors.success,
+  },
+  stepLabel: {
+    fontSize: '0.875rem',
+    color: theme.colors.text.secondary,
+    fontWeight: '600',
+  },
+  error: {
+    backgroundColor: '#fee2e2',
+    color: theme.colors.error,
+    padding: '1rem',
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: '1rem',
+    border: `2px solid ${theme.colors.error}`,
+  },
+  card: {
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.xl,
+    padding: '2rem',
+    boxShadow: theme.shadows.lg,
+    marginBottom: '2rem',
+    border: `2px solid ${theme.colors.primaryLight}`,
+  },
+  stepContent: {
+    minHeight: '400px',
+  },
+  stepTitle: {
+    fontSize: '1.5rem',
+    fontWeight: 'bold',
     marginBottom: '1.5rem',
+    color: theme.colors.primary,
   },
   formGroup: {
     marginBottom: '1.5rem',
@@ -505,33 +669,56 @@ const styles = {
   label: {
     display: 'block',
     fontWeight: '600',
-    color: theme.colors.text.primary,
     marginBottom: '0.5rem',
+    color: theme.colors.text.primary,
   },
   required: {
     color: theme.colors.error,
   },
   hint: {
-    color: theme.colors.text.secondary,
     fontSize: '0.875rem',
-    marginBottom: '0.75rem',
+    color: theme.colors.text.secondary,
+    marginBottom: '0.5rem',
   },
   input: {
     width: '100%',
-    padding: '0.875rem',
+    padding: '0.75rem',
     border: `2px solid ${theme.colors.primaryLight}`,
     borderRadius: theme.borderRadius.md,
     fontSize: '1rem',
-    transition: 'all 0.3s',
     outline: 'none',
+    transition: 'border-color 0.2s',
+  },
+  select: {
+    width: '100%',
+    padding: '0.75rem',
+    border: `2px solid ${theme.colors.primaryLight}`,
+    borderRadius: theme.borderRadius.md,
+    fontSize: '1rem',
+    backgroundColor: theme.colors.secondary,
+    outline: 'none',
+    cursor: 'pointer',
   },
   fileInput: {
     width: '100%',
-    padding: '0.875rem',
+    padding: '0.75rem',
     border: `2px dashed ${theme.colors.primaryLight}`,
     borderRadius: theme.borderRadius.md,
     fontSize: '0.95rem',
     cursor: 'pointer',
+  },
+  filePreview: {
+    marginTop: '0.5rem',
+    color: theme.colors.success,
+    fontWeight: '600',
+    fontSize: '0.875rem',
+  },
+  preview: {
+    marginTop: '1rem',
+    maxWidth: '200px',
+    maxHeight: '200px',
+    borderRadius: theme.borderRadius.md,
+    border: `2px solid ${theme.colors.primaryLight}`,
   },
   domainesGrid: {
     display: 'grid',
@@ -539,82 +726,73 @@ const styles = {
     gap: '0.75rem',
   },
   domaineButton: {
-    padding: '0.875rem',
+    padding: '0.75rem',
     border: `2px solid ${theme.colors.primaryLight}`,
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.secondary,
-    color: theme.colors.text.primary,
-    fontWeight: '600',
     cursor: 'pointer',
-    transition: 'all 0.3s',
+    fontWeight: '600',
+    transition: 'all 0.2s',
+    fontSize: '0.95rem',
     textAlign: 'left',
   },
   domaineButtonActive: {
     backgroundColor: theme.colors.primary,
-    color: theme.colors.text.white,
+    color: '#fff',
     borderColor: theme.colors.primary,
   },
-  preview: {
-    marginTop: '1rem',
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-    border: `2px solid ${theme.colors.primaryLight}`,
-  },
-  previewImage: {
-    width: '100%',
-    maxHeight: '200px',
-    objectFit: 'cover',
-  },
-  actions: {
+  summary: {
     display: 'flex',
-    gap: '1rem',
-    justifyContent: 'flex-end',
-    paddingTop: '1rem',
+    flexDirection: 'column',
+    gap: '1.5rem',
   },
-  cancelButton: {
-    padding: '0.875rem 2rem',
-    border: `2px solid ${theme.colors.primary}`,
-    borderRadius: theme.borderRadius.md,
+  summarySection: {
+    padding: '1.25rem',
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.lg,
+    border: `1px solid ${theme.colors.primaryLight}`,
+  },
+  summaryTitle: {
+    fontSize: '1.125rem',
+    fontWeight: 'bold',
+    marginBottom: '1rem',
+    color: theme.colors.primary,
+  },
+  warningBox: {
+    padding: '1.25rem',
+    backgroundColor: '#fef3c7',
+    border: `2px solid ${theme.colors.warning}`,
+    borderRadius: theme.borderRadius.lg,
+    color: '#92400e',
+    lineHeight: '1.6',
+  },
+  navigation: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: '1rem',
+    alignItems: 'center',
+  },
+  btnPrimary: {
+    backgroundColor: theme.colors.primary,
+    color: '#fff',
+    padding: '1rem 2rem',
+    borderRadius: theme.borderRadius.lg,
+    border: 'none',
+    fontWeight: '600',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    transition: 'all 0.3s',
+    boxShadow: theme.shadows.md,
+  },
+  btnSecondary: {
     backgroundColor: 'transparent',
     color: theme.colors.primary,
-    fontWeight: '600',
-    textDecoration: 'none',
-    display: 'inline-block',
-    transition: 'all 0.3s',
-  },
-  submitButton: {
-    padding: '0.875rem 2rem',
-    border: 'none',
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.primary,
-    color: theme.colors.text.white,
-    fontWeight: '600',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    boxShadow: theme.shadows.md,
-    transition: 'all 0.3s',
-  },
-  infoBox: {
-    backgroundColor: '#DBEAFE',
-    padding: '1.5rem',
+    padding: '1rem 2rem',
     borderRadius: theme.borderRadius.lg,
-    border: '2px solid #3B82F6',
-    display: 'flex',
-    gap: '1rem',
-    marginTop: '2rem',
-  },
-  infoIcon: {
-    fontSize: '2rem',
-    flexShrink: 0,
-  },
-  infoTitle: {
-    fontWeight: 'bold',
-    color: '#1E40AF',
-    marginBottom: '0.5rem',
-  },
-  infoText: {
-    color: '#1E40AF',
-    fontSize: '0.95rem',
-    lineHeight: '1.6',
+    border: `2px solid ${theme.colors.primary}`,
+    fontWeight: '600',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    transition: 'all 0.3s',
   },
 };
