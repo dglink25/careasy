@@ -23,7 +23,8 @@ class Entreprise extends Model{
         'certificate_number',
         'certificate_file',
         'image_boutique',
-        'status'
+        'status',
+        'admin_note'
     ];
 
     public function prestataire(){

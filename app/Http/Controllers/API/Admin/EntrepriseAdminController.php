@@ -47,8 +47,7 @@ class EntrepriseAdminController extends Controller
     }
 
     // voir une entreprise (avec fichiers)
-    public function show($id)
-    {
+    public function show($id){
         $this->ensureAdmin();
 
         $entreprise = Entreprise::with(['prestataire','domaines','services'])->find($id);
@@ -60,8 +59,7 @@ class EntrepriseAdminController extends Controller
     }
 
     // valider
-    public function approve(Request $request, $id)
-    {
+    public function approve(Request $request, $id){
         $this->ensureAdmin();
 
         $entreprise = Entreprise::find($id);
@@ -92,8 +90,7 @@ class EntrepriseAdminController extends Controller
     }
 
     // rejeter
-    public function reject(Request $request, $id)
-    {
+    public function reject(Request $request, $id){
         $this->ensureAdmin();
 
         $request->validate([
@@ -121,7 +118,8 @@ class EntrepriseAdminController extends Controller
             DB::commit();
 
             return response()->json(['message' => 'Entreprise rejetée', 'entreprise' => $entreprise]);
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['message' => 'Erreur lors du rejet', 'error' => $e->getMessage()], 500);
         }
