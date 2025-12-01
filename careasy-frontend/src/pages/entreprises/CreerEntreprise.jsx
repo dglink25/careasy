@@ -189,7 +189,7 @@ export default function CreerEntreprise() {
 
       await entrepriseApi.createEntreprise(submitData);
       
-      alert('✅ Entreprise créée avec succès !');
+      alert('Entreprise créée avec succès !');
       navigate('/mes-entreprises');
       
     } catch (err) {

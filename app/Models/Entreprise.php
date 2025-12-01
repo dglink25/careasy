@@ -24,7 +24,10 @@ class Entreprise extends Model{
         'certificate_file',
         'image_boutique',
         'status',
-        'admin_note'
+        'admin_note',
+        'latitude',
+        'longitude',
+        'google_formatted_address'
     ];
 
     public function prestataire(){

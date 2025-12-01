@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class EntrepriseController extends Controller{
     
@@ -63,6 +64,8 @@ class EntrepriseController extends Controller{
             'siege'              => 'nullable|string',
             'logo'               => 'nullable|image|max:2048',
             'image_boutique'     => 'nullable|image|max:2048',
+            'latitude'  => 'required|numeric',
+            'longitude' => 'required|numeric',
         ]);
 
         if ($validator->fails()) {
@@ -78,6 +81,19 @@ class EntrepriseController extends Controller{
             $data = $request->except(['domaine_ids']);
             $data['prestataire_id'] = Auth::id();
             $data['status'] = 'pending';
+
+            $data['latitude']  = $request->latitude;
+            $data['longitude'] = $request->longitude;
+
+            // Conversion Google Maps en adresse exacte
+            $geo = Http::get("https://maps.googleapis.com/maps/api/geocode/json", [
+                'latlng' => "{$request->latitude},{$request->longitude}",
+                'key' => env('GOOGLE_MAPS_KEY')
+            ]);
+
+            if ($geo->successful() && isset($geo['results'][0])) {
+                $data['google_formatted_address'] = $geo['results'][0]['formatted_address'];
+            }
 
             // Upload des fichiers
             if ($request->hasFile('logo')) {
