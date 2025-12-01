@@ -12,8 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class EntrepriseAdminController extends Controller
 {
-    protected function ensureAdmin()
-    {
+    protected function ensureAdmin(){
         $user = Auth::user();
         if (!$user || $user->role !== 'admin') {
             abort(403, 'Unauthorized. Admin only.');
@@ -21,8 +20,7 @@ class EntrepriseAdminController extends Controller
     }
 
     // Lister toutes les demandes (avec filtrage)
-    public function index(Request $request)
-    {
+    public function index(Request $request){
         $this->ensureAdmin();
 
         $query = Entreprise::with(['prestataire','domaines','services']);
@@ -45,8 +43,7 @@ class EntrepriseAdminController extends Controller
     }
 
     // Voir une entreprise avec TOUS les détails
-    public function show($id)
-    {
+    public function show($id){
         $this->ensureAdmin();
 
         $entreprise = Entreprise::with(['prestataire','domaines','services'])->find($id);
@@ -59,8 +56,7 @@ class EntrepriseAdminController extends Controller
     }
 
     // Valider une entreprise
-    public function approve(Request $request, $id)
-    {
+    public function approve(Request $request, $id){
         $this->ensureAdmin();
 
         $entreprise = Entreprise::find($id);
@@ -104,8 +100,7 @@ class EntrepriseAdminController extends Controller
     }
 
     // Rejeter une entreprise
-    public function reject(Request $request, $id)
-    {
+    public function reject(Request $request, $id){
         $this->ensureAdmin();
 
         $request->validate([
