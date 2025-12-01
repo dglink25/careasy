@@ -67,7 +67,7 @@ export default function AdminDashboard() {
           <div>
             <h1 style={styles.title}>Dashboard Administrateur</h1>
             <p style={styles.subtitle}>
-              Bienvenue {user?.name}  - Gérez les demandes d'entreprises
+              Bienvenue {user?.name}  Gérez les demandes d'entreprises
             </p>
           </div>
         </div>
