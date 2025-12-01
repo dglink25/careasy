@@ -18,9 +18,9 @@ export const serviceApi = {
     return response.data;
   },
 
-  // Récupérer les détails d'un service (public)
+  // Récupérer les détails d'un service
   getService: async (id) => {
-    const response = await api.get(`/entreprises/${id}`);
+    const response = await api.get(`/services/${id}`);
     return response.data;
   },
 

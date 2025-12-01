@@ -7,7 +7,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class EntrepriseStatusChangedNotification extends Notification{
+class EntrepriseStatusChangedNotification extends Notification
+{
     use Queueable;
 
     private $entreprise;
@@ -21,12 +22,18 @@ class EntrepriseStatusChangedNotification extends Notification{
         $this->adminNote = $adminNote;
     }
 
+    /**
+     * Canaux de notification - SANS NEXMO pour éviter l'erreur
+     */
     public function via($notifiable)
     {
-        // database + mail + custom sms channel
-        return ['database', 'mail', 'nexmo']; // si nexmo est configuré
+        // Seulement database et mail (nexmo retiré temporairement)
+        return ['database', 'mail'];
     }
 
+    /**
+     * Email notification
+     */
     public function toMail($notifiable)
     {
         $message = (new MailMessage)
@@ -38,12 +45,14 @@ class EntrepriseStatusChangedNotification extends Notification{
             $message->line("Remarque de l'administrateur : {$this->adminNote}");
         }
 
-        $message->action('Voir l’entreprise', url('/account/entreprises/'.$this->entreprise->id));
-        $message->line('Merci d’utiliser Careasy.');
+        $message->line('Merci d\'utiliser CarEasy.');
 
         return $message;
     }
 
+    /**
+     * Database notification
+     */
     public function toDatabase($notifiable)
     {
         return [
@@ -52,11 +61,5 @@ class EntrepriseStatusChangedNotification extends Notification{
             'status' => $this->status,
             'admin_note' => $this->adminNote,
         ];
-    }
-
-    public function toNexmo($notifiable)
-    {
-        return (new NexmoMessage)
-                    ->content("Careasy: votre entreprise '{$this->entreprise->name}' a été {$this->status}.");
     }
 }

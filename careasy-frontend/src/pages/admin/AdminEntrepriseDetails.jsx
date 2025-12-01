@@ -1,8 +1,8 @@
-// careasy-frontend/src/pages/admin/AdminEntrepriseDetails.jsx
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { adminApi } from '../../api/adminApi';
 import theme from '../../config/theme';
+import { FaArrowLeft, FaCheckCircle, FaTimesCircle, FaFileAlt, FaDownload, FaBuilding, FaUser, FaMapMarkerAlt } from 'react-icons/fa';
 
 export default function AdminEntrepriseDetails() {
   const { id } = useParams();
@@ -24,9 +24,9 @@ export default function AdminEntrepriseDetails() {
   const fetchEntreprise = async () => {
     try {
       setLoading(true);
+      setError('');
       const data = await adminApi.getEntreprise(id);
       setEntreprise(data);
-      setError('');
     } catch (err) {
       console.error('Erreur chargement entreprise:', err);
       setError('Entreprise non trouvée');
@@ -38,12 +38,15 @@ export default function AdminEntrepriseDetails() {
 
   const handleApprove = async () => {
     setActionLoading(true);
+    setError('');
     try {
-      await adminApi.approveEntreprise(id, adminNote || null);
-      alert(' Entreprise validée avec succès !');
+      const response = await adminApi.approveEntreprise(id, adminNote || null);
+      alert('✅ ' + response.message);
       navigate('/admin/entreprises');
     } catch (err) {
-      alert('Erreur lors de la validation: ' + (err.response?.data?.message || err.message));
+      const errorMsg = err.response?.data?.message || err.message || 'Erreur lors de la validation';
+      setError(errorMsg);
+      alert('❌ ' + errorMsg);
     } finally {
       setActionLoading(false);
       setShowApproveModal(false);
@@ -51,18 +54,21 @@ export default function AdminEntrepriseDetails() {
   };
 
   const handleReject = async () => {
-    if (!adminNote.trim()) {
-      alert('⚠️ Veuillez fournir une raison de rejet');
+    if (!adminNote.trim() || adminNote.length < 10) {
+      alert('⚠️ Veuillez fournir une raison détaillée (minimum 10 caractères)');
       return;
     }
     
     setActionLoading(true);
+    setError('');
     try {
-      await adminApi.rejectEntreprise(id, adminNote);
-      alert('❌ Entreprise rejetée');
+      const response = await adminApi.rejectEntreprise(id, adminNote);
+      alert('✅ ' + response.message);
       navigate('/admin/entreprises');
     } catch (err) {
-      alert('Erreur lors du rejet: ' + (err.response?.data?.message || err.message));
+      const errorMsg = err.response?.data?.message || err.message || 'Erreur lors du rejet';
+      setError(errorMsg);
+      alert('❌ ' + errorMsg);
     } finally {
       setActionLoading(false);
       setShowRejectModal(false);
@@ -71,15 +77,15 @@ export default function AdminEntrepriseDetails() {
 
   const getStatusBadge = (status) => {
     const badges = {
-      pending: { emoji: '🟡', text: 'En attente', color: theme.colors.warning, bg: '#FEF3C7' },
-      validated: { emoji: '✅', text: 'Validée', color: theme.colors.success, bg: '#D1FAE5' },
-      rejected: { emoji: '❌', text: 'Rejetée', color: theme.colors.error, bg: '#FEE2E2' },
+      pending: { icon: <FaTimesCircle />, text: 'En attente', color: theme.colors.warning, bg: '#FEF3C7' },
+      validated: { icon: <FaCheckCircle />, text: 'Validée', color: theme.colors.success, bg: '#D1FAE5' },
+      rejected: { icon: <FaTimesCircle />, text: 'Rejetée', color: theme.colors.error, bg: '#FEE2E2' },
     };
     const badge = badges[status] || badges.pending;
     
     return (
       <div style={{...styles.statusBanner, backgroundColor: badge.bg, borderColor: badge.color}}>
-        <span style={styles.statusEmoji}>{badge.emoji}</span>
+        <span style={{...styles.statusIcon, color: badge.color}}>{badge.icon}</span>
         <div>
           <div style={{...styles.statusText, color: badge.color}}>{badge.text}</div>
           {status === 'rejected' && entreprise?.admin_note && (
@@ -89,6 +95,19 @@ export default function AdminEntrepriseDetails() {
           )}
         </div>
       </div>
+    );
+  };
+
+  const renderFileLink = (filePath, label) => {
+    if (!filePath) return <span style={styles.noFile}>Non fourni</span>;
+    
+    const fullUrl = `${import.meta.env.VITE_API_URL}/storage/${filePath}`;
+    return (
+      <a href={fullUrl} target="_blank" rel="noopener noreferrer" style={styles.fileLink}>
+        <FaFileAlt style={{marginRight: '0.5rem'}} />
+        {label}
+        <FaDownload style={{marginLeft: '0.5rem', fontSize: '0.9rem'}} />
+      </a>
     );
   };
 
@@ -107,10 +126,11 @@ export default function AdminEntrepriseDetails() {
     return (
       <div style={styles.container}>
         <div style={styles.errorContainer}>
-          <div style={styles.errorIcon}></div>
+          <FaTimesCircle style={{fontSize: '5rem', color: theme.colors.error}} />
           <h2 style={styles.errorTitle}>{error || 'Entreprise introuvable'}</h2>
           <Link to="/admin/entreprises" style={styles.errorButton}>
-            ← Retour à la liste
+            <FaArrowLeft style={{marginRight: '0.5rem'}} />
+            Retour à la liste
           </Link>
         </div>
       </div>
@@ -123,12 +143,14 @@ export default function AdminEntrepriseDetails() {
         {/* Header */}
         <div style={styles.header}>
           <Link to="/admin/entreprises" style={styles.backButton}>
-            ← Retour à la liste
+            <FaArrowLeft style={{marginRight: '0.5rem'}} />
+            Retour à la liste
           </Link>
           <div style={styles.headerTop}>
             <div>
               <h1 style={styles.title}>{entreprise.name}</h1>
               <p style={styles.subtitle}>
+                <FaMapMarkerAlt style={{marginRight: '0.5rem'}} />
                 Demande créée le {new Date(entreprise.created_at).toLocaleDateString('fr-FR', {
                   year: 'numeric',
                   month: 'long',
@@ -143,14 +165,18 @@ export default function AdminEntrepriseDetails() {
                 <button 
                   onClick={() => setShowRejectModal(true)}
                   style={styles.rejectButton}
+                  disabled={actionLoading}
                 >
-                   Rejeter
+                  <FaTimesCircle style={{marginRight: '0.5rem'}} />
+                  Rejeter
                 </button>
                 <button 
                   onClick={() => setShowApproveModal(true)}
                   style={styles.approveButton}
+                  disabled={actionLoading}
                 >
-                   Valider
+                  <FaCheckCircle style={{marginRight: '0.5rem'}} />
+                  Valider
                 </button>
               </div>
             )}
@@ -160,13 +186,23 @@ export default function AdminEntrepriseDetails() {
         {/* Statut */}
         {getStatusBadge(entreprise.status)}
 
+        {error && (
+          <div style={styles.errorBanner}>
+            <FaTimesCircle style={{marginRight: '0.5rem'}} />
+            {error}
+          </div>
+        )}
+
         {/* Grid principal */}
         <div style={styles.mainGrid}>
           {/* Colonne gauche */}
           <div style={styles.leftColumn}>
             {/* Carte Médias */}
             <div style={styles.card}>
-              <h2 style={styles.cardTitle}> Médias</h2>
+              <h2 style={styles.cardTitle}>
+                <FaBuilding style={{marginRight: '0.5rem'}} />
+                Médias
+              </h2>
               <div style={styles.mediaGrid}>
                 {entreprise.logo ? (
                   <div style={styles.mediaItem}>
@@ -179,7 +215,7 @@ export default function AdminEntrepriseDetails() {
                   </div>
                 ) : (
                   <div style={styles.mediaPlaceholder}>
-                    <div style={styles.placeholderIcon}></div>
+                    <FaBuilding style={{fontSize: '3rem', color: theme.colors.primary}} />
                     <p style={styles.placeholderText}>Aucun logo</p>
                   </div>
                 )}
@@ -195,7 +231,7 @@ export default function AdminEntrepriseDetails() {
                   </div>
                 ) : (
                   <div style={styles.mediaPlaceholder}>
-                    <div style={styles.placeholderIcon}></div>
+                    <FaBuilding style={{fontSize: '3rem', color: theme.colors.primary}} />
                     <p style={styles.placeholderText}>Aucune image</p>
                   </div>
                 )}
@@ -204,7 +240,7 @@ export default function AdminEntrepriseDetails() {
 
             {/* Carte Domaines */}
             <div style={styles.card}>
-              <h2 style={styles.cardTitle}> Domaines d'activité</h2>
+              <h2 style={styles.cardTitle}>Domaines d'activité</h2>
               {entreprise.domaines && entreprise.domaines.length > 0 ? (
                 <div style={styles.domainesGrid}>
                   {entreprise.domaines.map((domaine) => (
@@ -223,7 +259,10 @@ export default function AdminEntrepriseDetails() {
           <div style={styles.rightColumn}>
             {/* Carte Prestataire */}
             <div style={styles.card}>
-              <h2 style={styles.cardTitle}> Prestataire</h2>
+              <h2 style={styles.cardTitle}>
+                <FaUser style={{marginRight: '0.5rem'}} />
+                Prestataire
+              </h2>
               <div style={styles.infoList}>
                 <div style={styles.infoItem}>
                   <span style={styles.infoLabel}>Nom</span>
@@ -242,7 +281,7 @@ export default function AdminEntrepriseDetails() {
 
             {/* Carte Informations */}
             <div style={styles.card}>
-              <h2 style={styles.cardTitle}> Informations</h2>
+              <h2 style={styles.cardTitle}>Informations</h2>
               <div style={styles.infoList}>
                 <div style={styles.infoItem}>
                   <span style={styles.infoLabel}>Nom entreprise</span>
@@ -255,34 +294,45 @@ export default function AdminEntrepriseDetails() {
               </div>
             </div>
 
-            {/* Carte Documents */}
+            {/* Carte Documents AVEC FICHIERS */}
             <div style={styles.card}>
-              <h2 style={styles.cardTitle}> Documents légaux</h2>
-              <div style={styles.infoList}>
-                <div style={styles.infoItem}>
-                  <span style={styles.infoLabel}>IFU</span>
-                  <span style={styles.infoValue}>
+              <h2 style={styles.cardTitle}>
+                <FaFileAlt style={{marginRight: '0.5rem'}} />
+                Documents légaux
+              </h2>
+              <div style={styles.documentsList}>
+                <div style={styles.documentItem}>
+                  <div style={styles.documentInfo}>
+                    <strong>IFU</strong>
                     <code style={styles.code}>{entreprise.ifu_number}</code>
-                  </span>
+                  </div>
+                  {renderFileLink(entreprise.ifu_file, 'Télécharger IFU')}
                 </div>
-                <div style={styles.infoItem}>
-                  <span style={styles.infoLabel}>RCCM</span>
-                  <span style={styles.infoValue}>
+                
+                <div style={styles.documentItem}>
+                  <div style={styles.documentInfo}>
+                    <strong>RCCM</strong>
                     <code style={styles.code}>{entreprise.rccm_number}</code>
-                  </span>
+                  </div>
+                  {renderFileLink(entreprise.rccm_file, 'Télécharger RCCM')}
                 </div>
-                <div style={styles.infoItem}>
-                  <span style={styles.infoLabel}>Certificat</span>
-                  <span style={styles.infoValue}>
+                
+                <div style={styles.documentItem}>
+                  <div style={styles.documentInfo}>
+                    <strong>Certificat</strong>
                     <code style={styles.code}>{entreprise.certificate_number}</code>
-                  </span>
+                  </div>
+                  {renderFileLink(entreprise.certificate_file, 'Télécharger Certificat')}
                 </div>
               </div>
             </div>
 
             {/* Carte Dirigeant */}
             <div style={styles.card}>
-              <h2 style={styles.cardTitle}> Dirigeant</h2>
+              <h2 style={styles.cardTitle}>
+                <FaUser style={{marginRight: '0.5rem'}} />
+                Dirigeant
+              </h2>
               <div style={styles.infoList}>
                 <div style={styles.infoItem}>
                   <span style={styles.infoLabel}>Nom complet</span>
@@ -292,6 +342,10 @@ export default function AdminEntrepriseDetails() {
                   <span style={styles.infoLabel}>Profession</span>
                   <span style={styles.infoValue}>{entreprise.pdg_full_profession}</span>
                 </div>
+                <div style={styles.infoItem}>
+                  <span style={styles.infoLabel}>Rôle</span>
+                  <span style={styles.infoValue}>{entreprise.role_user || '-'}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -300,9 +354,12 @@ export default function AdminEntrepriseDetails() {
 
       {/* Modal Validation */}
       {showApproveModal && (
-        <div style={styles.modalOverlay} onClick={() => setShowApproveModal(false)}>
+        <div style={styles.modalOverlay} onClick={() => !actionLoading && setShowApproveModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h3 style={styles.modalTitle}> Valider l'entreprise</h3>
+            <h3 style={styles.modalTitle}>
+              <FaCheckCircle style={{marginRight: '0.5rem', color: theme.colors.success}} />
+              Valider l'entreprise
+            </h3>
             <p style={styles.modalText}>
               Confirmez-vous la validation de <strong>{entreprise.name}</strong> ?
             </p>
@@ -314,12 +371,14 @@ export default function AdminEntrepriseDetails() {
                 style={styles.textarea}
                 rows="3"
                 placeholder="Commentaire pour le prestataire..."
+                disabled={actionLoading}
               />
             </div>
             <div style={styles.modalActions}>
               <button 
                 onClick={() => setShowApproveModal(false)}
                 style={styles.cancelModalButton}
+                disabled={actionLoading}
               >
                 Annuler
               </button>
@@ -337,9 +396,12 @@ export default function AdminEntrepriseDetails() {
 
       {/* Modal Rejet */}
       {showRejectModal && (
-        <div style={styles.modalOverlay} onClick={() => setShowRejectModal(false)}>
+        <div style={styles.modalOverlay} onClick={() => !actionLoading && setShowRejectModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <h3 style={styles.modalTitle}> Rejeter l'entreprise</h3>
+            <h3 style={styles.modalTitle}>
+              <FaTimesCircle style={{marginRight: '0.5rem', color: theme.colors.error}} />
+              Rejeter l'entreprise
+            </h3>
             <p style={styles.modalText}>
               Vous êtes sur le point de rejeter <strong>{entreprise.name}</strong>.
             </p>
@@ -352,8 +414,9 @@ export default function AdminEntrepriseDetails() {
                 onChange={(e) => setAdminNote(e.target.value)}
                 style={styles.textarea}
                 rows="4"
-                placeholder="Expliquez pourquoi cette entreprise est rejetée..."
+                placeholder="Expliquez pourquoi cette entreprise est rejetée (minimum 10 caractères)..."
                 required
+                disabled={actionLoading}
               />
               <small style={styles.hint}>
                 Cette note sera envoyée au prestataire par email
@@ -363,15 +426,16 @@ export default function AdminEntrepriseDetails() {
               <button 
                 onClick={() => setShowRejectModal(false)}
                 style={styles.cancelModalButton}
+                disabled={actionLoading}
               >
                 Annuler
               </button>
               <button 
                 onClick={handleReject}
-                disabled={actionLoading || !adminNote.trim()}
+                disabled={actionLoading || !adminNote.trim() || adminNote.length < 10}
                 style={{
                   ...styles.rejectButton, 
-                  opacity: (actionLoading || !adminNote.trim()) ? 0.6 : 1
+                  opacity: (actionLoading || !adminNote.trim() || adminNote.length < 10) ? 0.6 : 1
                 }}
               >
                 {actionLoading ? 'Rejet...' : 'Confirmer le rejet'}
@@ -431,9 +495,6 @@ const styles = {
     minHeight: '60vh',
     gap: '1.5rem',
   },
-  errorIcon: {
-    fontSize: '5rem',
-  },
   errorTitle: {
     fontSize: '1.75rem',
     color: theme.colors.text.primary,
@@ -445,6 +506,8 @@ const styles = {
     borderRadius: theme.borderRadius.lg,
     textDecoration: 'none',
     fontWeight: '600',
+    display: 'inline-flex',
+    alignItems: 'center',
   },
   header: {
     marginBottom: '2rem',
@@ -454,7 +517,8 @@ const styles = {
     textDecoration: 'none',
     fontWeight: '600',
     marginBottom: '1rem',
-    display: 'inline-block',
+    display: 'inline-flex',
+    alignItems: 'center',
   },
   headerTop: {
     display: 'flex',
@@ -472,6 +536,8 @@ const styles = {
   subtitle: {
     color: theme.colors.text.secondary,
     fontSize: '1.125rem',
+    display: 'flex',
+    alignItems: 'center',
   },
   actionButtons: {
     display: 'flex',
@@ -488,6 +554,8 @@ const styles = {
     cursor: 'pointer',
     boxShadow: theme.shadows.md,
     transition: 'all 0.3s',
+    display: 'inline-flex',
+    alignItems: 'center',
   },
   rejectButton: {
     backgroundColor: theme.colors.error,
@@ -499,6 +567,8 @@ const styles = {
     cursor: 'pointer',
     boxShadow: theme.shadows.md,
     transition: 'all 0.3s',
+    display: 'inline-flex',
+    alignItems: 'center',
   },
   statusBanner: {
     padding: '1.5rem',
@@ -509,7 +579,7 @@ const styles = {
     alignItems: 'flex-start',
     border: '2px solid',
   },
-  statusEmoji: {
+  statusIcon: {
     fontSize: '2rem',
     flexShrink: 0,
   },
@@ -522,6 +592,16 @@ const styles = {
     fontSize: '0.95rem',
     color: theme.colors.text.secondary,
     marginTop: '0.5rem',
+  },
+  errorBanner: {
+    backgroundColor: '#FEE2E2',
+    color: theme.colors.error,
+    padding: '1rem',
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: '2rem',
+    border: `2px solid ${theme.colors.error}`,
+    display: 'flex',
+    alignItems: 'center',
   },
   mainGrid: {
     display: 'grid',
@@ -550,6 +630,8 @@ const styles = {
     fontWeight: 'bold',
     color: theme.colors.primary,
     marginBottom: '1rem',
+    display: 'flex',
+    alignItems: 'center',
   },
   mediaGrid: {
     display: 'grid',
@@ -584,9 +666,6 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '0.5rem',
-  },
-  placeholderIcon: {
-    fontSize: '3rem',
   },
   placeholderText: {
     color: theme.colors.text.secondary,
@@ -640,6 +719,38 @@ const styles = {
     fontSize: '0.875rem',
     fontFamily: 'monospace',
   },
+  documentsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem',
+  },
+  documentItem: {
+    padding: '1rem',
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.md,
+    border: `1px solid ${theme.colors.primaryLight}`,
+  },
+  documentInfo: {
+    marginBottom: '0.75rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+  },
+  fileLink: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    color: theme.colors.primary,
+    textDecoration: 'none',
+    fontWeight: '600',
+    padding: '0.5rem 1rem',
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: theme.borderRadius.md,
+    transition: 'all 0.3s',
+  },
+  noFile: {
+    color: theme.colors.text.secondary,
+    fontStyle: 'italic',
+  },
   modalOverlay: {
     position: 'fixed',
     top: 0,
@@ -666,6 +777,8 @@ const styles = {
     fontWeight: 'bold',
     color: theme.colors.text.primary,
     marginBottom: '1rem',
+    display: 'flex',
+    alignItems: 'center',
   },
   modalText: {
     color: theme.colors.text.secondary,

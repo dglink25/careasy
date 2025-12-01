@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Notifications\EntrepriseStatusChangedNotification;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class EntrepriseAdminController extends Controller
 {
@@ -15,11 +16,11 @@ class EntrepriseAdminController extends Controller
     {
         $user = Auth::user();
         if (!$user || $user->role !== 'admin') {
-            abort(response()->json(['message' => 'Unauthorized. Admin only.'], 403));
+            abort(403, 'Unauthorized. Admin only.');
         }
     }
 
-    // lister toutes les demandes (avec filtrage)
+    // Lister toutes les demandes (avec filtrage)
     public function index(Request $request)
     {
         $this->ensureAdmin();
@@ -32,9 +33,6 @@ class EntrepriseAdminController extends Controller
 
         if ($request->filled('q')) {
             $q = $request->q;
-            $query->where(function($sub){
-                // closure set below to avoid injection; we'll use SQL after
-            });
             $query->where(function($qb) use ($q) {
                 $qb->where('name', 'like', "%{$q}%")
                    ->orWhere('pdg_full_name', 'like', "%{$q}%");
@@ -46,11 +44,13 @@ class EntrepriseAdminController extends Controller
         return response()->json(['data' => $entreprises]);
     }
 
-    // voir une entreprise (avec fichiers)
-    public function show($id){
+    // Voir une entreprise avec TOUS les détails
+    public function show($id)
+    {
         $this->ensureAdmin();
 
         $entreprise = Entreprise::with(['prestataire','domaines','services'])->find($id);
+        
         if (!$entreprise) {
             return response()->json(['message' => 'Entreprise non trouvée'], 404);
         }
@@ -58,11 +58,13 @@ class EntrepriseAdminController extends Controller
         return response()->json($entreprise);
     }
 
-    // valider
-    public function approve(Request $request, $id){
+    // Valider une entreprise
+    public function approve(Request $request, $id)
+    {
         $this->ensureAdmin();
 
         $entreprise = Entreprise::find($id);
+        
         if (!$entreprise) {
             return response()->json(['message'=>'Entreprise non trouvée'], 404);
         }
@@ -77,27 +79,41 @@ class EntrepriseAdminController extends Controller
             $entreprise->admin_note = $request->admin_note ?? null;
             $entreprise->save();
 
-            // notifier le prestataire
-            $entreprise->prestataire->notify(new EntrepriseStatusChangedNotification($entreprise, 'validée', $entreprise->admin_note));
+            // Notifier le prestataire
+            if ($entreprise->prestataire) {
+                $entreprise->prestataire->notify(
+                    new EntrepriseStatusChangedNotification($entreprise, 'validée', $entreprise->admin_note)
+                );
+            }
 
             DB::commit();
 
-            return response()->json(['message' => 'Entreprise validée', 'entreprise' => $entreprise]);
+            return response()->json([
+                'message' => 'Entreprise validée avec succès', 
+                'entreprise' => $entreprise
+            ], 200);
+            
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Erreur lors de la validation', 'error' => $e->getMessage()], 500);
+            Log::error('Erreur validation entreprise: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Erreur lors de la validation', 
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
-    // rejeter
-    public function reject(Request $request, $id){
+    // Rejeter une entreprise
+    public function reject(Request $request, $id)
+    {
         $this->ensureAdmin();
 
         $request->validate([
-            'admin_note' => 'required|string'
+            'admin_note' => 'required|string|min:10'
         ]);
 
         $entreprise = Entreprise::find($id);
+        
         if (!$entreprise) {
             return response()->json(['message'=>'Entreprise non trouvée'], 404);
         }
@@ -112,17 +128,27 @@ class EntrepriseAdminController extends Controller
             $entreprise->admin_note = $request->admin_note;
             $entreprise->save();
 
-            // notifier le prestataire
-            $entreprise->prestataire->notify(new EntrepriseStatusChangedNotification($entreprise, 'rejetée', $entreprise->admin_note));
+            // Notifier le prestataire
+            if ($entreprise->prestataire) {
+                $entreprise->prestataire->notify(
+                    new EntrepriseStatusChangedNotification($entreprise, 'rejetée', $entreprise->admin_note)
+                );
+            }
 
             DB::commit();
 
-            return response()->json(['message' => 'Entreprise rejetée', 'entreprise' => $entreprise]);
-        } 
-        catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Entreprise rejetée', 
+                'entreprise' => $entreprise
+            ], 200);
+            
+        } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Erreur lors du rejet', 'error' => $e->getMessage()], 500);
+            Log::error('Erreur rejet entreprise: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Erreur lors du rejet', 
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }
-

@@ -14,20 +14,23 @@ export default function MesEntreprises() {
     fetchEntreprises();
   }, []);
 
-  const fetchEntreprises = async () => {
-    try {
-      setLoading(true);
-      const data = await entrepriseApi.getMesEntreprises();
-      setEntreprises(data);
-      setError('');
-    } 
-    catch (err) {
+ // REMPLACER LA FONCTION fetchEntreprises par:
+const fetchEntreprises = async () => {
+  try {
+    setLoading(true);
+    setError(''); // Reset error avant de charger
+    const data = await entrepriseApi.getMesEntreprises();
+    setEntreprises(data);
+  } catch (err) {
+    console.error('Erreur:', err);
+    // Seulement afficher l'erreur si c'est vraiment une erreur réseau
+    if (err.response) {
       setError('Erreur lors du chargement des entreprises');
-      console.error(err);
-    } finally {
-      setLoading(false);
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getStatusBadge = (status) => {
     const badges = {

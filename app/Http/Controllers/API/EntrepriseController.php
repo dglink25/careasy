@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class EntrepriseController extends Controller{
     
@@ -20,33 +21,46 @@ class EntrepriseController extends Controller{
 
     //Liste toutes les entreprises validées (public)
     public function index(){
-        return Entreprise::with('domaines')
+        return Entreprise::with('domaines', 'services')
             ->where('status', 'validated')
             ->get();
     }
 
     //Les entreprises du prestataire connecté
-
-    public function mine(){
-        $user = Auth::user();
-
-        return Entreprise::with('domaines', 'services')
-            ->where('prestataire_id', $user->id)
-            ->get();
+    public function mine()
+{
+    $user = Auth::user();
+    
+    if (!$user) {
+        return response()->json(['message' => 'Non authentifié'], 401);
     }
 
-    // Création d’une entreprise
+    $entreprises = Entreprise::with('domaines', 'services')
+        ->where('prestataire_id', $user->id)
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+    return response()->json($entreprises);
+}
+
+    // Création d'une entreprise
     public function store(Request $request){
+        Log::info('Données reçues:', $request->all());
+        
         $validator = Validator::make($request->all(), [
             'name'               => 'required|string|max:255',
             'domaine_ids'        => 'required|array',
             'domaine_ids.*'      => 'exists:domaines,id',
-            'ifu_number'         => 'nullable|string',
-            'rccm_number'        => 'nullable|string',
-            'pdg_full_name'      => 'nullable|string',
-            'pdg_full_profession'=> 'nullable|string',
+            'ifu_number'         => 'required|string',
+            'ifu_file'           => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'rccm_number'        => 'required|string',
+            'rccm_file'          => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'pdg_full_name'      => 'required|string',
+            'pdg_full_profession'=> 'required|string',
+            'role_user'          => 'required|string',
+            'certificate_number' => 'required|string',
+            'certificate_file'   => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'siege'              => 'nullable|string',
-            'certificate_number' => 'nullable|string',
             'logo'               => 'nullable|image|max:2048',
             'image_boutique'     => 'nullable|image|max:2048',
         ]);
@@ -65,7 +79,7 @@ class EntrepriseController extends Controller{
             $data['prestataire_id'] = Auth::id();
             $data['status'] = 'pending';
 
-            // Upload des images
+            // Upload des fichiers
             if ($request->hasFile('logo')) {
                 $data['logo'] = $request->file('logo')->store('uploads/logos', 'public');
             }
@@ -75,19 +89,22 @@ class EntrepriseController extends Controller{
             }
 
             if ($request->hasFile('ifu_file')) {
-                $data['ifu_file'] = $request->file('ifu_file')->store('uploads/logos', 'public');
+                $data['ifu_file'] = $request->file('ifu_file')->store('uploads/documents', 'public');
             }
 
             if ($request->hasFile('rccm_file')) {
-                $data['rccm_file'] = $request->file('rccm_file')->store('uploads/logos', 'public');
+                $data['rccm_file'] = $request->file('rccm_file')->store('uploads/documents', 'public');
             }
 
             if ($request->hasFile('certificate_file')) {
-                $data['certificate_file'] = $request->file('certificate_file')->store('uploads/logos', 'public');
+                $data['certificate_file'] = $request->file('certificate_file')->store('uploads/documents', 'public');
             }
 
             $entreprise = Entreprise::create($data);
             $entreprise->domaines()->sync($request->domaine_ids);
+            
+            // Recharger avec relations
+            $entreprise->load('domaines', 'prestataire');
 
             DB::commit();
 
@@ -96,9 +113,9 @@ class EntrepriseController extends Controller{
                 'entreprise' => $entreprise
             ], 201);
 
-        } 
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Erreur création entreprise:', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'message' => 'Erreur interne',
@@ -108,9 +125,8 @@ class EntrepriseController extends Controller{
     }
 
     //Afficher une entreprise (public)
-
     public function show($id){
-        $entreprise = Entreprise::with('domaines', 'services')->find($id);
+        $entreprise = Entreprise::with('domaines', 'services', 'prestataire')->find($id);
 
         if (!$entreprise) {
             return response()->json(['message' => 'Entreprise non trouvée'], 404);
@@ -123,7 +139,7 @@ class EntrepriseController extends Controller{
     public function indexByDomaine($domaineId){
         $entreprises = Entreprise::where('status', 'validated')
             ->whereHas('domaines', function ($q) use ($domaineId) {
-                $q->where('domaines.id', $domaineId);  // important !
+                $q->where('domaines.id', $domaineId);
             })
             ->with('domaines', 'services')
             ->get();
@@ -131,12 +147,14 @@ class EntrepriseController extends Controller{
         return response()->json($entreprises);
     }
 
-
     //Rechercher entreprise ou service
     public function search(Request $request){
         $s = $request->query('q');
 
-        $entreprises = Entreprise::where('name', 'LIKE', "%$s%")->get();
+        $entreprises = Entreprise::where('status', 'validated')
+            ->where('name', 'LIKE', "%$s%")
+            ->with('domaines', 'services')
+            ->get();
 
         return response()->json($entreprises);
     }
