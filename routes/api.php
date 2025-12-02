@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\EntrepriseController;
 use App\Http\Controllers\API\ServiceController;
 use App\Http\Controllers\API\Admin\EntrepriseAdminController;
+use App\Http\Controllers\MessageController;
+
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
@@ -43,3 +45,7 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('entreprises/{id}/approve', [EntrepriseAdminController::class, 'approve']);
     Route::post('entreprises/{id}/reject', [EntrepriseAdminController::class, 'reject']);
 });
+
+Route::post('/conversation/start', [MessageController::class, 'startConversation']);
+Route::post('/conversation/{id}/send', [MessageController::class, 'sendMessage']);
+Route::get('/conversation/{id}', [MessageController::class, 'getMessages']);
