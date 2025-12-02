@@ -7,8 +7,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class EnsureEmailIsVerified
-{
+class EnsureEmailIsVerified{
     /**
      * Handle an incoming request.
      *
