@@ -3,12 +3,9 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
-
 
 class AuthenticatedSessionController extends Controller{
     /**
@@ -20,14 +17,17 @@ class AuthenticatedSessionController extends Controller{
             'password' => 'required|string',
         ]);
 
-        if (!auth()->attempt($request->only('email', 'password'))) {
+        if (!Auth::attempt($request->only('email', 'password'))) {
             return response()->json([
                 'message' => 'Invalid login credentials'
             ], 401);
         }
 
         $user = User::where('email', $request->email)->first();
-
+        
+        // Révocation des anciens tokens pour plus de sécurité
+        $user->tokens()->delete();
+        
         $token = $user->createToken('api_token')->plainTextToken;
 
         return response()->json([
@@ -37,17 +37,23 @@ class AuthenticatedSessionController extends Controller{
         ]);
     }
 
-
     /**
      * Destroy an authenticated session.
      */
-
-    public function destroy(Request $request){
-        $request->user()->currentAccessToken()->delete();
-
+    public function destroy(Request $request)
+    {
+        // Vérifie si l'utilisateur est authentifié
+        if ($request->user()) {
+            $request->user()->currentAccessToken()->delete();
+            
+            return response()->json([
+                'message' => 'Logged out successfully'
+            ], 200);
+        }
+        
+        // Si pas d'utilisateur authentifié, on retourne quand même un succès
         return response()->json([
-            'message' => 'Logged out'
-        ]);
+            'message' => 'Already logged out'
+        ], 200);
     }
-
 }

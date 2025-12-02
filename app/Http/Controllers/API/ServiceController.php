@@ -10,8 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 
-class ServiceController extends Controller
-{
+class ServiceController extends Controller{
     /**
      * Services de l'entreprise du prestataire
      */
