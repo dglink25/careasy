@@ -1,4 +1,4 @@
-// careasy-frontend/src/pages/Home.jsx - ULTRA PROFESSIONNEL
+// careasy-frontend/src/pages/Home.jsx - VERSION PROFESSIONNELLE AVEC REACT ICONS
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,66 +7,56 @@ import theme from '../config/theme';
 import { 
   FaWrench, FaPaintBrush, FaCog, FaSnowflake, 
   FaCar, FaShieldAlt, FaGraduationCap, FaOilCan,
-  FaArrowRight, FaComments, FaTimes, FaPaperPlane
+  FaArrowRight, FaComments, FaTimes, FaPaperPlane,
+  FaMapMarkerAlt, FaPhone, FaEnvelope, FaStar
 } from 'react-icons/fa';
 
 export default function Home() {
   const { user } = useAuth();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [services, setServices] = useState([]);
+  const [partners, setPartners] = useState([]);
   const [showChatbot, setShowChatbot] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const sectionsRef = useRef([]);
 
-  // Hero slides avec 8 domaines
+  // Hero slides avec vraies images
   const heroSlides = [
     {
-      image: '/images/hero/mecanique.jpeg',
+      image: 'https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=1600',
       title: 'Mécanique Automobile',
       subtitle: 'Réparation et entretien de tous véhicules',
       icon: <FaWrench />
     },
     {
-      image: '/images/hero/peinture.jpg',
+      image: 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?w=1600',
       title: 'Peinture & Carrosserie',
       subtitle: 'Redonnez vie à votre véhicule',
       icon: <FaPaintBrush />
     },
     {
-      image: '/images/hero/pneumatique.jpg',
+      image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1600',
       title: 'Pneumatique',
       subtitle: 'Pneus neufs et vulcanisation',
       icon: <FaCog />
     },
     {
-      image: '/images/hero/climatisation.jpg',
+      image: 'https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=1600',
       title: 'Climatisation',
       subtitle: 'Roulez au frais toute l\'année',
       icon: <FaSnowflake />
     },
     {
-      image: '/images/hero/autoecole.jpg',
+      image: 'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=1600',
       title: 'Auto-école',
       subtitle: 'Apprenez à conduire en toute sécurité',
       icon: <FaGraduationCap />
     },
     {
-      image: '/images/hero/assurance.jpg',
+      image: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=1600',
       title: 'Assurance Automobile',
       subtitle: 'Protégez votre véhicule',
       icon: <FaShieldAlt />
-    },
-    {
-      image: '/images/hero/vidange.jpg',
-      title: 'Vidange & Entretien',
-      subtitle: 'Prolongez la vie de votre moteur',
-      icon: <FaOilCan />
-    },
-    {
-      image: '/images/hero/location.jpg',
-      title: 'Location de Véhicules',
-      subtitle: 'Louez le véhicule qu\'il vous faut',
-      icon: <FaCar />
     }
   ];
 
@@ -74,42 +64,42 @@ export default function Home() {
     {
       id: 1,
       name: 'Mécanique',
-      image: '/images/domaines/mecanique.jpeg',
+      image: 'https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800',
       description: 'Réparation moteur, boîte de vitesses, suspension',
       icon: <FaWrench />
     },
     {
       id: 2,
       name: 'Peinture',
-      image: '/images/domaines/peinture.jpg',
+      image: 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?w=800',
       description: 'Carrosserie, débosselage, peinture complète',
       icon: <FaPaintBrush />
     },
     {
       id: 3,
       name: 'Pneumatique',
-      image: '/images/domaines/pneumatique.jpg',
+      image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800',
       description: 'Pneus, jantes, équilibrage, vulcanisation',
       icon: <FaCog />
     },
     {
       id: 4,
       name: 'Climatisation',
-      image: '/images/domaines/climatisation.jpg',
+      image: 'https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=800',
       description: 'Recharge gaz, réparation système AC',
       icon: <FaSnowflake />
     },
     {
       id: 5,
       name: 'Auto-école',
-      image: '/images/domaines/autoecole.jpg',
+      image: 'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=800',
       description: 'Permis B, formation complète',
       icon: <FaGraduationCap />
     },
     {
       id: 6,
       name: 'Assurance',
-      image: '/images/domaines/assurance.jpg',
+      image: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=800',
       description: 'Tous types d\'assurances auto',
       icon: <FaShieldAlt />
     }
@@ -126,14 +116,24 @@ export default function Home() {
   // Fetch services récents
   useEffect(() => {
     fetchRecentServices();
+    fetchPartners();
   }, []);
 
   const fetchRecentServices = async () => {
     try {
       const data = await publicApi.getServices();
-      setServices(data.slice(0, 6)); // 6 plus récents
+      setServices(data.slice(0, 6));
     } catch (err) {
       console.error('Erreur chargement services:', err);
+    }
+  };
+
+  const fetchPartners = async () => {
+    try {
+      const data = await publicApi.getEntreprises();
+      setPartners(data.slice(0, 10));
+    } catch (err) {
+      console.error('Erreur chargement partenaires:', err);
     }
   };
 
@@ -157,26 +157,21 @@ export default function Home() {
     return () => observer.disconnect();
   }, []);
 
-  const partners = [
-    'Total Énergies', 'Shell', 'Michelin', 'Bosch', 'Continental',
-    'Castrol', 'Renault', 'Toyota', 'Peugeot', 'Nissan'
-  ];
-
   const handleChatSend = () => {
-    // Simulation IA (frontend only)
-    alert(`Message envoyé : ${chatMessage}\n\n(L'IA sera disponible bientot)`);
+    alert(`Message envoyé : ${chatMessage}\n\n(L'IA sera disponible bientôt)`);
     setChatMessage('');
   };
 
   return (
     <div style={styles.container}>
-      {/* Hero Carousel */}
+      {/* Hero Carousel avec vraies images */}
       <div style={styles.heroSection}>
         {heroSlides.map((slide, index) => (
           <div
             key={index}
             style={{
               ...styles.slide,
+              backgroundImage: `url(${slide.image})`,
               opacity: currentSlide === index ? 1 : 0,
               zIndex: currentSlide === index ? 1 : 0,
             }}
@@ -215,7 +210,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Section Domaines */}
+      {/* Section Domaines avec vraies images */}
       <div 
         ref={el => sectionsRef.current[0] = el}
         className="animate-section"
@@ -227,14 +222,19 @@ export default function Home() {
         </p>
         
         <div style={styles.domainesGrid}>
-          {domaines.map((domaine, index) => (
+          {domaines.map((domaine) => (
             <Link
               key={domaine.id}
               to={`/entreprises?domaine=${domaine.id}`}
               style={styles.domaineCard}
               className="domaine-card"
             >
-              <div style={styles.domaineImage}>
+              <div 
+                style={{
+                  ...styles.domaineImage,
+                  backgroundImage: `url(${domaine.image})`
+                }}
+              >
                 <div style={styles.domaineOverlay}>
                   <div style={styles.domaineIcon}>{domaine.icon}</div>
                 </div>
@@ -298,7 +298,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Section Partenaires Défilants */}
+      {/* Section Partenaires avec logos/images défilants */}
       <div 
         ref={el => sectionsRef.current[2] = el}
         className="animate-section"
@@ -309,8 +309,18 @@ export default function Home() {
           <div style={styles.partnersSlide} className="partners-scroll">
             {[...partners, ...partners].map((partner, index) => (
               <div key={index} style={styles.partnerCard}>
-                <div style={styles.partnerLogo}>{partner.charAt(0)}</div>
-                <p style={styles.partnerName}>{partner}</p>
+                {partner.logo ? (
+                  <img 
+                    src={`${import.meta.env.VITE_API_URL}/storage/${partner.logo}`}
+                    alt={partner.name}
+                    style={styles.partnerImage}
+                  />
+                ) : (
+                  <div style={styles.partnerPlaceholder}>
+                    {partner.name.charAt(0)}
+                  </div>
+                )}
+                <p style={styles.partnerName}>{partner.name}</p>
               </div>
             ))}
           </div>
@@ -445,7 +455,7 @@ const styles = {
     backgroundColor: theme.colors.background,
   },
   
-  // Hero
+  // Hero avec vraies images
   heroSection: {
     position: 'relative',
     height: '100vh',
@@ -457,7 +467,8 @@ const styles = {
     left: 0,
     width: '100%',
     height: '100%',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
     transition: 'opacity 1s ease-in-out',
   },
   slideOverlay: {
@@ -570,7 +581,7 @@ const styles = {
     margin: '0 auto 4rem',
   },
   
-  // Domaines
+  // Domaines avec vraies images
   domainesGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
@@ -587,7 +598,8 @@ const styles = {
   domaineImage: {
     position: 'relative',
     height: '200px',
-    backgroundColor: theme.colors.primaryLight,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
   },
   domaineOverlay: {
     width: '100%',
@@ -693,7 +705,7 @@ const styles = {
     boxShadow: theme.shadows.lg,
   },
   
-  // Partenaires
+  // Partenaires avec images défilantes
   partnersSection: {
     padding: '4rem 0',
     backgroundColor: theme.colors.secondary,
@@ -715,7 +727,14 @@ const styles = {
     minWidth: '180px',
     border: `2px solid ${theme.colors.primaryLight}`,
   },
-  partnerLogo: {
+  partnerImage: {
+    width: '80px',
+    height: '80px',
+    margin: '0 auto 1rem',
+    borderRadius: '50%',
+    objectFit: 'cover',
+  },
+  partnerPlaceholder: {
     width: '80px',
     height: '80px',
     margin: '0 auto 1rem',
@@ -810,44 +829,186 @@ const styles = {
     borderRadius: theme.borderRadius.md,
     marginBottom: '1rem',
   },
-  chatbotInfo: {
-    fontSize: '0.875rem',
+   chatbotInfo: {
     color: theme.colors.text.secondary,
+    fontSize: '0.85rem',
+    textAlign: 'center',
+    marginTop: '1rem',
     fontStyle: 'italic',
+    padding: '0.5rem',
+    background: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: theme.borderRadius.md,
+    border: `1px solid ${theme.colors.primaryLight}20`,
   },
+
   chatbotFooter: {
-    padding: '1rem',
-    borderTop: `1px solid ${theme.colors.primaryLight}`,
+    padding: '1.25rem',
+    borderTop: `2px solid ${theme.colors.primaryLight}`,
     display: 'flex',
     gap: '0.75rem',
+    alignItems: 'center',
+    background: theme.colors.background,
   },
+
   chatbotInput: {
     flex: 1,
-    padding: '0.75rem',
+    padding: '1rem 1.5rem',
+    borderRadius: theme.borderRadius.lg,
     border: `2px solid ${theme.colors.primaryLight}`,
-    borderRadius: theme.borderRadius.md,
-    outline: 'none',
-  },
-  chatbotSend: {
-    backgroundColor: theme.colors.primary,
-    color: '#fff',
-    border: 'none',
-    padding: '0.75rem 1.25rem',
-    borderRadius: theme.borderRadius.md,
-    cursor: 'pointer',
     fontSize: '1rem',
+    fontFamily: 'inherit',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    background: theme.colors.secondary,
+    color: theme.colors.text.primary,
+    minHeight: '52px',
   },
-  chatbotButton: {
-    width: '70px',
-    height: '70px',
-    borderRadius: '50%',
-    backgroundColor: theme.colors.primary,
+
+  chatbotSend: {
+    background: `linear-gradient(135deg, ${theme.colors.primary}, ${theme.colors.primaryDark || '#991b1b'})`,
     color: '#fff',
     border: 'none',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+    borderRadius: theme.borderRadius.lg,
+    width: '52px',
+    height: '52px',
+    minWidth: '52px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    fontSize: '1.25rem',
+    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)',
   },
-};
+
+  chatbotButton: {
+    background: `linear-gradient(135deg, ${theme.colors.primary}, #991b1b)`,
+    color: '#fff',
+    border: `2px solid rgba(255, 255, 255, 0.2)`,
+    borderRadius: '50%',
+    width: '70px',
+    height: '70px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 10px 35px rgba(0, 0, 0, 0.3)',
+    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    fontSize: '1.75rem',
+    position: 'relative',
+    overflow: 'hidden',
+    zIndex: 1001,
+  },
+
+  chatbotNotification: {
+    position: 'absolute',
+    top: '-5px',
+    right: '-5px',
+    background: '#ef4444',
+    color: '#fff',
+    width: '25px',
+    height: '25px',
+    borderRadius: '50%',
+    fontSize: '0.75rem',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 'bold',
+    border: `2px solid ${theme.colors.secondary}`,
+    boxShadow: '0 3px 10px rgba(0, 0, 0, 0.3)',
+  },
+
+  typingIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '1rem 1.25rem',
+    background: theme.colors.background,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: '1rem',
+    width: 'fit-content',
+    border: `1px solid ${theme.colors.primaryLight}40`,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+  },
+
+  typingDot: {
+    width: '10px',
+    height: '10px',
+    background: theme.colors.primary,
+    borderRadius: '50%',
+    opacity: 0.8,
+  },
+
+  chatbotMessageUser: {
+    backgroundColor: theme.colors.primary,
+    color: '#fff',
+    padding: '1rem 1.25rem',
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: '1rem',
+    marginLeft: 'auto',
+    maxWidth: '80%',
+    border: `1px solid ${theme.colors.primaryDark || '#991b1b'}`,
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+  },
+
+  chatbotMessageBot: {
+    backgroundColor: theme.colors.background,
+    color: theme.colors.text.primary,
+    padding: '1rem 1.25rem',
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: '1rem',
+    marginRight: 'auto',
+    maxWidth: '80%',
+    border: `1px solid ${theme.colors.primaryLight}40`,
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+  },
+
+  chatbotMessagesContainer: {
+    height: '300px',
+    overflowY: 'auto',
+    padding: '1.5rem',
+    scrollBehavior: 'smooth',
+  },
+
+  chatbotWelcome: {
+    textAlign: 'center',
+    padding: '2rem 1rem',
+    color: theme.colors.text.secondary,
+  },
+
+  chatbotWelcomeIcon: {
+    fontSize: '3rem',
+    color: theme.colors.primary,
+    marginBottom: '1rem',
+    opacity: 0.8,
+  },
+
+  chatbotWelcomeTitle: {
+    fontSize: '1.25rem',
+    fontWeight: '600',
+    marginBottom: '0.5rem',
+    color: theme.colors.text.primary,
+  },
+
+  chatbotWelcomeText: {
+    fontSize: '0.95rem',
+    lineHeight: '1.6',
+    maxWidth: '280px',
+    margin: '0 auto',
+  },
+
+  chatbotStatus: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    fontSize: '0.85rem',
+    color: theme.colors.text.secondary,
+    marginTop: '0.75rem',
+  },
+
+  chatbotStatusDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    background: '#10b981',
+  },
+}

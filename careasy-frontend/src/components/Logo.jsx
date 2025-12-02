@@ -1,39 +1,34 @@
-// careasy-frontend/src/components/Logo.jsx
+// careasy-frontend/src/components/Logo.jsx - VERSION PROFESSIONNELLE
 import { Link } from 'react-router-dom';
 
 export default function Logo({ size = 'md', showText = true }) {
   const sizes = {
-    sm: { container: '30px', text: '1rem' },
-    md: { container: '40px', text: '1.25rem' },
+    sm: { container: '35px', text: '1rem' },
+    md: { container: '45px', text: '1.25rem' },
     lg: { container: '60px', text: '1.5rem' },
   };
 
   return (
     <Link to="/" style={styles.link}>
       <div style={styles.container}>
-        {/* Option 1: Si vous avez un logo dans public/logo.png */}
+        {/* Logo dans un cercle */}
         <div 
           style={{
-            ...styles.logoPlaceholder,
+            ...styles.logoCircle,
             width: sizes[size].container,
             height: sizes[size].container,
           }}
         >
-          {/* Si vous avez un logo, décommentez la ligne ci-dessous et mettez le logo dans public/logo.png */}
-          { <img src="/logo.png" alt="CarEasy Logo" style={styles.logoImage} /> }
-          
-          {/* Sinon, utilisez le SVG temporaire */}
-         {/* <svg 
-            width={sizes[size].container} 
-            height={sizes[size].container} 
-            viewBox="0 0 40 40"
-            style={styles.logoSvg}
-          >
-            <circle cx="20" cy="20" r="18" fill="#DC2626"/>
-            <text x="20" y="26" fontSize="18" fontWeight="bold" fill="white" textAnchor="middle">
-              C
-            </text>
-          </svg>*/}
+          <img 
+            src="/logo.png" 
+            alt="CarEasy Logo" 
+            style={styles.logoImage}
+            onError={(e) => {
+              // Fallback si l'image n'existe pas
+              e.target.style.display = 'none';
+              e.target.parentElement.innerHTML = '<span style="font-size: 1.5rem; font-weight: bold; color: white;">C</span>';
+            }}
+          />
         </div>
         
         {showText && (
@@ -43,7 +38,7 @@ export default function Logo({ size = 'md', showText = true }) {
               fontSize: sizes[size].text,
             }}
           >
-            CarEasy
+            <span style={styles.textAccent}>CarEasy</span>
           </span>
         )}
       </div>
@@ -60,22 +55,30 @@ const styles = {
     alignItems: 'center',
     gap: '0.75rem',
   },
-  logoPlaceholder: {
+  logoCircle: {
+    borderRadius: '50%',
+    backgroundColor: '#DC2626',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
+    border: '3px solid #FEE2E2',
+    transition: 'transform 0.3s ease',
   },
   logoImage: {
-    width: '100%',
-    height: '100%',
+    width: '70%',
+    height: '70%',
     objectFit: 'contain',
   },
-  logoSvg: {
-    display: 'block',
-  },
   text: {
-    fontWeight: 'bold',
-    color: '#DC2626',
+    fontWeight: '700',
+    color: '#1F2937',
     letterSpacing: '-0.025em',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  textAccent: {
+    color: '#DC2626',
   },
 };
