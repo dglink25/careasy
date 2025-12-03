@@ -122,12 +122,12 @@ export default function AdminEntrepriseDetails() {
     setError('');
     try {
       const response = await adminApi.approveEntreprise(id, adminNote || null);
-      alert('✅ ' + response.message);
+      alert(response.message);
       navigate('/admin/entreprises');
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message || 'Erreur lors de la validation';
       setError(errorMsg);
-      alert('❌ ' + errorMsg);
+      alert(errorMsg);
     } finally {
       setActionLoading(false);
       setShowApproveModal(false);
@@ -144,12 +144,12 @@ export default function AdminEntrepriseDetails() {
     setError('');
     try {
       const response = await adminApi.rejectEntreprise(id, adminNote);
-      alert('✅ ' + response.message);
+      alert(response.message);
       navigate('/admin/entreprises');
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message || 'Erreur lors du rejet';
       setError(errorMsg);
-      alert('❌ ' + errorMsg);
+      alert( errorMsg);
     } finally {
       setActionLoading(false);
       setShowRejectModal(false);
@@ -235,7 +235,8 @@ export default function AdminEntrepriseDetails() {
       );
     }
     
-    const fullUrl = `${import.meta.env.VITE_API_URL}/storage/${filePath}`;
+    const fullUrl = `${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage${filePath?.replace(/^\/?storage\//, '')}`;
+    
     return (
       <div style={styles.fileLinkContainer}>
         <a 
@@ -383,7 +384,7 @@ export default function AdminEntrepriseDetails() {
                 <div style={styles.titleWithLogo}>
                   {entreprise.logo && (
                     <img 
-                      src={`${import.meta.env.VITE_API_URL}/storage/${entreprise.logo}`}
+                      src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${entreprise.logo?.replace(/^\/?storage\//, '')}`}
                       alt={entreprise.name}
                       style={styles.companyLogo}
                       onError={(e) => {
@@ -595,7 +596,7 @@ export default function AdminEntrepriseDetails() {
                       </div>
                       {entreprise.logo ? (
                         <img 
-                          src={`${import.meta.env.VITE_API_URL}/storage/${entreprise.logo}`}
+                          src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${entreprise.logo?.replace(/^\/?storage\//, '')}`}
                           alt="Logo de l'entreprise"
                           style={styles.mediaPreview}
                           onError={(e) => {
@@ -618,7 +619,7 @@ export default function AdminEntrepriseDetails() {
                       </div>
                       {entreprise.image_boutique ? (
                         <img 
-                          src={`${import.meta.env.VITE_API_URL}/storage/${entreprise.image_boutique}`}
+                          src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${entreprise.image_boutique?.replace(/^\/?storage\//, '')}`}
                           alt="Boutique de l'entreprise"
                           style={styles.mediaPreview}
                           onError={(e) => {
