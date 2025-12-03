@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { entrepriseApi } from '../../api/entrepriseApi';
+import { useGeolocation } from '../../hooks/useGeolocation';
 import theme from '../../config/theme';
 
 const STEPS = [
@@ -18,6 +19,9 @@ export default function CreerEntreprise() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [domaines, setDomaines] = useState([]);
+
+  // Géolocalisation automatique
+  const { latitude, longitude, loading: geoLoading, error: geoError } = useGeolocation();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -47,6 +51,18 @@ export default function CreerEntreprise() {
   useEffect(() => {
     fetchDomaines();
   }, []);
+
+  // 🆕 Afficher l'erreur de géolocalisation
+  useEffect(() => {
+    if (geoError) {
+      setError(`⚠️ ${geoError}. Veuillez activer la géolocalisation dans votre navigateur pour continuer.`);
+    } else {
+      // Effacer l'erreur si la géolocalisation réussit
+      if (latitude && longitude && error.includes('géolocalisation')) {
+        setError('');
+      }
+    }
+  }, [geoError, latitude, longitude]);
 
   const fetchDomaines = async () => {
     try {
@@ -165,6 +181,19 @@ export default function CreerEntreprise() {
   };
 
   const handleSubmit = async () => {
+
+    //  Validation géolocalisation
+    if (geoLoading) {
+      setError('⏳ Géolocalisation en cours... Veuillez patienter quelques secondes.');
+      return;
+    }
+
+    if (!latitude || !longitude) {
+      setError('❌ Impossible de récupérer votre position. Veuillez activer la géolocalisation dans votre navigateur et recharger la page.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -186,6 +215,12 @@ export default function CreerEntreprise() {
       if (formData.ifu_file) submitData.append('ifu_file', formData.ifu_file);
       if (formData.rccm_file) submitData.append('rccm_file', formData.rccm_file);
       if (formData.certificate_file) submitData.append('certificate_file', formData.certificate_file);
+
+       // 🆕 Ajouter latitude et longitude
+      submitData.append('latitude', latitude.toString());
+      submitData.append('longitude', longitude.toString());
+
+      console.log('📍 Envoi avec localisation:', { latitude, longitude });
 
       await entrepriseApi.createEntreprise(submitData);
       
@@ -406,8 +441,36 @@ export default function CreerEntreprise() {
           <div style={styles.stepContent}>
             <h2 style={styles.stepTitle}>📍 Localisation & Médias</h2>
             
+            {/* 🆕 Indicateur de géolocalisation */}
+            {geoLoading && (
+              <div style={styles.geoAlert}>
+                <div style={styles.geoSpinner}></div>
+                <span>📍 Récupération automatique de votre position...</span>
+              </div>
+            )}
+
+            {geoError && (
+              <div style={styles.geoError}>
+                ⚠️ Erreur : {geoError}
+                <br />
+                <small>Veuillez activer la géolocalisation dans votre navigateur</small>
+              </div>
+            )}
+
+            {latitude && longitude && (
+              <div style={styles.geoSuccess}>
+                ✅ Position détectée automatiquement
+                <div style={styles.geoCoords}>
+                  📍 Coordonnées : {latitude.toFixed(6)}°, {longitude.toFixed(6)}°
+                </div>
+              </div>
+            )}
+            
             <div style={styles.formGroup}>
               <label style={styles.label}>Siège de l'entreprise</label>
+              <p style={styles.hint}>
+                Adresse approximative (ex: Cotonou, Akpakpa). Votre position exacte est détectée automatiquement.
+              </p>
               <input
                 type="text"
                 name="siege"
@@ -475,10 +538,12 @@ export default function CreerEntreprise() {
                 <p><strong>Profession :</strong> {formData.pdg_full_profession}</p>
                 <p><strong>Votre rôle :</strong> {formData.role_user}</p>
               </div>
-
-              <div style={styles.summarySection}>
+                <div style={styles.summarySection}>
                 <h3 style={styles.summaryTitle}>📍 Localisation & Médias</h3>
                 <p><strong>Siège :</strong> {formData.siege || 'Non renseigné'}</p>
+                {latitude && longitude && (
+                  <p><strong>Position GPS :</strong> ✅ Détectée ({latitude.toFixed(4)}°, {longitude.toFixed(4)}°)</p>
+                )}
                 <p><strong>Logo :</strong> {previews.logo ? '✅ Chargé' : 'Non fourni'}</p>
                 <p><strong>Image boutique :</strong> {previews.image_boutique ? '✅ Chargée' : 'Non fournie'}</p>
               </div>
@@ -549,14 +614,27 @@ export default function CreerEntreprise() {
           ) : (
             <button 
               onClick={handleSubmit} 
-              disabled={loading}
-              style={{...styles.btnPrimary, opacity: loading ? 0.6 : 1}}
+              disabled={loading || geoLoading || !latitude || !longitude}
+              style={{
+                ...styles.btnPrimary, 
+                opacity: (loading || geoLoading || !latitude || !longitude) ? 0.5 : 1,
+                cursor: (loading || geoLoading || !latitude || !longitude) ? 'not-allowed' : 'pointer'
+              }}
             >
-              {loading ? '⏳ Envoi en cours...' : '✅ Finaliser et envoyer'}
+              {loading ? '⏳ Envoi en cours...' : 
+               geoLoading ? '📍 Localisation en cours...' : 
+               !latitude || !longitude ? '❌ Localisation requise' :
+               '✅ Finaliser et envoyer'}
             </button>
           )}
         </div>
       </div>
+      {/* 🆕 CSS Animations */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -794,5 +872,37 @@ const styles = {
     cursor: 'pointer',
     fontSize: '1rem',
     transition: 'all 0.3s',
+  },
+  geoAlert: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    backgroundColor: '#FEF3C7',
+    border: `2px solid ${theme.colors.warning}`,
+    padding: '1rem 1.5rem',
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: '2rem',
+    fontSize: '1rem',
+    color: theme.colors.text.primary,
+  },
+  geoSuccess: {
+    backgroundColor: '#D1FAE5',
+    border: `2px solid ${theme.colors.success}`,
+    color: theme.colors.success,
+    padding: '1rem 1.5rem',
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: '2rem',
+    fontSize: '1rem',
+    fontWeight: '600',
+  },
+  geoError: {
+    backgroundColor: '#FEE2E2',
+    border: `2px solid ${theme.colors.error}`,
+    color: theme.colors.error,
+    padding: '1rem 1.5rem',
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: '2rem',
+    fontSize: '1rem',
+    fontWeight: '600',
   },
 };

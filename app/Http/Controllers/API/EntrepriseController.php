@@ -64,8 +64,8 @@ class EntrepriseController extends Controller{
             'siege'              => 'nullable|string',
             'logo'               => 'nullable|image|max:2048',
             'image_boutique'     => 'nullable|image|max:2048',
-            'latitude'  => 'required|numeric',
-            'longitude' => 'required|numeric',
+            'latitude'  => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
         ]);
 
         if ($validator->fails()) {
