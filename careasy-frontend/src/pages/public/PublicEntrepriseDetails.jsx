@@ -232,7 +232,7 @@ export default function PublicEntrepriseDetails() {
             {entreprise.image_boutique ? (
               <div style={styles.heroImage}>
                 <img 
-                  src={`${import.meta.env.VITE_API_URL}/storage/${entreprise.image_boutique}`}
+                  src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${entreprise.image_boutique?.replace(/^\/?storage\//, '')}`}
                   alt={`Boutique ${entreprise.name}`}
                   style={styles.heroImg}
                   onError={(e) => {
@@ -370,7 +370,7 @@ export default function PublicEntrepriseDetails() {
                             {service.medias && service.medias.length > 0 && (
                               <div style={styles.serviceImageContainer}>
                                 <img 
-                                  src={`${import.meta.env.VITE_API_URL}/storage/${service.medias[0]}`}
+                                  src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${service.medias[0]?.replace(/^\/?storage\//, '')}`}
                                   alt={service.name}
                                   style={styles.serviceImage}
                                   onError={(e) => {

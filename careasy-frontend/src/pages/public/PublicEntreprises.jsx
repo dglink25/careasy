@@ -496,7 +496,7 @@ export default function PublicEntreprises() {
                     <div style={styles.cardImage}>
                       {entreprise.logo ? (
                         <img 
-                          src={`${import.meta.env.VITE_API_URL}/storage/${entreprise.logo}`}
+                          src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${entreprise.logo?.replace(/^\/?storage\//, '')}`}
                           alt={entreprise.name}
                           style={styles.logo}
                           onError={(e) => {

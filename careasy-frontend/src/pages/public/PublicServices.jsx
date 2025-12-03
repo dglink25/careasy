@@ -62,7 +62,7 @@ export default function PublicServices() {
         <div style={styles.searchSection}>
           <input
             type="text"
-            placeholder="🔍 Rechercher un service..."
+            placeholder="Rechercher un service..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={styles.searchInput}
@@ -107,7 +107,7 @@ export default function PublicServices() {
                   {service.medias && service.medias.length > 0 ? (
                     <div style={styles.cardImage}>
                       <img 
-                        src={`${import.meta.env.VITE_API_URL}/storage/${service.medias[0]}`}
+                        src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${service.medias[0]?.replace(/^\/?storage\//, '')}`}
                         alt={service.name}
                         style={styles.image}
                       />

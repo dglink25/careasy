@@ -268,7 +268,7 @@ export default function Home() {
               {service.medias && service.medias.length > 0 ? (
                 <div style={styles.serviceImage}>
                   <img 
-                    src={`${import.meta.env.VITE_API_URL}/storage/${service.medias[0]}`}
+                    src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${service.medias[0]?.replace(/^\/?storage\//, '')}`}
                     alt={service.name}
                     style={styles.serviceImg}
                   />
@@ -311,7 +311,7 @@ export default function Home() {
               <div key={index} style={styles.partnerCard}>
                 {partner.logo ? (
                   <img 
-                    src={`${import.meta.env.VITE_API_URL}/storage/${partner.logo}`}
+                    src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${partner.logo?.replace(/^\/?storage\//, '')}`}
                     alt={partner.name}
                     style={styles.partnerImage}
                   />
@@ -362,7 +362,7 @@ export default function Home() {
             </div>
             <div style={styles.chatbotBody}>
               <div style={styles.chatbotMessage}>
-                👋 Bonjour ! Je suis l'assistant IA de CarEasy. Comment puis-je vous aider aujourd'hui ?
+                Bonjour ! Je suis l'assistant IA de CarEasy. Comment puis-je vous aider aujourd'hui ?
               </div>
               <p style={styles.chatbotInfo}>
                 (L'IA sera bientôt disponible - En développement)
