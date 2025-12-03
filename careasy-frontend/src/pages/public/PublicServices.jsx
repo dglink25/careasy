@@ -167,7 +167,7 @@ export default function PublicServices() {
                         <div style={styles.entrepriseInfo}>
                           {service.entreprise.logo ? (
                             <img 
-                              src={`${import.meta.env.VITE_API_URL}/storage/${service.entreprise.logo}`}
+                              src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}/storage/${service.entreprise.logo?.replace(/^\/?storage\//, '')}`}
                               alt={service.entreprise.name}
                               style={styles.entrepriseLogo}
                             />
