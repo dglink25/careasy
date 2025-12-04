@@ -231,17 +231,7 @@ export default function MesEntreprises() {
               <div style={styles.statLabel}>Rejetées</div>
             </div>
           </div>
-
-          <div style={styles.statCard}>
-            <div style={styles.statIconContainer}>
-              <MdOutlineWork style={styles.statIcon} />
-            </div>
-            <div style={styles.statContent}>
-              <div style={styles.statNumber}>{stats.totalServices}</div>
-              <div style={styles.statLabel}>Services</div>
-            </div>
-          </div>
-
+          
           <div style={styles.statCard}>
             <div style={styles.statIconContainer}>
               <FiClock style={styles.statIcon} />
@@ -603,7 +593,7 @@ const styles = {
   },
   titleIcon: {
     fontSize: '2.25rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   subtitle: {
     color: '#64748b',
@@ -639,7 +629,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ef4444',
     color: '#fff',
     padding: '0.875rem 1.75rem',
     borderRadius: '0.75rem',
@@ -678,7 +668,7 @@ const styles = {
   },
   statIcon: {
     fontSize: '1.5rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   statContent: {
     flex: 1,
@@ -779,9 +769,9 @@ const styles = {
     transition: 'all 0.3s',
   },
   filterButtonStatusActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ef4444',
     color: '#fff',
-    borderColor: '#3b82f6',
+    borderColor: '#ef4444',
   },
   filterButtonIcon: {
     fontSize: '1rem',
@@ -841,7 +831,7 @@ const styles = {
   },
   emptyIcon: {
     fontSize: '2.5rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   emptyTitle: {
     fontSize: '1.5rem',
@@ -861,7 +851,7 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '0.5rem',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ef4444',
     color: '#fff',
     padding: '0.875rem 2rem',
     borderRadius: '0.75rem',
@@ -918,7 +908,7 @@ const styles = {
   },
   logoIcon: {
     fontSize: '2rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   cardHeaderInfo: {
     flex: 1,
@@ -1008,7 +998,7 @@ const styles = {
   },
   domaineTag: {
     backgroundColor: '#f0f9ff',
-    color: '#0369a1',
+    color: '#943535ff',
     padding: '0.375rem 0.75rem',
     borderRadius: '0.5rem',
     fontSize: '0.75rem',
@@ -1050,7 +1040,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '0.375rem',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#08ad53ff',
     color: '#fff',
     textDecoration: 'none',
     padding: '0.5rem 1rem',

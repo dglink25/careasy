@@ -361,47 +361,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Statistiques détaillées */}
-            <div style={styles.sectionCard}>
-              <div style={styles.sectionHeader}>
-                <h3 style={styles.sectionTitle}>
-                  <MdOutlineAnalytics style={styles.sectionIcon} />
-                  Statistiques détaillées
-                </h3>
-              </div>
-              <div style={styles.detailedStats}>
-                <div style={styles.detailedStatItem}>
-                  <div style={styles.detailedStatLabel}>Entreprises validées</div>
-                  <div style={styles.detailedStatValue}>{stats.validatedEntreprises}</div>
-                  <div style={styles.detailedStatProgress}>
-                    <div style={{
-                      ...styles.detailedStatProgressBar,
-                      width: `${(stats.validatedEntreprises / Math.max(stats.totalEntreprises, 1)) * 100}%`
-                    }}></div>
-                  </div>
-                </div>
-                <div style={styles.detailedStatItem}>
-                  <div style={styles.detailedStatLabel}>Services avec tarif</div>
-                  <div style={styles.detailedStatValue}>{stats.servicesWithPrice}</div>
-                  <div style={styles.detailedStatProgress}>
-                    <div style={{
-                      ...styles.detailedStatProgressBar,
-                      width: `${(stats.servicesWithPrice / Math.max(stats.totalServices, 1)) * 100}%`
-                    }}></div>
-                  </div>
-                </div>
-                <div style={styles.detailedStatItem}>
-                  <div style={styles.detailedStatLabel}>Taux d'occupation</div>
-                  <div style={styles.detailedStatValue}>78%</div>
-                  <div style={styles.detailedStatProgress}>
-                    <div style={{
-                      ...styles.detailedStatProgressBar,
-                      width: '78%'
-                    }}></div>
-                  </div>
-                </div>
-              </div>
-            </div>
+           
           </div>
 
           {/* Colonne droite - État et notifications */}
@@ -507,47 +467,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Notifications */}
-            <div style={styles.sectionCard}>
-              <div style={styles.sectionHeader}>
-                <h3 style={styles.sectionTitle}>
-                  <MdOutlineNotifications style={styles.sectionIcon} />
-                  Notifications
-                </h3>
-              </div>
-              <div style={styles.notificationsList}>
-                <div style={styles.notificationItem}>
-                  <div style={styles.notificationIcon}>
-                    <FiCheckCircle />
-                  </div>
-                  <div style={styles.notificationContent}>
-                    <div style={styles.notificationTitle}>Entreprise validée</div>
-                    <div style={styles.notificationText}>"AutoCare Garage" a été approuvée</div>
-                    <div style={styles.notificationTime}>Il y a 2 heures</div>
-                  </div>
-                </div>
-                <div style={styles.notificationItem}>
-                  <div style={styles.notificationIcon}>
-                    <FiMessageSquare />
-                  </div>
-                  <div style={styles.notificationContent}>
-                    <div style={styles.notificationTitle}>Nouveau message</div>
-                    <div style={styles.notificationText}>Demande de devis pour vidange</div>
-                    <div style={styles.notificationTime}>Il y a 1 jour</div>
-                  </div>
-                </div>
-                <div style={styles.notificationItem}>
-                  <div style={styles.notificationIcon}>
-                    <FiCalendar />
-                  </div>
-                  <div style={styles.notificationContent}>
-                    <div style={styles.notificationTitle}>Rendez-vous confirmé</div>
-                    <div style={styles.notificationText}>Demain à 14h: Réparation freins</div>
-                    <div style={styles.notificationTime}>Il y a 2 jours</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            
           </div>
         </div>
 
@@ -657,7 +577,7 @@ const styles = {
     width: '50px',
     height: '50px',
     border: '4px solid #dbeafe',
-    borderTop: '4px solid #3b82f6',
+    borderTop: '4px solid #ef4444',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
   },
@@ -689,7 +609,7 @@ const styles = {
   },
   titleIcon: {
     fontSize: '2.25rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   subtitle: {
     color: '#64748b',
@@ -745,7 +665,7 @@ const styles = {
     width: '80px',
     height: '80px',
     borderRadius: '50%',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ef4444',
     color: '#fff',
     display: 'flex',
     alignItems: 'center',
@@ -831,7 +751,7 @@ const styles = {
   },
   statIcon: {
     fontSize: '1.75rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   statContent: {
     flex: 1,
@@ -910,10 +830,10 @@ const styles = {
   },
   sectionIcon: {
     fontSize: '1.25rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   viewAllLink: {
-    color: '#3b82f6',
+    color: '#ef4444',
     textDecoration: 'none',
     fontSize: '0.875rem',
     fontWeight: '600',
@@ -945,7 +865,7 @@ const styles = {
     backgroundColor: '#dbeafe',
     borderRadius: '0.5rem',
     fontSize: '1.25rem',
-    color: '#3b82f6',
+    color: '#ef4444',
     flexShrink: 0,
   },
   actionContent: {
@@ -993,7 +913,7 @@ const styles = {
   },
   detailedStatProgressBar: {
     height: '100%',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ef4444',
     borderRadius: '3px',
   },
   entreprisesList: {
@@ -1100,7 +1020,7 @@ const styles = {
   },
   service24h: {
     fontSize: '0.75rem',
-    color: '#6366f1',
+    color: '#ef4444',
     fontWeight: '600',
   },
   emptyState: {
@@ -1122,7 +1042,7 @@ const styles = {
     marginBottom: '1rem',
   },
   emptyStateButton: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ef4444',
     color: '#fff',
     padding: '0.5rem 1rem',
     borderRadius: '0.5rem',
@@ -1153,7 +1073,7 @@ const styles = {
     backgroundColor: '#f0f9ff',
     borderRadius: '0.5rem',
     fontSize: '1rem',
-    color: '#3b82f6',
+    color: '#ef4444',
     flexShrink: 0,
   },
   notificationContent: {
@@ -1189,7 +1109,7 @@ const styles = {
   },
   tipsIcon: {
     fontSize: '1.75rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   tipsTitle: {
     fontSize: '1.25rem',

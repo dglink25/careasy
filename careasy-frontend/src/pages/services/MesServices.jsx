@@ -200,17 +200,7 @@ export default function MesServices() {
             </div>
           </div>
 
-          <div style={styles.statCard}>
-            <div style={styles.statIconContainer}>
-              <MdOutlineAttachMoney style={styles.statIcon} />
-            </div>
-            <div style={styles.statContent}>
-              <div style={styles.statNumber}>
-                {stats.averagePrice > 0 ? Math.round(stats.averagePrice).toLocaleString() : '0'}
-              </div>
-              <div style={styles.statLabel}>Moyenne prix (FCFA)</div>
-            </div>
-          </div>
+          
         </div>
 
         {/* Barre de recherche et filtres */}

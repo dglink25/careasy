@@ -841,7 +841,7 @@ export default function CreerService() {
         
         .form-input:focus, .form-select:focus, .form-textarea:focus {
           outline: none;
-          border-color: #3b82f6;
+          border-color: #ef4444;
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
           transform: translateY(-1px);
         }
@@ -899,7 +899,7 @@ const styles = {
     width: '50px',
     height: '50px',
     border: '4px solid #dbeafe',
-    borderTop: '4px solid #3b82f6',
+    borderTop: '4px solid #ef4444',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
   },
@@ -956,7 +956,7 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '0.5rem',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ef4444',
     color: '#fff',
     padding: '0.875rem 1.75rem',
     borderRadius: '0.75rem',
@@ -986,7 +986,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
-    color: '#3b82f6',
+    color: '#ef4444',
     textDecoration: 'none',
     fontWeight: '600',
     marginBottom: '1rem',
@@ -1006,7 +1006,7 @@ const styles = {
   },
   titleIcon: {
     fontSize: '2.25rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   subtitle: {
     color: '#64748b',
@@ -1042,8 +1042,8 @@ const styles = {
     minWidth: '150px',
   },
   stepButtonActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    backgroundColor: '#ef4444',
+    borderColor: '#ef4444',
     color: '#fff',
     transform: 'translateY(-2px)',
     boxShadow: '0 8px 20px rgba(59, 130, 246, 0.2)',
@@ -1164,7 +1164,7 @@ const styles = {
     backgroundColor: '#dbeafe',
     borderRadius: '0.75rem',
     fontSize: '1.75rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   sectionTitle: {
     fontSize: '1.5rem',
@@ -1190,7 +1190,7 @@ const styles = {
   },
   labelIcon: {
     fontSize: '1.125rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   required: {
     color: '#ef4444',
@@ -1339,12 +1339,12 @@ const styles = {
   },
   domaineCardActive: {
     backgroundColor: '#dbeafe',
-    borderColor: '#3b82f6',
-    color: '#1e40af',
+    borderColor: '#ef4444',
+    color: '#ef4444',
   },
   domaineCardIcon: {
     fontSize: '1.25rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   domaineCardName: {
     fontSize: '0.875rem',
@@ -1402,7 +1402,7 @@ const styles = {
   },
   checkboxIcon: {
     fontSize: '1.5rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   checkboxTitle: {
     fontSize: '1rem',
@@ -1505,7 +1505,7 @@ const styles = {
   },
   previewsTitleIcon: {
     fontSize: '1.25rem',
-    color: '#3b82f6',
+    color: '#ef4444',
   },
   previewsGrid: {
     display: 'grid',
@@ -1583,7 +1583,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ef4444',
     color: '#fff',
     border: 'none',
     padding: '0.75rem 1.5rem',
