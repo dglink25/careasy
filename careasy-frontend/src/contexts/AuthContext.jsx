@@ -69,16 +69,19 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    try {
-      await api.post('/logout');
-    } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
-    } finally {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      setUser(null);
-    }
-  };
+  try {
+    await api.post('/logout');
+  } catch (error) {
+    console.error('Erreur lors de la déconnexion:', error);
+  } finally {
+    // Nettoyer le localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    // navigate('/login'); 
+    window.location.href = '/'; 
+  }
+};
 
   return (
     <AuthContext.Provider value={{ user, login, register, logout, loading }}>
