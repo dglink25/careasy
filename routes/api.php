@@ -1,11 +1,11 @@
 <?php
+// routes/api.php - VERSION COMPLÈTE MISE À JOUR
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\EntrepriseController;
 use App\Http\Controllers\API\ServiceController;
 use App\Http\Controllers\API\Admin\EntrepriseAdminController;
 use App\Http\Controllers\MessageController;
-
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
@@ -25,6 +25,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // MES SERVICES - DOIT ÊTRE AVANT /services
     Route::get('services/mine', [ServiceController::class, 'mine']);
     Route::post('services', [ServiceController::class, 'store']);
+    
+    // 👉 MESSAGERIE - ROUTES AUTHENTIFIÉES
+    Route::get('conversations', [MessageController::class, 'myConversations']);
+    Route::post('conversation/{id}/mark-read', [MessageController::class, 'markAsRead']);
 });
 
 /**
@@ -46,6 +50,9 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('entreprises/{id}/reject', [EntrepriseAdminController::class, 'reject']);
 });
 
-Route::post('/conversation/start', [MessageController::class, 'startConversation']);
-Route::post('/conversation/{id}/send', [MessageController::class, 'sendMessage']);
-Route::get('/conversation/{id}', [MessageController::class, 'getMessages']);
+/**
+ * MESSAGERIE - Routes publiques (anonymes et authentifiées)
+ */
+Route::post('conversation/start', [MessageController::class, 'startConversation']);
+Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
+Route::get('conversation/{id}', [MessageController::class, 'getMessages']);

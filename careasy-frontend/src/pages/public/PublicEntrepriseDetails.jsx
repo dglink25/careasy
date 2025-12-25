@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { publicApi } from '../../api/publicApi';
+import ChatButton from '../../components/Chat/ChatButton'; // 👈 IMPORT
 import theme from '../../config/theme';
 
 // Import des icônes React Icons
@@ -216,6 +217,15 @@ export default function PublicEntrepriseDetails() {
                 <FiRefreshCw style={refreshing ? styles.refreshingIcon : styles.headerActionIcon} />
                 {refreshing ? 'Rafraîchissement...' : 'Rafraîchir'}
               </button>
+              {/* 👉 BOUTON CHAT - OPTION 1: Dans le header */}
+          <div style={styles.headerActions}>
+            <ChatButton
+              receiverId={entreprise.prestataire_id}
+              receiverName={entreprise.name}
+              buttonText="💬 Discuter avec nous"
+              variant="primary"
+            />
+          </div>
               <button 
                 onClick={handleShare}
                 style={styles.headerActionButton}
@@ -500,6 +510,15 @@ export default function PublicEntrepriseDetails() {
                       </div>
                     </button>
                     
+                    {/* 👉 BOUTON CHAT - OPTION 2: Dans la section contact */}
+                    <div style={styles.contactActions}>
+              <ChatButton
+                receiverId={entreprise.prestataire_id}
+                receiverName={entreprise.name}
+                buttonText="Envoyer un message"
+                variant="secondary"
+              />
+            </div>
                     <button 
                       onClick={() => handleContact('whatsapp')}
                       style={{...styles.contactButton, ...styles.contactWhatsappButton}}

@@ -1,4 +1,4 @@
-// careasy-frontend/src/App.jsx - VERSION COMPLÈTE FINALE
+// careasy-frontend/src/App.jsx - VERSION AVEC MESSAGERIE
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
@@ -20,6 +20,9 @@ import DetailsEntreprise from './pages/entreprises/DetailsEntreprise';
 import MesServices from './pages/services/MesServices';
 import CreerService from './pages/services/CreerService';
 import DetailsService from './pages/services/DetailsService';
+
+// 👉 MESSAGERIE - NOUVEAU
+import MessagesPage from './pages/messages/MessagesPage';
 
 // Admin
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -91,6 +94,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <DetailsService />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* 👉 MESSAGERIE - NOUVEAU */}
+              <Route
+                path="/messages"
+                element={
+                  <ProtectedRoute>
+                    <MessagesPage />
                   </ProtectedRoute>
                 }
               />

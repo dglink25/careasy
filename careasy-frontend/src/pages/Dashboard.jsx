@@ -179,34 +179,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Carte utilisateur */}
-          <div style={styles.userCard}>
-            <div style={styles.userAvatar}>
-              {getInitials(user?.name || user?.email)}
-            </div>
-            <div style={styles.userInfo}>
-              <h2 style={styles.userName}>{user?.name || 'Utilisateur'}</h2>
-              <div style={styles.userDetails}>
-                <div style={styles.userDetail}>
-                  <MdOutlineEmail style={styles.userDetailIcon} />
-                  <span>{user?.email || 'Email non disponible'}</span>
-                </div>
-                <div style={styles.userDetail}>
-                  <MdOutlinePhone style={styles.userDetailIcon} />
-                  <span>{user?.phone || 'Téléphone non renseigné'}</span>
-                </div>
-              </div>
-            </div>
-            <div style={styles.userStatus}>
-              <div style={styles.badge}>
-                <MdOutlineVerified style={styles.badgeIcon} />
-                <span>Prestataire Pro</span>
-              </div>
-              <div style={styles.joinDate}>
-                Membre depuis {new Date(user?.created_at || Date.now()).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-              </div>
-            </div>
-          </div>
+          
         </div>
 
         {/* Statistiques principales */}

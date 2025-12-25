@@ -22,6 +22,9 @@ import {
   FaChevronDown
 } from 'react-icons/fa';
 
+// 👉 AJOUT
+import { FiMessageSquare } from 'react-icons/fi';
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -97,6 +100,22 @@ export default function Navbar() {
                       <FaBuilding style={styles.icon} />
                       Entreprises
                     </Link>
+
+                    {/* 👉 NOUVEAU LIEN MESSAGES */}
+                    <Link 
+                      to="/messages" 
+                      style={{
+                        ...styles.link,
+                        ...(isActive('/messages') ? styles.linkActive : {})
+                      }}
+                      className="nav-link"
+                    >
+                      <FiMessageSquare style={styles.icon} />
+                      Messages
+                      {/* Badge optionnel pour non lus */}
+                      {/* <span style={styles.messageBadge}>3</span> */}
+                    </Link>
+
                     <Link 
                       to="/entreprises" 
                       style={{
@@ -145,6 +164,22 @@ export default function Navbar() {
                       <FaTools style={styles.icon} />
                       Mes Services
                     </Link>
+
+                     {/* 👉 NOUVEAU LIEN MESSAGES */}
+                    <Link 
+                      to="/messages" 
+                      style={{
+                        ...styles.link,
+                        ...(isActive('/messages') ? styles.linkActive : {})
+                      }}
+                      className="nav-link"
+                    >
+                      <FiMessageSquare style={styles.icon} />
+                      Messages
+                      {/* Badge optionnel pour non lus */}
+                      {/* <span style={styles.messageBadge}>3</span> */}
+                    </Link>
+                    
                     <Link 
                       to="/entreprises" 
                       style={{
@@ -247,7 +282,6 @@ export default function Navbar() {
                     </div>
                   )}
                 </div>
-                
                 <Link to="/login" style={styles.buttonSecondary}>
                   Connexion
                 </Link>
@@ -322,6 +356,10 @@ export default function Navbar() {
                       <Link to="/mes-services" style={styles.mobileLink} onClick={closeMobileMenu}>
                         <FaTools /> Mes Services
                       </Link>
+                        {/* 👉 NOUVEAU LIEN MESSAGES - MOBILE */}
+                <Link to="/messages" style={styles.mobileLink} onClick={closeMobileMenu}>
+                  <FiMessageSquare /> Messages
+                </Link>
                       <Link to="/entreprises" style={styles.mobileLink} onClick={closeMobileMenu}>
                         <FaSearch /> Explorer
                       </Link>
@@ -807,4 +845,4 @@ if (typeof window !== 'undefined') {
   };
   mediaQuery.addListener(updateStyles);
   updateStyles();
-}
+} 
