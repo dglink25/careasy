@@ -1,24 +1,29 @@
-// careasy-frontend/src/api/messageApi.js
+// careasy-frontend/src/api/messageApi.js - VERSION AVEC DEBUG
 import api from './axios';
 
 export const messageApi = {
   /**
    * Démarrer ou récupérer une conversation
-   * @param {number|null} receiverId - ID du destinataire (prestataire), null si conversation anonyme
    */
   startConversation: async (receiverId = null) => {
+    console.log('🔵 API startConversation - receiverId:', receiverId);
+    
     const payload = receiverId ? { receiver_id: receiverId } : {};
+    console.log('🔵 Payload:', payload);
+    
     const response = await api.post('/conversation/start', payload);
+    console.log('🔵 Réponse:', response.data);
+    
     return response.data;
   },
 
   /**
    * Envoyer un message dans une conversation
-   * @param {number} conversationId - ID de la conversation
-   * @param {string} content - Contenu du message
-   * @param {object} location - {latitude, longitude} optionnel
    */
   sendMessage: async (conversationId, content, location = null) => {
+    console.log('🔵 API sendMessage - conversationId:', conversationId);
+    console.log('🔵 Content:', content);
+    
     const payload = {
       content,
       ...(location && {
@@ -26,31 +31,46 @@ export const messageApi = {
         longitude: location.longitude
       })
     };
+    
     const response = await api.post(`/conversation/${conversationId}/send`, payload);
+    console.log('🔵 Message envoyé:', response.data);
+    
     return response.data;
   },
 
   /**
    * Récupérer les messages d'une conversation
-   * @param {number} conversationId - ID de la conversation
    */
   getMessages: async (conversationId) => {
+    console.log('🔵 API getMessages - conversationId:', conversationId);
+    
     const response = await api.get(`/conversation/${conversationId}`);
+    console.log('🔵 Messages reçus:', response.data.messages?.length || 0);
+    
     return response.data;
   },
 
   /**
    * Récupérer toutes les conversations de l'utilisateur connecté
-   * Note: Cette route n'existe pas encore dans ton backend, 
-   * mais on peut l'implémenter plus tard si nécessaire
    */
   getMyConversations: async () => {
-    try {
-      const response = await api.get('/conversations');
-      return response.data;
-    } catch (error) {
-      console.warn('Route /conversations pas encore implémentée');
-      return [];
-    }
+    console.log('🔵 API getMyConversations');
+    
+    const response = await api.get('/conversations');
+    console.log('🔵 Conversations reçues:', response.data.length);
+    
+    return response.data;
+  },
+
+  /**
+   * Marquer les messages comme lus
+   */
+  markAsRead: async (conversationId) => {
+    console.log('🔵 API markAsRead - conversationId:', conversationId);
+    
+    const response = await api.post(`/conversation/${conversationId}/mark-read`);
+    console.log('🔵 Messages marqués comme lus');
+    
+    return response.data;
   }
 };

@@ -1,5 +1,5 @@
 <?php
-// routes/api.php - VERSION COMPLÈTE MISE À JOUR
+// routes/api.php - VERSION CORRIGÉE
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\EntrepriseController;
@@ -12,7 +12,7 @@ Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 require __DIR__.'/auth.php';
 
 /**
- * AUTHENTIFIÉ - Token requis (AVANT les routes publiques !)
+ * AUTHENTIFIÉ - Token requis
  */
 Route::middleware('auth:sanctum')->group(function () {
     // Form data pour création
@@ -29,6 +29,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // 👉 MESSAGERIE - ROUTES AUTHENTIFIÉES
     Route::get('conversations', [MessageController::class, 'myConversations']);
     Route::post('conversation/{id}/mark-read', [MessageController::class, 'markAsRead']);
+    
+    // ✅ NOUVEAU: Routes messagerie authentifiées
+    Route::post('conversation/start', [MessageController::class, 'startConversation']);
+    Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
+    Route::get('conversation/{id}', [MessageController::class, 'getMessages']);
 });
 
 /**
@@ -51,8 +56,9 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
 });
 
 /**
- * MESSAGERIE - Routes publiques (anonymes et authentifiées)
+ * ❌ SUPPRIMER CES ROUTES PUBLIQUES POUR LA MESSAGERIE
+ * (Elles étaient en conflit avec les routes authentifiées)
  */
-Route::post('conversation/start', [MessageController::class, 'startConversation']);
-Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
-Route::get('conversation/{id}', [MessageController::class, 'getMessages']);
+// Route::post('conversation/start', [MessageController::class, 'startConversation']);
+// Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
+// Route::get('conversation/{id}', [MessageController::class, 'getMessages']);

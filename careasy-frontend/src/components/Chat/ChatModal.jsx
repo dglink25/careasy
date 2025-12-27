@@ -1,6 +1,6 @@
-// careasy-frontend/src/components/Chat/ChatModal.jsx
+// careasy-frontend/src/components/Chat/ChatModal.jsx - VERSION CORRIGÉE
 import { useState, useEffect, useRef } from 'react';
-import { FiX, FiSend, FiMapPin, FiLoader } from 'react-icons/fi';
+import { FiX, FiSend, FiMapPin, FiLoader, FiCheck, FiCheckCircle } from 'react-icons/fi';
 import { messageApi } from '../../api/messageApi';
 import { useAuth } from '../../contexts/AuthContext';
 import theme from '../../config/theme';
@@ -9,8 +9,8 @@ export default function ChatModal({
   receiverId, 
   receiverName, 
   onClose, 
-  conversationId = null,  // 👈 AJOUT: ID de conversation existante
-  existingConversation = false // 👈 AJOUT: Flag pour conversation existante
+  conversationId = null,
+  existingConversation = false
 }) {
   const { user } = useAuth();
   const [conversation, setConversation] = useState(null);
@@ -22,12 +22,10 @@ export default function ChatModal({
   const [locationSharing, setLocationSharing] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Initialiser ou récupérer la conversation
   useEffect(() => {
     initConversation();
   }, [receiverId, conversationId]);
 
-  // Auto-scroll vers le bas quand nouveaux messages
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -41,27 +39,43 @@ export default function ChatModal({
       setLoading(true);
       setError('');
       
+      // ✅ DEBUG
+      console.log('🔍 ChatModal - Initialisation');
+      console.log('🔍 receiverId:', receiverId);
+      console.log('🔍 conversationId:', conversationId);
+      console.log('🔍 existingConversation:', existingConversation);
+      console.log('🔍 user:', user);
+      
       let conv;
       
-      // Si on a déjà un conversationId, charger directement les messages
       if (conversationId && existingConversation) {
+        // Conversation existante
         conv = { id: conversationId };
         setConversation(conv);
         
-        // Charger les messages existants
         const convData = await messageApi.getMessages(conversationId);
+        console.log('✅ Messages chargés:', convData.messages?.length || 0);
         setMessages(convData.messages || []);
       } else {
-        // Sinon, démarrer ou récupérer la conversation
+        // Nouvelle conversation
+        console.log('🔍 Création nouvelle conversation avec receiverId:', receiverId);
+        
+        if (!receiverId && user) {
+          setError('Erreur: Destinataire non défini');
+          console.error('❌ receiverId est NULL mais user existe');
+          return;
+        }
+        
         conv = await messageApi.startConversation(receiverId);
+        console.log('✅ Conversation créée:', conv);
         setConversation(conv);
         
-        // Charger les messages existants
         const convData = await messageApi.getMessages(conv.id);
         setMessages(convData.messages || []);
       }
     } catch (err) {
-      console.error('Erreur initialisation conversation:', err);
+      console.error('❌ Erreur initialisation conversation:', err);
+      console.error('❌ Détails:', err.response?.data);
       setError('Impossible de démarrer la conversation. Veuillez réessayer.');
     } finally {
       setLoading(false);
@@ -77,18 +91,18 @@ export default function ChatModal({
       setSending(true);
       setError('');
 
-      // Envoyer le message
+      console.log('📤 Envoi message dans conversation:', conversation.id);
       const sentMessage = await messageApi.sendMessage(
         conversation.id,
         newMessage.trim()
       );
 
-      // Ajouter le message à la liste locale
+      console.log('✅ Message envoyé:', sentMessage);
       setMessages(prev => [...prev, sentMessage]);
       setNewMessage('');
       
     } catch (err) {
-      console.error('Erreur envoi message:', err);
+      console.error('❌ Erreur envoi message:', err);
       setError('Impossible d\'envoyer le message. Veuillez réessayer.');
     } finally {
       setSending(false);
@@ -111,7 +125,6 @@ export default function ChatModal({
           try {
             const { latitude, longitude } = position.coords;
             
-            // Envoyer un message avec la localisation
             const locationMessage = await messageApi.sendMessage(
               conversation.id,
               `📍 Ma position actuelle`,
@@ -147,14 +160,9 @@ export default function ChatModal({
   };
 
   const isMyMessage = (message) => {
-    // Si l'utilisateur est connecté
     if (user) {
-      // C'est mon message si le sender_id correspond à mon ID
       return message.sender_id === user.id;
     }
-    
-    // Si l'utilisateur n'est PAS connecté (anonyme)
-    // Ses messages sont ceux sans sender_id (null)
     return message.sender_id === null;
   };
 
@@ -173,9 +181,9 @@ export default function ChatModal({
               </h3>
               <div style={styles.headerStatus}>
                 {user ? (
-                  <span>Connecté en tant que {user.name}</span>
+                  <span>✅ Connecté en tant que {user.name}</span>
                 ) : (
-                  <span>Mode anonyme</span>
+                  <span>👤 Mode anonyme</span>
                 )}
               </div>
             </div>
@@ -192,6 +200,14 @@ export default function ChatModal({
               <FiLoader style={styles.spinner} />
               <p>Chargement de la conversation...</p>
             </div>
+          ) : error ? (
+            <div style={styles.errorState}>
+              <div style={styles.errorIcon}>❌</div>
+              <p style={styles.errorText}>{error}</p>
+              <button onClick={initConversation} style={styles.retryButton}>
+                Réessayer
+              </button>
+            </div>
           ) : messages.length === 0 ? (
             <div style={styles.emptyState}>
               <div style={styles.emptyIcon}>💬</div>
@@ -201,50 +217,68 @@ export default function ChatModal({
             </div>
           ) : (
             <>
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  style={{
-                    ...styles.messageWrapper,
-                    justifyContent: isMyMessage(message) ? 'flex-end' : 'flex-start'
-                  }}
-                >
+              {messages.map((message) => {
+                const isMine = isMyMessage(message);
+                return (
                   <div
+                    key={message.id}
                     style={{
-                      ...styles.messageBubble,
-                      ...(isMyMessage(message) 
-                        ? styles.myMessage 
-                        : styles.theirMessage
-                      )
+                      ...styles.messageWrapper,
+                      justifyContent: isMine ? 'flex-end' : 'flex-start'
                     }}
                   >
-                    {message.sender?.name && !isMyMessage(message) && (
-                      <div style={styles.senderName}>{message.sender.name}</div>
-                    )}
-                    <div style={styles.messageContent}>{message.content}</div>
-                    {message.latitude && message.longitude && (
-                      <a
-                        href={`https://www.google.com/maps?q=${message.latitude},${message.longitude}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={styles.locationLink}
-                      >
-                        <FiMapPin /> Voir sur la carte
-                      </a>
-                    )}
-                    <div style={styles.messageTime}>
-                      {formatTime(message.created_at)}
+                    <div
+                      style={{
+                        ...styles.messageBubble,
+                        ...(isMine 
+                          ? styles.myMessage 
+                          : styles.theirMessage
+                        )
+                      }}
+                    >
+                      {!isMine && message.sender?.name && (
+                        <div style={styles.senderName}>{message.sender.name}</div>
+                      )}
+                      
+                      <div style={styles.messageContent}>{message.content}</div>
+                      
+                      {message.latitude && message.longitude && (
+                        <a
+                          href={`https://www.google.com/maps?q=${message.latitude},${message.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={styles.locationLink}
+                        >
+                          <FiMapPin /> Voir sur la carte
+                        </a>
+                      )}
+                      
+                      <div style={styles.messageFooter}>
+                        <span style={styles.messageTime}>
+                          {formatTime(message.created_at)}
+                        </span>
+                        
+                        {isMine && (
+                          <span style={styles.readStatus}>
+                            {message.read_at ? (
+                              <FiCheckCircle style={styles.readIcon} title="Lu" />
+                            ) : (
+                              <FiCheck style={styles.sentIcon} title="Envoyé" />
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={messagesEndRef} />
             </>
           )}
         </div>
 
-        {/* Error */}
-        {error && (
+        {/* Error banner */}
+        {error && !loading && (
           <div style={styles.errorBanner}>
             {error}
           </div>
@@ -274,13 +308,15 @@ export default function ChatModal({
           <button
             type="submit"
             disabled={!newMessage.trim() || sending || !conversation}
-            style={styles.sendButton}
+            style={{
+              ...styles.sendButton,
+              ...((!newMessage.trim() || sending || !conversation) && styles.sendButtonDisabled)
+            }}
           >
             {sending ? <FiLoader style={styles.spinner} /> : <FiSend />}
           </button>
         </form>
 
-        {/* Info footer pour utilisateurs anonymes */}
         {!user && (
           <div style={styles.infoFooter}>
             💡 Connectez-vous pour suivre vos conversations
@@ -391,6 +427,31 @@ const styles = {
     animation: 'spin 1s linear infinite',
     fontSize: '1.5rem',
   },
+  errorState: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    gap: '1rem',
+    padding: '2rem',
+  },
+  errorIcon: {
+    fontSize: '3rem',
+  },
+  errorText: {
+    color: theme.colors.error,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary,
+    color: '#fff',
+    border: 'none',
+    padding: '0.75rem 1.5rem',
+    borderRadius: theme.borderRadius.md,
+    cursor: 'pointer',
+    fontWeight: '600',
+  },
   emptyState: {
     display: 'flex',
     flexDirection: 'column',
@@ -422,18 +483,21 @@ const styles = {
     backgroundColor: theme.colors.primary,
     color: '#fff',
     borderBottomRightRadius: '4px',
+    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.2)',
   },
   theirMessage: {
     backgroundColor: '#fff',
     color: theme.colors.text.primary,
-    border: `1px solid ${theme.colors.primaryLight}`,
+    border: `2px solid ${theme.colors.primaryLight}`,
     borderBottomLeftRadius: '4px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
   },
   senderName: {
     fontSize: '0.75rem',
     fontWeight: '600',
     marginBottom: '0.375rem',
-    opacity: 0.9,
+    opacity: 0.8,
+    color: theme.colors.primary,
   },
   messageContent: {
     fontSize: '0.95rem',
@@ -449,10 +513,30 @@ const styles = {
     textDecoration: 'underline',
     opacity: 0.9,
   },
+  messageFooter: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: '0.375rem',
+    gap: '0.5rem',
+  },
   messageTime: {
     fontSize: '0.7rem',
-    marginTop: '0.375rem',
     opacity: 0.7,
+  },
+  readStatus: {
+    display: 'flex',
+    alignItems: 'center',
+    fontSize: '0.875rem',
+  },
+  readIcon: {
+    color: '#10b981',
+    fontSize: '0.875rem',
+  },
+  sentIcon: {
+    color: 'currentColor',
+    opacity: 0.6,
+    fontSize: '0.875rem',
   },
   errorBanner: {
     backgroundColor: '#fee2e2',
@@ -482,6 +566,7 @@ const styles = {
     color: theme.colors.primary,
     fontSize: '1.25rem',
     flexShrink: 0,
+    transition: 'all 0.2s',
   },
   input: {
     flex: 1,
@@ -491,6 +576,7 @@ const styles = {
     fontSize: '0.95rem',
     outline: 'none',
     fontFamily: 'inherit',
+    transition: 'border-color 0.2s',
   },
   sendButton: {
     backgroundColor: theme.colors.primary,
@@ -505,6 +591,11 @@ const styles = {
     cursor: 'pointer',
     fontSize: '1.25rem',
     flexShrink: 0,
+    transition: 'all 0.2s',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+    cursor: 'not-allowed',
   },
   infoFooter: {
     backgroundColor: '#fef3c7',

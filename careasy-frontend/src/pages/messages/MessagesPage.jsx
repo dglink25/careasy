@@ -1,4 +1,4 @@
-// careasy-frontend/src/pages/messages/MessagesPage.jsx - VERSION COMPLÈTE
+// careasy-frontend/src/pages/messages/MessagesPage.jsx - VERSION CORRIGÉE
 import { useState, useEffect } from 'react';
 import { FiMessageSquare, FiSearch, FiUser, FiClock, FiLoader, FiRefreshCw } from 'react-icons/fi';
 import { messageApi } from '../../api/messageApi';
@@ -49,23 +49,8 @@ export default function MessagesPage() {
     if (!conversation.messages || conversation.messages.length === 0) {
       return 'Aucun message';
     }
-    const lastMsg = conversation.messages[0]; // Le dernier message (orderBy desc)
+    const lastMsg = conversation.messages[0];
     return lastMsg.content.substring(0, 60) + (lastMsg.content.length > 60 ? '...' : '');
-  };
-
-  const getOtherUser = (conversation) => {
-    // Si other_user est déjà défini par le backend
-    if (conversation.other_user) {
-      return conversation.other_user;
-    }
-    
-    // Sinon, vérifier user_two_id
-    if (conversation.user_two_id === null) {
-      return { name: 'Visiteur Anonyme', email: null };
-    }
-    
-    // Récupérer depuis les relations
-    return conversation.user_two || conversation.user_one || { name: 'Utilisateur', email: null };
   };
 
   const formatDate = (dateString) => {
@@ -89,12 +74,12 @@ export default function MessagesPage() {
 
   const handleCloseChat = () => {
     setSelectedConversation(null);
-    // Rafraîchir les conversations après fermeture
     fetchConversations(true);
   };
 
+  // ✅ CORRECTION: Filtrage amélioré
   const filteredConversations = conversations.filter(conv => {
-    const otherUser = getOtherUser(conv);
+    const otherUser = conv.other_user;
     const userName = otherUser?.name || 'Utilisateur';
     const lastMsg = getLastMessage(conv);
     
@@ -150,7 +135,7 @@ export default function MessagesPage() {
             <FiUser style={styles.statIcon} />
             <div>
               <div style={styles.statNumber}>
-                {conversations.filter(c => c.user_two_id === null).length}
+                {conversations.filter(c => c.is_anonymous).length}
               </div>
               <div style={styles.statLabel}>Visiteurs anonymes</div>
             </div>
@@ -159,14 +144,9 @@ export default function MessagesPage() {
             <FiClock style={styles.statIcon} />
             <div>
               <div style={styles.statNumber}>
-                {conversations.filter(c => {
-                  const lastMsg = c.messages?.[0];
-                  if (!lastMsg) return false;
-                  const diff = new Date() - new Date(lastMsg.created_at);
-                  return diff < 3600000; // Moins d'1h
-                }).length}
+                {conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)}
               </div>
-              <div style={styles.statLabel}>Messages récents</div>
+              <div style={styles.statLabel}>Messages non lus</div>
             </div>
           </div>
         </div>
@@ -213,18 +193,26 @@ export default function MessagesPage() {
         ) : (
           <div style={styles.conversationsList}>
             {filteredConversations.map((conversation) => {
-              const otherUser = getOtherUser(conversation);
-              const isAnonymous = conversation.user_two_id === null;
+              // ✅ CORRECTION: Utiliser directement other_user du backend
+              const otherUser = conversation.other_user;
+              const isAnonymous = conversation.is_anonymous;
+              const hasUnread = (conversation.unread_count || 0) > 0;
               
               return (
                 <div
                   key={conversation.id}
                   onClick={() => handleConversationClick(conversation)}
-                  style={styles.conversationCard}
+                  style={{
+                    ...styles.conversationCard,
+                    ...(hasUnread && styles.conversationCardUnread)
+                  }}
                   className="conversation-card"
                 >
                   {/* Avatar */}
-                  <div style={styles.conversationAvatar}>
+                  <div style={{
+                    ...styles.conversationAvatar,
+                    ...(hasUnread && styles.avatarUnread)
+                  }}>
                     {otherUser?.name ? (
                       otherUser.name.charAt(0).toUpperCase()
                     ) : (
@@ -235,14 +223,21 @@ export default function MessagesPage() {
                   {/* Contenu */}
                   <div style={styles.conversationContent}>
                     <div style={styles.conversationHeader}>
-                      <h3 style={styles.conversationName}>
+                      <h3 style={{
+                        ...styles.conversationName,
+                        ...(hasUnread && styles.conversationNameUnread)
+                      }}>
                         {otherUser?.name || 'Utilisateur'}
+                        {isAnonymous && ' 👤'}
                       </h3>
                       <span style={styles.conversationDate}>
                         {formatDate(conversation.updated_at)}
                       </span>
                     </div>
-                    <p style={styles.conversationPreview}>
+                    <p style={{
+                      ...styles.conversationPreview,
+                      ...(hasUnread && styles.conversationPreviewUnread)
+                    }}>
                       {getLastMessage(conversation)}
                     </p>
                     {isAnonymous && (
@@ -253,7 +248,7 @@ export default function MessagesPage() {
                   </div>
 
                   {/* Badge non lu */}
-                  {conversation.unread_count > 0 && (
+                  {hasUnread && (
                     <div style={styles.unreadBadge}>
                       {conversation.unread_count}
                     </div>
@@ -278,8 +273,8 @@ export default function MessagesPage() {
       {selectedConversation && (
         <ChatModal
           conversationId={selectedConversation.id}
-          receiverId={getOtherUser(selectedConversation)?.id}
-          receiverName={getOtherUser(selectedConversation)?.name || 'Utilisateur'}
+          receiverId={selectedConversation.other_user_id}
+          receiverName={selectedConversation.other_user?.name || 'Utilisateur'}
           onClose={handleCloseChat}
           existingConversation={true}
         />
@@ -463,6 +458,11 @@ const styles = {
     alignItems: 'flex-start',
     position: 'relative',
   },
+  conversationCardUnread: {
+    borderColor: theme.colors.primary,
+    backgroundColor: '#fef2f2',
+    boxShadow: '0 0 0 1px rgba(239, 68, 68, 0.1)',
+  },
   conversationAvatar: {
     width: '56px',
     height: '56px',
@@ -475,6 +475,10 @@ const styles = {
     flexShrink: 0,
     fontSize: '1.5rem',
     fontWeight: 'bold',
+  },
+  avatarUnread: {
+    backgroundColor: theme.colors.primary,
+    color: '#fff',
   },
   avatarIcon: {
     fontSize: '1.75rem',
@@ -491,9 +495,13 @@ const styles = {
   },
   conversationName: {
     fontSize: '1.125rem',
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#1e293b',
     margin: 0,
+  },
+  conversationNameUnread: {
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   conversationDate: {
     fontSize: '0.8rem',
@@ -507,6 +515,10 @@ const styles = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     marginBottom: '0.5rem',
+  },
+  conversationPreviewUnread: {
+    fontWeight: '500',
+    color: '#475569',
   },
   anonymousBadge: {
     display: 'inline-block',
@@ -523,14 +535,15 @@ const styles = {
     right: '1rem',
     backgroundColor: theme.colors.primary,
     color: '#fff',
-    width: '24px',
-    height: '24px',
+    width: '28px',
+    height: '28px',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '0.75rem',
+    fontSize: '0.8rem',
     fontWeight: '700',
+    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)',
   },
   emptyState: {
     backgroundColor: '#fff',

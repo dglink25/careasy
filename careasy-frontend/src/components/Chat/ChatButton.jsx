@@ -1,4 +1,4 @@
-// careasy-frontend/src/components/Chat/ChatButton.jsx
+// careasy-frontend/src/components/Chat/ChatButton.jsx - VERSION CORRIGÉE AVEC DEBUG
 import { useState } from 'react';
 import { FiMessageCircle } from 'react-icons/fi';
 import ChatModal from './ChatModal';
@@ -11,6 +11,20 @@ export default function ChatButton({
   variant = "primary" // primary, secondary, float
 }) {
   const [isOpen, setIsOpen] = useState(false);
+
+  // ✅ DEBUG: Vérifier que receiverId est bien défini
+  const handleOpenChat = () => {
+    console.log('🔍 ChatButton - receiverId:', receiverId);
+    console.log('🔍 ChatButton - receiverName:', receiverName);
+    
+    if (!receiverId) {
+      console.error('❌ ERREUR: receiverId est NULL ou undefined !');
+      alert('Erreur: Impossible d\'identifier le destinataire. Veuillez réessayer.');
+      return;
+    }
+    
+    setIsOpen(true);
+  };
 
   const getButtonStyle = () => {
     if (variant === 'float') {
@@ -34,7 +48,7 @@ export default function ChatButton({
   return (
     <>
       <button 
-        onClick={() => setIsOpen(true)}
+        onClick={handleOpenChat}
         style={getButtonStyle()}
         className="chat-button"
       >
