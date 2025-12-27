@@ -57,7 +57,6 @@ export default function PublicServices() {
             Découvrez {services.length} services automobiles certifiés
           </p>
         </div>
-        
 
         {/* Recherche */}
         <div style={styles.searchSection}>
