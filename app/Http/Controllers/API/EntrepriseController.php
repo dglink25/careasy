@@ -28,21 +28,20 @@ class EntrepriseController extends Controller{
     }
 
     //Les entreprises du prestataire connecté
-    public function mine()
-{
-    $user = Auth::user();
-    
-    if (!$user) {
-        return response()->json(['message' => 'Non authentifié'], 401);
+    public function mine(){
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
+
+        $entreprises = Entreprise::with('domaines', 'services')
+            ->where('prestataire_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($entreprises);
     }
-
-    $entreprises = Entreprise::with('domaines', 'services')
-        ->where('prestataire_id', $user->id)
-        ->orderBy('created_at', 'desc')
-        ->get();
-
-    return response()->json($entreprises);
-}
 
     // Création d'une entreprise
     public function store(Request $request){
@@ -174,4 +173,54 @@ class EntrepriseController extends Controller{
 
         return response()->json($entreprises);
     }
+    //Complèter profil entreprise
+    public function completeProfile(Request $request, $id){
+        $user = Auth::user();
+
+        $entreprise = Entreprise::where('id', $id)
+            ->where('prestataire_id', $user->id)
+            ->first();
+
+        if (!$entreprise) {
+            return response()->json(['message' => 'Entreprise introuvable ou non autorisée'], 404);
+        }
+
+        if ($entreprise->status !== 'validated') {
+            return response()->json(['message' => 'Action non autorisée : entreprise non validée'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'logo'           => 'nullable|image|max:2048',
+            'siege'          => 'nullable|string|max:255',
+            'whatsapp_phone' => 'nullable|string|max:25',
+            'call_phone'     => 'nullable|string|max:25',
+            'status_online'  => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            if ($request->hasFile('logo')) {
+                // optionnel : Storage::disk('public')->delete($entreprise->logo);
+                $entreprise->logo = $request->file('logo')->store('uploads/logos','public');
+            }
+
+            $entreprise->fill($request->only(['siege','whatsapp_phone','call_phone','status_online']));
+            $entreprise->save();
+
+            $entreprise->load('domaines','services');
+
+            return response()->json([
+                'message' => 'Profil entreprise mis à jour',
+                'entreprise' => $entreprise
+            ]);
+        } 
+        catch (\Exception $e) {
+            Log::error('Erreur completeProfile:', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Erreur interne'], 500);
+        }
+    }
+
 }

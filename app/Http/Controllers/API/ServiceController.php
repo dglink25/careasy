@@ -125,4 +125,79 @@ class ServiceController extends Controller{
 
         return response()->json($service);
     }
+
+    public function update(Request $request, $id){
+        $user = Auth::user();
+
+        $service = Service::where('id', $id)
+            ->where('prestataire_id', $user->id)
+            ->first();
+
+        if (!$service) {
+            return response()->json(['message' => 'Service introuvable ou non autorisé'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name'         => 'sometimes|string|max:255',
+            'price'        => 'nullable|numeric',
+            'descriptions' => 'nullable|string',
+            'start_time'   => 'nullable|date_format:H:i',
+            'end_time'     => 'nullable|date_format:H:i',
+            'is_open_24h'  => 'nullable|boolean',
+            'medias.*'     => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            // gestion nouveaux médias (facultatif)
+            if ($request->hasFile('medias')) {
+                $medias = $service->medias ?? [];
+                foreach ($request->file('medias') as $file) {
+                    $medias[] = $file->store('uploads/services', 'public');
+                }
+                $service->medias = $medias;
+            }
+
+            $service->fill($request->only([
+                'name','price','descriptions','start_time','end_time','is_open_24h'
+            ]));
+            $service->save();
+
+            $service->load('entreprise','domaine');
+
+            return response()->json([
+                'message' => 'Service mis à jour',
+                'service' => $service
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur update service:', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Erreur interne'], 500);
+        }
+    }
+
+    public function destroy($id){
+        $user = Auth::user();
+
+        $service = Service::where('id', $id)
+            ->where('prestataire_id', $user->id)
+            ->first();
+
+        if (!$service) {
+            return response()->json(['message' => 'Service introuvable ou non autorisé'], 404);
+        }
+
+        try {
+            $service->delete();
+
+            return response()->json(['message' => 'Service supprimé']);
+        } 
+        catch (\Exception $e) {
+            Log::error('Erreur suppression service:', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Erreur interne'], 500);
+        }
+    }
+
 }

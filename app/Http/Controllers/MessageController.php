@@ -1,215 +1,171 @@
 <?php
-// app/Http/Controllers/MessageController.php - VERSION FINALE CORRIGÉE
+namespace App\Http\Controllers\API;
 
-namespace App\Http\Controllers;
-
+use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 class MessageController extends Controller{
-    
-    /**
-     * Récupérer toutes les conversations du prestataire connecté
-     */
-    public function myConversations() {
-        $user = Auth::user();
-        
-        if (!$user) {
-            return response()->json(['message' => 'Non authentifié'], 401);
+    public function getMessages($convId){
+        $conv = Conversation::with(['messages.sender'])
+            ->find($convId);
+
+        if (!$conv) {
+            return response()->json(['message' => 'Conversation introuvable'], 404);
         }
 
-        Log::info('📋 myConversations - User ID: ' . $user->id);
-
-        // Récupérer les conversations où l'utilisateur est user_one OU user_two
-        $conversations = Conversation::where('user_one_id', $user->id)
-            ->orWhere('user_two_id', $user->id)
-            ->with([
-                'messages' => function($query) {
-                    $query->orderBy('created_at', 'desc')->limit(1);
-                },
-                'messages.sender',
-                'userOne',
-                'userTwo'
-            ])
-            ->orderBy('updated_at', 'desc')
-            ->get();
-
-        Log::info('📋 Conversations trouvées: ' . $conversations->count());
-
-        // Ajouter des infos sur l'autre utilisateur
-        $conversations = $conversations->map(function($conv) use ($user) {
-            // Déterminer qui est l'autre utilisateur
-            if ($conv->user_one_id === $user->id) {
-                // Je suis user_one, l'autre est user_two
-                if ($conv->user_two_id === null) {
-                    $conv->other_user = (object)[
-                        'id' => null,
-                        'name' => 'Visiteur Anonyme',
-                        'email' => null
-                    ];
-                    $conv->other_user_id = null;
-                    $conv->is_anonymous = true;
-                } else {
-                    $conv->other_user = $conv->userTwo;
-                    $conv->other_user_id = $conv->user_two_id;
-                    $conv->is_anonymous = false;
-                }
-            } else {
-                // Je suis user_two, l'autre est user_one
-                $conv->other_user = $conv->userOne;
-                $conv->other_user_id = $conv->user_one_id;
-                $conv->is_anonymous = false;
-            }
-            
-            // Compter les messages non lus
-            $conv->unread_count = Message::where('conversation_id', $conv->id)
-                ->where('sender_id', '!=', $user->id)
-                ->whereNull('read_at')
-                ->count();
-            
-            return $conv;
-        });
-
-        return response()->json($conversations);
-    }
-
-    /**
-     * Créer ou récupérer une conversation
-     */
-    public function startConversation(Request $request) {
-        $request->validate([
-            'receiver_id' => 'nullable|exists:users,id'
-        ]);
-
-        $userId = Auth::id();
-        $receiverId = $request->receiver_id;
-
-        Log::info('🔄 startConversation - userId: ' . $userId . ', receiverId: ' . $receiverId);
-
-        // ✅ CAS 1: Utilisateur anonyme contacte un prestataire
-        if (!$userId && $receiverId) {
-            Log::info('✅ Création conversation anonyme -> prestataire');
-            $conversation = Conversation::create([
-                'user_one_id' => $receiverId,  // Prestataire
-                'user_two_id' => null,         // Anonyme
-            ]);
-            Log::info('✅ Conversation créée ID: ' . $conversation->id);
-            return response()->json($conversation);
+        // Autorisation : faire partie de la conversation
+        if (! $this->isMember($conv, Auth::id())) {
+            return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        // ❌ CAS INVALIDE: Ni sender ni receiver
-        if (!$userId && !$receiverId) {
-            return response()->json(['message' => 'Receiver required for anonymous'], 422);
-        }
-
-        // ✅ CAS 2: Utilisateur authentifié contacte un autre utilisateur
-        if ($userId && $receiverId) {
-            Log::info('✅ Recherche conversation entre User ' . $userId . ' et User ' . $receiverId);
-            
-            // Chercher conversation existante (dans les deux sens)
-            $conversation = Conversation::where(function($query) use ($userId, $receiverId) {
-                $query->where('user_one_id', $userId)
-                      ->where('user_two_id', $receiverId);
-            })->orWhere(function($query) use ($userId, $receiverId) {
-                $query->where('user_one_id', $receiverId)
-                      ->where('user_two_id', $userId);
-            })->first();
-
-            // Si pas trouvée, créer nouvelle conversation
-            if (!$conversation) {
-                Log::info('✅ Création nouvelle conversation');
-                $conversation = Conversation::create([
-                    'user_one_id' => $userId,      // Celui qui initie
-                    'user_two_id' => $receiverId   // Le destinataire
-                ]);
-                Log::info('✅ Conversation créée ID: ' . $conversation->id);
-            } else {
-                Log::info('✅ Conversation existante trouvée ID: ' . $conversation->id);
-            }
-
-            return response()->json($conversation);
-        }
-
-        // ❌ CAS INVALIDE: Utilisateur authentifié sans destinataire
-        return response()->json(['message' => 'Receiver ID required'], 422);
-    }
-
-    /**
-     * Envoyer un message
-     */
-    public function sendMessage(Request $request, $conversationId) {
-        $request->validate([
-            'content' => 'required|string',
-            'latitude' => 'nullable|numeric',
-            'longitude' => 'nullable|numeric'
-        ]);
-
-        $conversation = Conversation::findOrFail($conversationId);
-        $senderId = Auth::id(); // null si anonyme
-
-        Log::info('📤 sendMessage - Conversation: ' . $conversationId . ', Sender: ' . ($senderId ?? 'anonyme'));
-
-        $msg = Message::create([
-            'conversation_id' => $conversation->id,
-            'sender_id' => $senderId,  // Peut être null pour anonyme
-            'content' => $request->content,
-            'latitude' => $request->latitude,
-            'longitude' => $request->longitude,
-        ]);
-
-        // Mettre à jour le timestamp de la conversation
-        $conversation->touch();
-
-        // Charger les relations pour la réponse
-        $msg->load('sender');
-
-        Log::info('✅ Message créé ID: ' . $msg->id . ', sender_id: ' . ($msg->sender_id ?? 'null'));
-
-        return response()->json($msg);
-    }
-
-    /**
-     * Récupérer les messages d'une conversation
-     */
-    public function getMessages($conversationId) {
-        $conv = Conversation::with([
-            'messages' => function($query) {
-                $query->orderBy('created_at', 'asc');
-            },
-            'messages.sender',
-            'userOne',
-            'userTwo'
-        ])->findOrFail($conversationId);
-        
-        Log::info('📥 getMessages - Conversation: ' . $conversationId . ', Messages: ' . $conv->messages->count());
-        
+        // Marquer comme lus (optionnel ici, on le fait via markAsRead dédié)
         return response()->json($conv);
     }
 
-    /**
-     * Marquer les messages comme lus
-     */
-    public function markAsRead($conversationId) {
-        $user = Auth::user();
-        
-        if (!$user) {
-            return response()->json(['message' => 'Non authentifié'], 401);
+    public function sendMessage(Request $request, $convId){
+        $conv = Conversation::find($convId);
+        if (!$conv) {
+            return response()->json(['message' => 'Conversation introuvable'], 404);
         }
 
-        $conversation = Conversation::findOrFail($conversationId);
-        
-        // Marquer tous les messages de l'autre utilisateur comme lus
-        $updated = Message::where('conversation_id', $conversationId)
-            ->where('sender_id', '!=', $user->id)
+        $userId = Auth::id();
+        if (! $this->isMember($conv, $userId)) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        /* -------- validation -------- */
+        $rules = [
+            'type'      => 'required|in:text,image,video,vocal',
+            'content'   => 'required_if:type,text|string|nullable',
+            'file'      => 'required_unless:type,text|file',
+            'latitude'  => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        /* -------- upload fichier -------- */
+        $filePath = null;
+        if ($request->hasFile('file')) {
+            $disk = 'public';
+            $dir  = match ($request->type) {
+                'image' => 'uploads/messages/images',
+                'video' => 'uploads/messages/videos',
+                'vocal' => 'uploads/messages/vocals',
+            };
+            $file = $request->file('file');
+
+            // sécurité : types & tailles
+
+            $maxSize = match ($request->type) {
+                'image' => 5 * 1024,   // 5 Mo
+                'video' => 25 * 1024,  // 25 Mo
+                'vocal' => 5 * 1024,   // 5 Mo
+            };
+            if ($file->getSize() > $maxSize * 1024) {
+                return response()->json(['message' => 'Fichier trop lourd'], 413);
+            }
+            $filePath = $file->store($dir, $disk);
+        }
+
+        /* -------- création message -------- */
+        DB::beginTransaction();
+        try {
+            $msg = Message::create([
+                'conversation_id' => $conv->id,
+                'sender_id'       => $userId,
+                'content'         => $request->input('content'),
+                'type'            => $request->type,
+                'file_path'       => $filePath,
+                'latitude'        => $request->latitude,
+                'longitude'       => $request->longitude,
+            ]);
+            $conv->touch(); // updated_at
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // suppression fichier si uploadé
+            if ($filePath) Storage::disk('public')->delete($filePath);
+            Log::error('sendMessage error', ['e' => $e->getMessage()]);
+            return response()->json(['message' => 'Erreur interne'], 500);
+        }
+
+        return response()->json($msg->load('sender'), 201);
+    }
+
+    // MARQUER COMME LUS
+    public function markAsRead($convId){
+        $conv = Conversation::find($convId);
+        if (!$conv) {
+            return response()->json(['message' => 'Conversation introuvable'], 404);
+        }
+        $userId = Auth::id();
+        if (! $this->isMember($conv, $userId)) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        $updated = Message::where('conversation_id', $convId)
+            ->where('sender_id', '!=', $userId)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
-        Log::info('✅ Messages marqués comme lus: ' . $updated);
+        return response()->json(['message' => 'Messages marqués lus', 'count' => $updated]);
+    }
 
-        return response()->json(['message' => 'Messages marqués comme lus', 'count' => $updated]);
+    //LISTE MES CONVERSATIONS (avec unreadCount)
+
+    public function myConversations(){
+        $userId = Auth::id();
+        $conv = Conversation::where('user_one_id', $userId)
+            ->orWhere('user_two_id', $userId)
+            ->with(['messages.sender'])
+            ->latest('updated_at')
+            ->get()
+            ->map(function ($c) use ($userId) {
+                $c->other_user = $c->user_one_id === $userId ? $c->userTwo : $c->userOne;
+                $c->unread_count = $c->unreadCountFor($userId);
+                return $c;
+            });
+
+        return response()->json($conv);
+    }
+
+    public function startConversation(Request $request){
+        $request->validate(['receiver_id' => 'nullable|exists:users,id']);
+        $userId = Auth::id();
+        $recvId = $request->receiver_id;
+
+        // anonyme
+        if (! $userId && $recvId) {
+            $conv = Conversation::create(['user_one_id' => $recvId, 'user_two_id' => null]);
+            return response()->json($conv, 201);
+        }
+
+        // authentifié
+        if ($userId && $recvId) {
+            $conv = Conversation::where(fn($q) => $q->where('user_one_id', $userId)->where('user_two_id', $recvId))
+                ->orWhere(fn($q) => $q->where('user_one_id', $recvId)->where('user_two_id', $userId))
+                ->first();
+            if (! $conv) {
+                $conv = Conversation::create(['user_one_id' => $userId, 'user_two_id' => $recvId]);
+            }
+            return response()->json($conv);
+        }
+
+        return response()->json(['message' => 'Receiver required'], 422);
+    }
+
+    private function isMember(Conversation $conv, ?int $userId): bool{
+        return $conv->user_one_id === $userId || $conv->user_two_id === $userId;
     }
 }

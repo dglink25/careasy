@@ -27,7 +27,14 @@ class Entreprise extends Model{
         'admin_note',
         'latitude',
         'longitude',
-        'google_formatted_address'
+        'google_formatted_address',
+        'status_online',
+        'whatsapp_phone',
+        'call_phone'
+    ];
+
+    protected $casts = [
+        'status_online' => 'boolean',
     ];
 
     public function prestataire(){

@@ -23,4 +23,11 @@ class Conversation extends Model {
     public function userTwo() {
         return $this->belongsTo(User::class, 'user_two_id');
     }
+    
+    public function unreadCountFor(int $userId): int{
+        return $this->messages()
+            ->where('sender_id', '!=', $userId)
+            ->whereNull('read_at')
+            ->count();
+    }
 }

@@ -26,14 +26,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('services/mine', [ServiceController::class, 'mine']);
     Route::post('services', [ServiceController::class, 'store']);
     
-    // 👉 MESSAGERIE - ROUTES AUTHENTIFIÉES
+    //  MESSAGERIE - ROUTES AUTHENTIFIÉES
     Route::get('conversations', [MessageController::class, 'myConversations']);
     Route::post('conversation/{id}/mark-read', [MessageController::class, 'markAsRead']);
     
-    // ✅ NOUVEAU: Routes messagerie authentifiées
+    //  NOUVEAU: Routes messagerie authentifiées
     Route::post('conversation/start', [MessageController::class, 'startConversation']);
     Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
     Route::get('conversation/{id}', [MessageController::class, 'getMessages']);
+
+    // Services
+    Route::put('services/{id}', [ServiceController::class, 'update']);
+    Route::delete('services/{id}', [ServiceController::class, 'destroy']);
+
+    // Entreprise – completion profil
+    Route::post('entreprises/{id}/complete-profile', [EntrepriseController::class, 'completeProfile']);
 });
 
 /**
@@ -55,10 +62,6 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('entreprises/{id}/reject', [EntrepriseAdminController::class, 'reject']);
 });
 
-/**
- * ❌ SUPPRIMER CES ROUTES PUBLIQUES POUR LA MESSAGERIE
- * (Elles étaient en conflit avec les routes authentifiées)
- */
 // Route::post('conversation/start', [MessageController::class, 'startConversation']);
 // Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
 // Route::get('conversation/{id}', [MessageController::class, 'getMessages']);
