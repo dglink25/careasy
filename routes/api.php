@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\EntrepriseController;
 use App\Http\Controllers\API\ServiceController;
 use App\Http\Controllers\API\Admin\EntrepriseAdminController;
-use App\Http\Controllers\MessageController;
+use App\Http\Controllers\API\MessageController;
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
