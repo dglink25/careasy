@@ -15,8 +15,6 @@ require __DIR__.'/auth.php';
  * AUTHENTIFIÉ - Token requis
  */
 Route::middleware('auth:sanctum')->group(function () {
-    // Form data pour création
-    Route::get('entreprises/form/data', [EntrepriseController::class, 'getFormData']);
     
     // MES ENTREPRISES - DOIT ÊTRE AVANT /entreprises/{id}
     Route::get('entreprises/mine', [EntrepriseController::class, 'mine']);
@@ -38,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Services
     Route::put('services/{id}', [ServiceController::class, 'update']);
     Route::delete('services/{id}', [ServiceController::class, 'destroy']);
+    Route::get('services/{id}', [ServiceController::class, 'show']);
 
     // Entreprise – completion profil
     Route::post('entreprises/{id}/complete-profile', [EntrepriseController::class, 'completeProfile']);
@@ -51,7 +50,9 @@ Route::get('entreprises/domaine/{id}', [EntrepriseController::class, 'indexByDom
 Route::get('entreprises/{id}', [EntrepriseController::class, 'show']);
 Route::get('search', [EntrepriseController::class, 'search']);
 Route::get('services', [ServiceController::class, 'index']);
-
+Route::get('services/{id}', [ServiceController::class, 'show']); // ✅ AJOUT - Détails service
+// Form data pour création
+    Route::get('entreprises/form/data', [EntrepriseController::class, 'getFormData']);   
 /**
  * ADMIN - Gestion des entreprises
  */
@@ -61,7 +62,3 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('entreprises/{id}/approve', [EntrepriseAdminController::class, 'approve']);
     Route::post('entreprises/{id}/reject', [EntrepriseAdminController::class, 'reject']);
 });
-
-// Route::post('conversation/start', [MessageController::class, 'startConversation']);
-// Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
-// Route::get('conversation/{id}', [MessageController::class, 'getMessages']);
