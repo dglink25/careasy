@@ -3,6 +3,7 @@
 namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Support\Facades\Storage;
 
 class Message extends Model {
     protected $fillable = [
@@ -20,18 +21,26 @@ class Message extends Model {
         'read_at' => 'datetime',
     ];
 
+    // ✅ IMPORTANT: Ajouter file_url aux attributs retournés
+    protected $appends = ['file_url'];
+
     public function conversation() {
         return $this->belongsTo(Conversation::class);
     }
-
 
     public function sender() {
         return $this->belongsTo(User::class, 'sender_id');
     }
 
-    protected function fileUrl(): Attribute{
-        return Attribute::get(fn() => $this->file_path
-            ? \Storage::disk('public')->url($this->file_path)
-            : null);
+    // ✅ CORRECTION: Accessor pour retourner l'URL complète du fichier
+    protected function fileUrl(): Attribute {
+        return Attribute::get(function () {
+            if (!$this->file_path) {
+                return null;
+            }
+            
+            // Retourner l'URL complète accessible publiquement
+            return Storage::disk('public')->url($this->file_path);
+        });
     }
 }
