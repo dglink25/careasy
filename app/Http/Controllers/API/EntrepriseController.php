@@ -59,6 +59,8 @@ class EntrepriseController extends Controller{
             'pdg_full_profession'=> 'required|string',
             'role_user'          => 'required|string',
             'certificate_number' => 'required|string',
+            'whatsapp_phone'    => 'required|string',
+            'call_phone'        => 'required|string',
             'certificate_file'   => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'siege'              => 'nullable|string',
             'logo'               => 'nullable|image|max:2048',
