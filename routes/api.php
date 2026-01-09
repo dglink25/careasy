@@ -27,6 +27,11 @@ Route::middleware('auth:sanctum')->group(function () {
     //  MESSAGERIE - ROUTES AUTHENTIFIÉES
     Route::get('conversations', [MessageController::class, 'myConversations']);
     Route::post('conversation/{id}/mark-read', [MessageController::class, 'markAsRead']);
+
+    // 👉 STATUT EN LIGNE - NOUVEAU
+    Route::post('user/update-online-status', [MessageController::class, 'updateOnlineStatus']);
+    Route::get('user/{userId}/online-status', [MessageController::class, 'checkOnlineStatus']);
+    
     
     //  NOUVEAU: Routes messagerie authentifiées
     Route::post('conversation/start', [MessageController::class, 'startConversation']);
