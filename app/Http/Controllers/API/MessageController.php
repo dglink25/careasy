@@ -328,6 +328,47 @@ class MessageController extends Controller
         return response()->json(['message' => 'Receiver required'], 422);
     }
 
+    /**
+     * Mettre à jour mon statut en ligne
+     */
+    public function updateOnlineStatus()
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
+
+        $user->last_seen_at = now();
+        $user->save();
+
+        return response()->json([
+            'message' => 'Statut mis à jour',
+            'last_seen_at' => $user->last_seen_at
+        ]);
+    }
+
+    /**
+     * Vérifier le statut en ligne d'un utilisateur
+     */
+    public function checkOnlineStatus($userId)
+    {
+        $user = User::find($userId);
+        
+        if (!$user) {
+            return response()->json(['message' => 'Utilisateur introuvable'], 404);
+        }
+
+        // Un utilisateur est considéré "en ligne" si vu dans les 5 dernières minutes
+        $isOnline = $user->last_seen_at && 
+                    $user->last_seen_at->diffInMinutes(now()) < 5;
+
+        return response()->json([
+            'user_id' => $user->id,
+            'is_online' => $isOnline,
+            'last_seen_at' => $user->last_seen_at
+        ]);
+    }
+
     private function isMember(Conversation $conv, ?int $userId): bool
     {
         return $conv->user_one_id === $userId || $conv->user_two_id === $userId;
