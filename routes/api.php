@@ -67,3 +67,5 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('entreprises/{id}/approve', [EntrepriseAdminController::class, 'approve']);
     Route::post('entreprises/{id}/reject', [EntrepriseAdminController::class, 'reject']);
 });
+
+Route::put('/entreprises/{id}', [EntrepriseController::class, 'update'])->middleware('auth:sanctum');

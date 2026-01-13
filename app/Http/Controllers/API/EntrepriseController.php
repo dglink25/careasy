@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 class EntrepriseController extends Controller{
     
@@ -222,6 +223,212 @@ class EntrepriseController extends Controller{
         catch (\Exception $e) {
             Log::error('Erreur completeProfile:', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erreur interne'], 500);
+        }
+    }
+
+    public function update(Request $request, $id){
+        $user = Auth::user();
+        
+        // Vérifier que l'utilisateur est authentifié
+        if (!$user) {
+            return response()->json([
+                'message' => 'Non authentifié',
+                'status' => 'error'
+            ], 401);
+        }
+
+        // Récupérer l'entreprise avec vérification des permissions
+        $entreprise = Entreprise::where('id', $id)
+            ->where('prestataire_id', $user->id)
+            ->first();
+
+        if (!$entreprise) {
+            return response()->json([
+                'message' => 'Entreprise non trouvée ou vous n\'avez pas les permissions nécessaires',
+                'status' => 'error'
+            ], 404);
+        }
+
+        // Vérifier le statut de l'entreprise
+        if ($entreprise->status !== 'validated') {
+            return response()->json([
+                'message' => 'Seules les entreprises validées peuvent être modifiées',
+                'status' => 'error',
+                'current_status' => $entreprise->status
+            ], 403);
+        }
+
+        // Définir les règles de validation pour les champs modifiables
+        $validator = Validator::make($request->all(), [
+            'name' => 'nullable|string|max:255',
+            'domaine_ids' => 'nullable|array',
+            'domaine_ids.*' => 'exists:domaines,id',
+            'siege' => 'nullable|string|max:500',
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'image_boutique' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'description' => 'nullable|string|max:2000',
+            'whatsapp_phone' => 'nullable|string|max:20',
+            'call_phone' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
+            'website' => 'nullable|url|max:255',
+            'facebook' => 'nullable|url|max:255',
+            'instagram' => 'nullable|url|max:255',
+            'linkedin' => 'nullable|url|max:255',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'status_online' => 'nullable|boolean',
+            'horaires_ouverture' => 'nullable|string|max:500',
+            'jours_ouverture' => 'nullable|string|max:255',
+            'tarif_moyen' => 'nullable|string|max:100',
+        ], [
+            'logo.max' => 'Le logo ne doit pas dépasser 2 Mo',
+            'image_boutique.max' => 'L\'image de la boutique ne doit pas dépasser 2 Mo',
+            'domaine_ids.*.exists' => 'Un ou plusieurs domaines sélectionnés sont invalides',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Erreur de validation',
+                'status' => 'error',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Liste des champs modifiables (exclure les documents officiels)
+            $modifiableFields = [
+                'name', 'siege', 'description', 'whatsapp_phone', 
+                'call_phone', 'email', 'website', 'facebook', 'instagram', 
+                'linkedin', 'latitude', 'longitude', 'status_online',
+                'horaires_ouverture', 'jours_ouverture', 'tarif_moyen'
+            ];
+
+            // Mettre à jour les champs modifiables
+            foreach ($modifiableFields as $field) {
+                if ($request->has($field) && !is_null($request->input($field))) {
+                    $entreprise->$field = $request->input($field);
+                }
+            }
+
+            // Gérer la géolocalisation et l'adresse Google Maps
+            if ($request->has('latitude') && $request->has('longitude')) {
+                $latitude = $request->latitude;
+                $longitude = $request->longitude;
+                
+                // Vérifier si les coordonnées ont changé
+                if ($entreprise->latitude != $latitude || $entreprise->longitude != $longitude) {
+                    // Mettre à jour les coordonnées
+                    $entreprise->latitude = $latitude;
+                    $entreprise->longitude = $longitude;
+                    
+                    // Convertir les coordonnées en adresse avec Google Maps
+                    if (env('GOOGLE_MAPS_KEY')) {
+                        try {
+                            $geo = Http::timeout(10)->get("https://maps.googleapis.com/maps/api/geocode/json", [
+                                'latlng' => "{$latitude},{$longitude}",
+                                'key' => env('GOOGLE_MAPS_KEY'),
+                                'language' => 'fr'
+                            ]);
+
+                            if ($geo->successful() && isset($geo['results'][0])) {
+                                $entreprise->google_formatted_address = $geo['results'][0]['formatted_address'];
+                            }
+                        } catch (\Exception $e) {
+                            Log::warning('Erreur lors de la géolocalisation Google Maps', ['error' => $e->getMessage()]);
+                            // Continuer sans mettre à jour l'adresse
+                        }
+                    }
+                }
+            }
+
+            // Gérer l'upload du logo
+            if ($request->hasFile('logo')) {
+                try {
+                    // Supprimer l'ancien logo s'il existe
+                    if ($entreprise->logo && Storage::disk('public')->exists($entreprise->logo)) {
+                        Storage::disk('public')->delete($entreprise->logo);
+                    }
+                    
+                    // Upload du nouveau logo
+                    $logoPath = $request->file('logo')->store('uploads/entreprises/logos', 'public');
+                    $entreprise->logo = $logoPath;
+                } catch (\Exception $e) {
+                    throw new \Exception("Erreur lors de l'upload du logo: " . $e->getMessage());
+                }
+            }
+
+            // Gérer l'upload de l'image de boutique
+            if ($request->hasFile('image_boutique')) {
+                try {
+                    // Supprimer l'ancienne image s'il existe
+                    if ($entreprise->image_boutique && Storage::disk('public')->exists($entreprise->image_boutique)) {
+                        Storage::disk('public')->delete($entreprise->image_boutique);
+                    }
+                    
+                    // Upload de la nouvelle image
+                    $boutiquePath = $request->file('image_boutique')->store('uploads/entreprises/boutiques', 'public');
+                    $entreprise->image_boutique = $boutiquePath;
+                } catch (\Exception $e) {
+                    throw new \Exception("Erreur lors de l'upload de l'image boutique: " . $e->getMessage());
+                }
+            }
+
+            // Sauvegarder les modifications
+            $entreprise->save();
+
+            // Mettre à jour les domaines si fournis
+            if ($request->has('domaine_ids')) {
+                $entreprise->domaines()->sync($request->domaine_ids);
+            }
+
+            // Recharger les relations
+            $entreprise->load('domaines', 'services', 'prestataire');
+
+            DB::commit();
+
+            // Journaliser la modification
+            Log::info('Entreprise mise à jour', [
+                'entreprise_id' => $entreprise->id,
+                'prestataire_id' => $user->id,
+                'champs_modifies' => array_keys($request->all())
+            ]);
+
+            return response()->json([
+                'message' => 'Informations de l\'entreprise mises à jour avec succès',
+                'status' => 'success',
+                'entreprise' => $entreprise,
+                'champs_modifies' => array_intersect($modifiableFields, array_keys($request->all()))
+            ], 200);
+
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+            Log::error('Erreur base de données lors de la mise à jour entreprise', [
+                'error' => $e->getMessage(),
+                'entreprise_id' => $id,
+                'user_id' => $user->id
+            ]);
+
+            return response()->json([
+                'message' => 'Erreur de base de données',
+                'status' => 'error',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Une erreur est survenue'
+            ], 500);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Erreur lors de la mise à jour entreprise', [
+                'error' => $e->getMessage(),
+                'entreprise_id' => $id,
+                'user_id' => $user->id
+            ]);
+
+            return response()->json([
+                'message' => 'Erreur lors de la mise à jour',
+                'status' => 'error',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Une erreur est survenue'
+            ], 500);
         }
     }
 
