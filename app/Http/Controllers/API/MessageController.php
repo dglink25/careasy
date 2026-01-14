@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
@@ -11,13 +12,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
+use Cloudinary\Cloudinary;
+use Cloudinary\Configuration\Configuration;
 use Exception;
+use Illuminate\Support\Str;
 
-class MessageController extends Controller
-{
-    public function getMessages($convId)
-    {
+class MessageController extends Controller{
+    public function getMessages($convId) {
         $conv = Conversation::with(['messages.sender'])
             ->find($convId);
 
@@ -33,8 +34,7 @@ class MessageController extends Controller
         return response()->json($conv);
     }
 
-    public function sendMessage(Request $request, $convId)
-    {
+    public function sendMessage(Request $request, $convId)  {
         $conv = Conversation::find($convId);
         if (!$conv) {
             return response()->json(['message' => 'Conversation introuvable'], 404);
@@ -49,7 +49,7 @@ class MessageController extends Controller
         $rules = [
             'type'      => 'required|in:text,image,video,vocal,document',
             'content'   => 'nullable|string',
-            //  Accepter soit un fichier classique, soit base64
+            // Accepter soit un fichier classique, soit base64
             'file'      => 'nullable|file',
             'file_data' => 'nullable|string',
             'file_name' => 'nullable|string',
@@ -62,179 +62,29 @@ class MessageController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        //  Vérifier qu'on a au moins du contenu ou un fichier
+        // Vérifier qu'on a au moins du contenu ou un fichier
         if ($request->type !== 'text' && !$request->hasFile('file') && !$request->file_data) {
             return response()->json(['message' => 'Fichier requis pour ce type de message'], 422);
         }
 
         /* -------- upload fichier -------- */
         $filePath = null;
-
-        //  CAS 1: Fichier classique (multipart/form-data)
-        if ($request->hasFile('file')) {
-            $disk = 'public';
-            $dir = match ($request->type) {
-                'image' => 'uploads/messages/images',
-                'video' => 'uploads/messages/videos',
-                'vocal' => 'uploads/messages/vocals',
-                'document' => 'uploads/messages/documents', // Nouveau
-                default => 'uploads/messages/others',
-            };
-            $file = $request->file('file');
-
-            // Sécurité : tailles max
-            $maxSize = match ($request->type) {
-                'image' => 5 * 1024,   // 5 Mo
-                'video' => 25 * 1024,  // 25 Mo
-                'vocal' => 5 * 1024,   // 5 Mo
-                'document' => 10 * 1024, // 10 Mo pour documents
-                default => 5 * 1024,
-            };
-
-            if ($file->getSize() > $maxSize * 1024) {
-                return response()->json(['message' => 'Fichier trop lourd'], 413);
-            }
-
-            $filePath = $file->store($dir, $disk);
-        }
-        //  CAS 2: Fichier en base64 (JSON)
-        elseif ($request->file_data) {
-            try {
-                // Extraire les données base64
-                $fileData = $request->file_data;
-                
-                Log::info('Traitement base64', [
-                    'has_data' => !empty($fileData),
-                    'length' => strlen($fileData),
-                    'preview' => substr($fileData, 0, 50),
-                ]);
-                
-                // Format: data:image/jpeg;base64,/9j/4AAQSkZJRg...
-                if (preg_match('/^data:([^;]+);base64,(.+)$/', $fileData, $matches)) {
-                    $mimeType = $matches[1];
-                    $base64Data = $matches[2];
-                    
-                    Log::info('Base64 parsé', [
-                        'mime' => $mimeType,
-                        'data_length' => strlen($base64Data),
-                    ]);
-                } else {
-                    Log::error('Format base64 invalide', ['data_preview' => substr($fileData, 0, 100)]);
-                    return response()->json(['message' => 'Format base64 invalide'], 422);
-                }
-
-                // Décoder le base64
-                $decodedFile = base64_decode($base64Data, true);
-                if ($decodedFile === false) {
-                    Log::error('Décodage base64 échoué');
-                    return response()->json(['message' => 'Décodage base64 échoué'], 422);
-                }
-
-                Log::info('Fichier décodé', ['size' => strlen($decodedFile)]);
-
-                // Vérifier la taille
-                $fileSize = strlen($decodedFile);
-                $maxSize = match ($request->type) {
-                    'image' => 5 * 1024 * 1024,   // 5 Mo
-                    'video' => 25 * 1024 * 1024,  // 25 Mo
-                    'vocal' => 5 * 1024 * 1024,   // 5 Mo
-                    'document' => 10 * 1024 * 1024, // 10 Mo pour documents
-                    default => 5 * 1024 * 1024,
-                };
-
-                if ($fileSize > $maxSize) {
-                    Log::warning('Fichier trop lourd', ['size' => $fileSize, 'max' => $maxSize]);
-                    return response()->json(['message' => 'Fichier trop lourd'], 413);
-                }
-
-                // Déterminer l'extension
-                $extension = match ($mimeType) {
-                    'image/jpeg' => 'jpg',
-                    'image/png' => 'png',
-                    'image/gif' => 'gif',
-                    'image/webp' => 'webp',
-                    'video/mp4' => 'mp4',
-                    'video/webm' => 'webm',
-                    'audio/webm' => 'webm',
-                    'audio/mpeg' => 'mp3',
-                    'audio/wav' => 'wav',
-                    // ✅ Documents
-                    'application/pdf' => 'pdf',
-                    'application/zip' => 'zip',
-                    'application/x-zip-compressed' => 'zip',
-                    'application/msword' => 'doc',
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
-                    'application/vnd.ms-excel' => 'xls',
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
-                    'text/plain' => 'txt',
-                    'application/json' => 'json',
-                    default => 'bin',
-                };
-
-                // Créer un nom de fichier unique
-                $originalName = $request->file_name ?? 'file_' . time();
-                $fileNameWithoutExt = pathinfo($originalName, PATHINFO_FILENAME);
-                $fileName = Str::slug($fileNameWithoutExt) . '_' . uniqid() . '.' . $extension;
-
-                // Déterminer le répertoire
-                $dir = match ($request->type) {
-                    'image' => 'uploads/messages/images',
-                    'video' => 'uploads/messages/videos',
-                    'vocal' => 'uploads/messages/vocals',
-                    'document' => 'uploads/messages/documents', // Nouveau
-                    default => 'uploads/messages/others',
-                };
-
-                // Sauvegarder le fichier
-                $filePath = $dir . '/' . $fileName;
-                
-                Log::info('Tentative sauvegarde', [
-                    'path' => $filePath,
-                    'dir' => $dir,
-                    'file' => $fileName,
-                ]);
-                
-                $saved = Storage::disk('public')->put($filePath, $decodedFile);
-                
-                if (!$saved) {
-                    Log::error('Échec sauvegarde fichier');
-                    throw new Exception('Impossible de sauvegarder le fichier');
-                }
-
-                Log::info('Fichier base64 sauvegardé', [
-                    'path' => $filePath,
-                    'size' => $fileSize,
-                    'mime' => $mimeType,
-                ]);
-
-            } catch (Exception $e) {
-                Log::error('Erreur traitement base64', [
-                    'error' => $e->getMessage(),
-                    'line' => $e->getLine(),
-                    'file' => $e->getFile(),
-                ]);
-                return response()->json([
-                    'message' => 'Erreur traitement du fichier',
-                    'error' => $e->getMessage(),
-                ], 500);
-            }
-        }
-
-        /* -------- création message -------- */
-        DB::beginTransaction();
+        
         try {
-            //  Définir un contenu par défaut si vide
-            $content = $request->input('content');
-            if (empty($content) && $filePath) {
-                $content = match ($request->type) {
-                    'image' => ' Image',
-                    'video' => ' Vidéo',
-                    'vocal' => ' Message vocal',
-                    'document' => 'Document',
-                    default => ' Fichier',
-                };
+            if ($request->hasFile('file')) {
+                // CAS 1: Fichier classique (multipart/form-data)
+                $filePath = $this->uploadFile($request->file('file'), $conv->id, $request->type);
             }
-            
+            elseif ($request->file_data) {
+                // CAS 2: Fichier en base64 (JSON)
+                $filePath = $this->uploadBase64File($request->file_data, $conv->id, $request->type, $request->file_name);
+            }
+
+            /* -------- création message -------- */
+            DB::beginTransaction();
+
+            $content = $request->input('content', $this->getDefaultContent($request->type, $filePath));
+
             $msg = Message::create([
                 'conversation_id' => $conv->id,
                 'sender_id'       => $userId,
@@ -244,7 +94,8 @@ class MessageController extends Controller
                 'latitude'        => $request->latitude,
                 'longitude'       => $request->longitude,
             ]);
-            $conv->touch(); // updated_at
+
+            $conv->touch(); // mise à jour du timestamp
             DB::commit();
 
             Log::info('Message créé avec succès', [
@@ -252,22 +103,129 @@ class MessageController extends Controller
                 'type' => $msg->type,
                 'has_file' => !is_null($filePath),
             ]);
-
+            
+            return response()->json($msg->load('sender'), 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            // Suppression fichier si uploadé
+            // Si fichier uploadé, on le supprime (rollback)
             if ($filePath) {
-                Storage::disk('public')->delete($filePath);
+                $this->deleteFile($filePath);
             }
-            Log::error('sendMessage error', ['e' => $e->getMessage()]);
+            Log::error('Erreur lors de l\'envoi du message', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erreur interne'], 500);
         }
-
-        return response()->json($msg->load('sender'), 201);
     }
 
-    public function markAsRead($convId)
-    {
+    // Méthode pour uploader un fichier vers Cloudinary ou local
+    private function uploadFile($file, $convId, $type){
+        // On détermine le répertoire du type de fichier
+        $folderPath = "messages/{$convId}/{$type}";
+
+        if ($this->isCloudStorageEnabled()) {
+            return $this->uploadToCloudinary($file, $folderPath);
+        } else {
+            return $this->uploadToLocalStorage($file, $folderPath);
+        }
+    }
+
+    // Méthode pour uploader un fichier en base64 vers Cloudinary ou local
+    private function uploadBase64File($base64Data, $convId, $type, $fileName){
+        // Créer un fichier temporaire à partir du base64
+        $tmpFile = tmpfile();
+        fwrite($tmpFile, base64_decode($base64Data));
+        $meta = stream_get_meta_data($tmpFile);
+        $tmpFilePath = $meta['uri'];
+        $file = new \Illuminate\Http\File($tmpFilePath);
+
+        $folderPath = "messages/{$convId}/{$type}";
+
+        if ($this->isCloudStorageEnabled()) {
+            return $this->uploadToCloudinary($file, $folderPath, $fileName);
+        } else {
+            return $this->uploadToLocalStorage($file, $folderPath);
+        }
+    }
+
+    // Vérifie si Cloudinary est activé
+    private function isCloudStorageEnabled() {
+        return env('CLOUDINARY_CLOUD_NAME') && env('CLOUDINARY_API_KEY') && env('CLOUDINARY_API_SECRET');
+    }
+
+    // Upload vers Cloudinary
+    private function uploadToCloudinary($file, $folderPath, $fileName = null) {
+        Configuration::instance([
+            'cloud' => [
+                'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
+                'api_key'    => env('CLOUDINARY_API_KEY'),
+                'api_secret' => env('CLOUDINARY_API_SECRET'),
+            ],
+            'url' => ['secure' => true],
+        ]);
+
+        try {
+            $result = (new \Cloudinary\Api\Upload\UploadApi())->upload(
+                $file->getRealPath(),
+                [
+                    'folder' => $folderPath,
+                    'resource_type' => 'auto',
+                    'public_id' => $fileName ? Str::slug($fileName) . '-' . uniqid() : null,
+                ]
+            );
+            return $result['secure_url'] ?? null;
+        } catch (\Exception $e) {
+            Log::error('Cloudinary upload error', [
+                'error' => $e->getMessage(),
+                'path' => $file->getRealPath(),
+            ]);
+            throw new Exception('Erreur lors de l\'upload vers Cloudinary');
+        }
+    }
+
+    // Upload vers stockage local
+    private function uploadToLocalStorage($file, $folderPath) {
+        try {
+            return $file->store($folderPath, 'public');
+        } catch (\Exception $e) {
+            Log::error('Erreur upload local', [
+                'error' => $e->getMessage(),
+                'path' => $file->getRealPath(),
+            ]);
+            throw new Exception('Erreur lors de l\'upload local');
+        }
+    }
+
+    // Méthode pour supprimer un fichier (Cloudinary ou local)
+    private function deleteFile($filePath) {
+        if ($this->isCloudStorageEnabled()) {
+            // Supprimer du cloud
+            $publicId = basename($filePath, '.' . pathinfo($filePath, PATHINFO_EXTENSION));
+            try {
+                (new \Cloudinary\Api\Upload\UploadApi())->destroy($publicId);
+            } catch (\Exception $e) {
+                Log::error('Erreur suppression Cloudinary', ['error' => $e->getMessage()]);
+            }
+        } else {
+            // Supprimer du stockage local
+            Storage::disk('public')->delete($filePath);
+        }
+    }
+
+    // Contenu par défaut en fonction du type de fichier
+    private function getDefaultContent($type, $filePath) {
+        if (!$filePath) {
+            return $type === 'text' ? 'Message texte' : 'Fichier envoyé';
+        }
+
+        return match ($type) {
+            'image' => 'Image envoyée',
+            'video' => 'Vidéo envoyée',
+            'vocal' => 'Message vocal',
+            'document' => 'Document envoyé',
+            default => 'Fichier envoyé',
+        };
+    }
+
+    public function markAsRead($convId) {
         $conv = Conversation::find($convId);
         if (!$conv) {
             return response()->json(['message' => 'Conversation introuvable'], 404);
@@ -285,8 +243,7 @@ class MessageController extends Controller
         return response()->json(['message' => 'Messages marqués lus', 'count' => $updated]);
     }
 
-    public function myConversations()
-    {
+    public function myConversations() {
         $userId = Auth::id();
         $conv = Conversation::where('user_one_id', $userId)
             ->orWhere('user_two_id', $userId)
@@ -302,8 +259,7 @@ class MessageController extends Controller
         return response()->json($conv);
     }
 
-    public function startConversation(Request $request)
-    {
+    public function startConversation(Request $request) {
         $request->validate(['receiver_id' => 'nullable|exists:users,id']);
         $userId = Auth::id();
         $recvId = $request->receiver_id;
@@ -328,11 +284,14 @@ class MessageController extends Controller
         return response()->json(['message' => 'Receiver required'], 422);
     }
 
+    private function isMember(Conversation $conv, ?int $userId): bool {
+        return $conv->user_one_id === $userId || $conv->user_two_id === $userId;
+    }
+
     /**
      * Mettre à jour mon statut en ligne
      */
-    public function updateOnlineStatus()
-    {
+    public function updateOnlineStatus() {
         $user = Auth::user();
         if (!$user) {
             return response()->json(['message' => 'Non authentifié'], 401);
@@ -350,8 +309,7 @@ class MessageController extends Controller
     /**
      * Vérifier le statut en ligne d'un utilisateur
      */
-    public function checkOnlineStatus($userId)
-    {
+    public function checkOnlineStatus($userId){
         $user = User::find($userId);
         
         if (!$user) {
@@ -369,8 +327,4 @@ class MessageController extends Controller
         ]);
     }
 
-    private function isMember(Conversation $conv, ?int $userId): bool
-    {
-        return $conv->user_one_id === $userId || $conv->user_two_id === $userId;
-    }
 }

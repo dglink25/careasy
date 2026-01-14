@@ -12,8 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Cloudinary\Configuration\Configuration;
+use Cloudinary\Api\Upload\UploadApi;
 
 class EntrepriseController extends Controller{
+
+   public function __construct() {
+       
+    }
     
     public function getFormData(){
         return response()->json([
@@ -45,6 +51,43 @@ class EntrepriseController extends Controller{
     }
 
     // Création d'une entreprise
+   
+
+    //Afficher une entreprise (public)
+    public function show($id){
+        $entreprise = Entreprise::with('domaines', 'services', 'prestataire')->find($id);
+
+        if (!$entreprise) {
+            return response()->json(['message' => 'Entreprise non trouvée'], 404);
+        }
+
+        return response()->json($entreprise);
+    }
+
+    // Filtrer les entreprises par domaine
+    public function indexByDomaine($domaineId){
+        $entreprises = Entreprise::where('status', 'validated')
+            ->whereHas('domaines', function ($q) use ($domaineId) {
+                $q->where('domaines.id', $domaineId);
+            })
+            ->with('domaines', 'services')
+            ->get();
+
+        return response()->json($entreprises);
+    }
+
+    //Rechercher entreprise ou service
+    public function search(Request $request){
+        $s = $request->query('q');
+
+        $entreprises = Entreprise::where('status', 'validated')
+            ->where('name', 'LIKE', "%$s%")
+            ->with('domaines', 'services')
+            ->get();
+
+        return response()->json($entreprises);
+    }
+
     public function store(Request $request){
         Log::info('Données reçues:', $request->all());
         
@@ -99,23 +142,23 @@ class EntrepriseController extends Controller{
 
             // Upload des fichiers
             if ($request->hasFile('logo')) {
-                $data['logo'] = $request->file('logo')->store('uploads/logos', 'public');
+                $data['logo'] = $this->uploadToCloudinary($request->file('logo'), 'logos');
             }
 
             if ($request->hasFile('image_boutique')) {
-                $data['image_boutique'] = $request->file('image_boutique')->store('uploads/boutiques', 'public');
+                $data['image_boutique'] = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
             }
 
             if ($request->hasFile('ifu_file')) {
-                $data['ifu_file'] = $request->file('ifu_file')->store('uploads/documents', 'public');
+                $data['ifu_file'] = $this->uploadToCloudinary($request->file('ifu_file'), 'documents', 'ifu');
             }
 
             if ($request->hasFile('rccm_file')) {
-                $data['rccm_file'] = $request->file('rccm_file')->store('uploads/documents', 'public');
+                $data['rccm_file'] = $this->uploadToCloudinary($request->file('rccm_file'), 'documents', 'rccm');
             }
 
             if ($request->hasFile('certificate_file')) {
-                $data['certificate_file'] = $request->file('certificate_file')->store('uploads/documents', 'public');
+                $data['certificate_file'] = $this->uploadToCloudinary($request->file('certificate_file'), 'documents', 'certificates');
             }
 
             $entreprise = Entreprise::create($data);
@@ -142,40 +185,34 @@ class EntrepriseController extends Controller{
         }
     }
 
-    //Afficher une entreprise (public)
-    public function show($id){
-        $entreprise = Entreprise::with('domaines', 'services', 'prestataire')->find($id);
+    private function uploadToCloudinary($file, $folder, $subfolder = null){
+        // Initialisation EXPLICITE
+        Configuration::instance([
+            'cloud' => [
+                'cloud_name' => env('CLOUDINARY_CLOUD_NAME', 'dsumeoiga'),
+                'api_key'    => env('CLOUDINARY_API_KEY'),
+                'api_secret' => env('CLOUDINARY_API_SECRET'),
+            ],
+            'url' => [
+                'secure' => true
+            ]
+        ]);
 
-        if (!$entreprise) {
-            return response()->json(['message' => 'Entreprise non trouvée'], 404);
-        }
+        $folderPath = $subfolder
+            ? "entreprises/{$folder}/{$subfolder}"
+            : "entreprises/{$folder}";
 
-        return response()->json($entreprise);
+        $result = (new UploadApi())->upload(
+            $file->getRealPath(),
+            [
+                'folder' => $folderPath,
+                'resource_type' => 'auto',
+            ]
+        );
+
+        return $result['secure_url'];
     }
 
-    // Filtrer les entreprises par domaine
-    public function indexByDomaine($domaineId){
-        $entreprises = Entreprise::where('status', 'validated')
-            ->whereHas('domaines', function ($q) use ($domaineId) {
-                $q->where('domaines.id', $domaineId);
-            })
-            ->with('domaines', 'services')
-            ->get();
-
-        return response()->json($entreprises);
-    }
-
-    //Rechercher entreprise ou service
-    public function search(Request $request){
-        $s = $request->query('q');
-
-        $entreprises = Entreprise::where('status', 'validated')
-            ->where('name', 'LIKE', "%$s%")
-            ->with('domaines', 'services')
-            ->get();
-
-        return response()->json($entreprises);
-    }
     //Complèter profil entreprise
     public function completeProfile(Request $request, $id){
         $user = Auth::user();
@@ -206,8 +243,7 @@ class EntrepriseController extends Controller{
 
         try {
             if ($request->hasFile('logo')) {
-                // optionnel : Storage::disk('public')->delete($entreprise->logo);
-                $entreprise->logo = $request->file('logo')->store('uploads/logos','public');
+                $entreprise->logo = $this->uploadToCloudinary($request->file('logo'), 'logos');
             }
 
             $entreprise->fill($request->only(['siege','whatsapp_phone','call_phone','status_online']));
@@ -346,14 +382,15 @@ class EntrepriseController extends Controller{
             // Gérer l'upload du logo
             if ($request->hasFile('logo')) {
                 try {
-                    // Supprimer l'ancien logo s'il existe
-                    if ($entreprise->logo && Storage::disk('public')->exists($entreprise->logo)) {
-                        Storage::disk('public')->delete($entreprise->logo);
+                    // Gérer l'upload du logo
+                    if ($request->hasFile('logo')) {
+                        try {
+                            $entreprise->logo = $this->uploadToCloudinary($request->file('logo'), 'logos');
+                        } catch (\Exception $e) {
+                            throw new \Exception("Erreur lors du upload du logo: &quot; " . $e->getMessage());
+                        }
                     }
-                    
-                    // Upload du nouveau logo
-                    $logoPath = $request->file('logo')->store('uploads/entreprises/logos', 'public');
-                    $entreprise->logo = $logoPath;
+                
                 } catch (\Exception $e) {
                     throw new \Exception("Erreur lors de l'upload du logo: " . $e->getMessage());
                 }
@@ -362,16 +399,9 @@ class EntrepriseController extends Controller{
             // Gérer l'upload de l'image de boutique
             if ($request->hasFile('image_boutique')) {
                 try {
-                    // Supprimer l'ancienne image s'il existe
-                    if ($entreprise->image_boutique && Storage::disk('public')->exists($entreprise->image_boutique)) {
-                        Storage::disk('public')->delete($entreprise->image_boutique);
-                    }
-                    
-                    // Upload de la nouvelle image
-                    $boutiquePath = $request->file('image_boutique')->store('uploads/entreprises/boutiques', 'public');
-                    $entreprise->image_boutique = $boutiquePath;
+                    $entreprise->image_boutique = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
                 } catch (\Exception $e) {
-                    throw new \Exception("Erreur lors de l'upload de l'image boutique: " . $e->getMessage());
+                    throw new \Exception("Erreur lors de l'upload de l'image boutique ". $e->getMessage());
                 }
             }
 
@@ -431,5 +461,6 @@ class EntrepriseController extends Controller{
             ], 500);
         }
     }
+
 
 }

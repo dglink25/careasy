@@ -6,8 +6,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-class DomainesSeeder extends Seeder
-{
+class DomainesSeeder extends Seeder{
     public function run(): void
     {
         $domaines = [
