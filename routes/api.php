@@ -36,6 +36,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('user/update-online-status', [MessageController::class, 'updateOnlineStatus']);
     Route::get('user/{userId}/online-status', [MessageController::class, 'checkOnlineStatus']);
     
+    Route::post('/user/online-status', [MessageController::class, 'updateOnlineStatus']);
+    Route::get('/user/{userId}/online-status', [MessageController::class, 'checkOnlineStatus']);
     
     //  NOUVEAU: Routes messagerie authentifiées
     Route::post('conversation/start', [MessageController::class, 'startConversation']);

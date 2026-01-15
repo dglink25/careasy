@@ -305,18 +305,10 @@ class EntrepriseController extends Controller{
             'description' => 'nullable|string|max:2000',
             'whatsapp_phone' => 'nullable|string|max:20',
             'call_phone' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:255',
-            'website' => 'nullable|url|max:255',
-            'facebook' => 'nullable|url|max:255',
-            'instagram' => 'nullable|url|max:255',
-            'linkedin' => 'nullable|url|max:255',
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
-            'status_online' => 'nullable|boolean',
-            'horaires_ouverture' => 'nullable|string|max:500',
-            'jours_ouverture' => 'nullable|string|max:255',
-            'tarif_moyen' => 'nullable|string|max:100',
-        ], [
+        ], 
+        [
             'logo.max' => 'Le logo ne doit pas dépasser 2 Mo',
             'image_boutique.max' => 'L\'image de la boutique ne doit pas dépasser 2 Mo',
             'domaine_ids.*.exists' => 'Un ou plusieurs domaines sélectionnés sont invalides',
@@ -337,8 +329,7 @@ class EntrepriseController extends Controller{
             $modifiableFields = [
                 'name', 'siege', 'description', 'whatsapp_phone', 
                 'call_phone', 'email', 'website', 'facebook', 'instagram', 
-                'linkedin', 'latitude', 'longitude', 'status_online',
-                'horaires_ouverture', 'jours_ouverture', 'tarif_moyen'
+                'linkedin', 'latitude', 'longitude'
             ];
 
             // Mettre à jour les champs modifiables
