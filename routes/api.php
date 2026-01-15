@@ -20,6 +20,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('entreprises/mine', [EntrepriseController::class, 'mine']);
     Route::post('entreprises', [EntrepriseController::class, 'store']);
 
+    Route::put('entreprises/{id}', [EntrepriseController::class, 'update']);
+    Route::post('entreprises/{id}/complete-profile', [EntrepriseController::class, 'completeProfile']);
+    
+
     // MES SERVICES - DOIT ÊTRE AVANT /services
     Route::get('services/mine', [ServiceController::class, 'mine']);
     Route::post('services', [ServiceController::class, 'store']);
@@ -55,7 +59,7 @@ Route::get('entreprises/domaine/{id}', [EntrepriseController::class, 'indexByDom
 Route::get('entreprises/{id}', [EntrepriseController::class, 'show']);
 Route::get('search', [EntrepriseController::class, 'search']);
 Route::get('services', [ServiceController::class, 'index']);
-Route::get('services/{id}', [ServiceController::class, 'show']); // ✅ AJOUT - Détails service
+Route::get('services/{id}', [ServiceController::class, 'show']); //  AJOUT - Détails service
 // Form data pour création
     Route::get('entreprises/form/data', [EntrepriseController::class, 'getFormData']);   
 /**
@@ -67,5 +71,3 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('entreprises/{id}/approve', [EntrepriseAdminController::class, 'approve']);
     Route::post('entreprises/{id}/reject', [EntrepriseAdminController::class, 'reject']);
 });
-
-Route::put('/entreprises/{id}', [EntrepriseController::class, 'update'])->middleware('auth:sanctum');
