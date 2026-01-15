@@ -292,6 +292,7 @@ class MessageController extends Controller{
      * Mettre à jour mon statut en ligne
      */
     public function updateOnlineStatus() {
+        
         $user = Auth::user();
         if (!$user) {
             return response()->json(['message' => 'Non authentifié'], 401);
