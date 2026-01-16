@@ -328,8 +328,7 @@ class EntrepriseController extends Controller{
             // Liste des champs modifiables (exclure les documents officiels)
             $modifiableFields = [
                 'name', 'siege', 'description', 'whatsapp_phone', 
-                'call_phone', 'email', 'website', 'facebook', 'instagram', 
-                'linkedin', 'latitude', 'longitude'
+                'call_phone', 'latitude', 'longitude'
             ];
 
             // Mettre à jour les champs modifiables
