@@ -161,8 +161,8 @@ class ServiceController extends Controller{
             'name'         => 'sometimes|string|max:255',
             'price'        => 'nullable|numeric',
             'descriptions' => 'nullable|string',
-            'start_time'   => 'nullable|date_format:H:i',
-            'end_time'     => 'nullable|date_format:H:i',
+            'start_time'   => 'nullable',
+            'end_time'     => 'nullable',
             'is_open_24h'  => 'nullable|boolean',
             'medias.*'     => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
