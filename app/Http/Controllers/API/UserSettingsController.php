@@ -178,42 +178,42 @@ class UserSettingsController extends Controller
     /**
      * Mettre à jour le mot de passe
      */
-    public function updatePassword(Request $request)
-    {
-        $user = $request->user();
-        
-        $validator = Validator::make($request->all(), [
-            'current_password' => 'required|string|current_password',
-            'new_password' => [
-                'required',
-                'string',
-                Password::min(8)
-                    ->mixedCase()
-                    ->numbers()
-                    ->symbols()
-                    ->uncompromised(),
-                'confirmed',
-            ],
-        ]);
+    // app/Http/Controllers/UserController.php
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ], 422);
-        }
+public function updatePassword(Request $request)
+{
+    $validated = $request->validate([
+        'current_password' => 'required|string',
+        'new_password' => 'required|string|min:8|confirmed', // 👈 'confirmed' vérifie new_password_confirmation
+    ], [
+        'current_password.required' => 'Le mot de passe actuel est requis',
+        'new_password.required' => 'Le nouveau mot de passe est requis',
+        'new_password.min' => 'Le mot de passe doit contenir au moins 8 caractères',
+        'new_password.confirmed' => 'Les mots de passe ne correspondent pas',
+    ]);
 
-        $user->password = Hash::make($request->new_password);
-        $user->save();
+    $user = auth()->user();
 
-        // Invalider tous les tokens existants pour la sécurité
-        $user->tokens()->delete();
-
+    // Vérifier le mot de passe actuel
+    if (!Hash::check($validated['current_password'], $user->password)) {
         return response()->json([
-            'success' => true,
-            'message' => 'Mot de passe mis à jour avec succès. Veuillez vous reconnecter.'
-        ]);
+            'success' => false,
+            'message' => 'Le mot de passe actuel est incorrect',
+            'errors' => [
+                'current_password' => ['Le mot de passe actuel est incorrect']
+            ]
+        ], 422);
     }
+
+    // Mettre à jour le mot de passe
+    $user->password = Hash::make($validated['new_password']);
+    $user->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Mot de passe mis à jour avec succès'
+    ]);
+}
 
     /**
      * Récupérer les paramètres
