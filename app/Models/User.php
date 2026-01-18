@@ -27,17 +27,21 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    /**
+     * ✅ IMPORTANT: Ne PAS caster 'settings' en array ici
+     * Car on gère manuellement dans l'accessor
+     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'settings' => 'array',
+            // ❌ NE PAS METTRE 'settings' => 'array' ICI
         ];
     }
 
     /**
-     * Accès rapide aux paramètres
+     * ✅ Accessor pour settings - Gestion manuelle du JSON
      */
     public function getSettingsAttribute($value)
     {
@@ -55,8 +59,48 @@ class User extends Authenticatable
             'language' => 'fr',
         ];
 
-        $settings = $value ? json_decode($value, true) : [];
-        return array_merge($defaultSettings, $settings);
+        // Si la valeur est vide ou null
+        if (empty($value) || $value === null) {
+            return $defaultSettings;
+        }
+
+        // Si c'est déjà un tableau (ne devrait pas arriver)
+        if (is_array($value)) {
+            return array_merge($defaultSettings, $value);
+        }
+
+        // Décoder le JSON
+        $decoded = json_decode($value, true);
+        
+        // Si le décodage échoue, retourner les valeurs par défaut
+        if (!is_array($decoded)) {
+            return $defaultSettings;
+        }
+
+        // Fusionner récursivement pour conserver la structure imbriquée
+        return array_replace_recursive($defaultSettings, $decoded);
+    }
+
+    /**
+     * ✅ Setter pour settings - Encoder en JSON
+     */
+    public function setSettingsAttribute($value)
+    {
+        if (is_string($value)) {
+            // Si c'est déjà une string JSON, vérifier qu'elle est valide
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $this->attributes['settings'] = $value;
+            } else {
+                $this->attributes['settings'] = json_encode([]);
+            }
+        } elseif (is_array($value)) {
+            // Si c'est un tableau, l'encoder en JSON
+            $this->attributes['settings'] = json_encode($value);
+        } else {
+            // Sinon, utiliser un objet vide
+            $this->attributes['settings'] = json_encode([]);
+        }
     }
 
     /**
@@ -64,7 +108,8 @@ class User extends Authenticatable
      */
     public function getThemeAttribute()
     {
-        return $this->settings['theme'] ?? 'light';
+        $settings = $this->settings;
+        return $settings['theme'] ?? 'light';
     }
 
     /**
