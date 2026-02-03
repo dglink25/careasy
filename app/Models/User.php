@@ -7,6 +7,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\Storage;
+use App\Notifications\CustomResetPasswordNotification;
+
 
 class User extends Authenticatable
 {
@@ -39,6 +41,11 @@ class User extends Authenticatable
             // ❌ NE PAS METTRE 'settings' => 'array' ICI
         ];
     }
+
+    public function sendPasswordResetNotification($token)
+{
+    $this->notify(new CustomResetPasswordNotification($token));
+}
 
     /**
      * ✅ Accessor pour settings - Gestion manuelle du JSON

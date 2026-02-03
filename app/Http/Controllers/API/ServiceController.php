@@ -106,7 +106,7 @@ class ServiceController extends Controller{
                 'domaine_id'    => $request->domaine_id,
                 'name'          => $request->name,
                 'price'         => $request->price,
-                'descriptions'  => $request->descriptions,
+                'descriptions'  => $request->descriptions ?? '',
                 'start_time'    => $request->start_time,
                 'end_time'      => $request->end_time,
                 'is_open_24h'   => $request->is_open_24h ?? false,
