@@ -16,6 +16,7 @@ use Cloudinary\Cloudinary;
 use Cloudinary\Configuration\Configuration;
 use Exception;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
 
 class MessageController extends Controller{
     public function getMessages($convId) {
@@ -462,4 +463,15 @@ class MessageController extends Controller{
             return response()->json(['message' => 'Erreur de mise à jour'], 500);
         }
     }
+
+    public function chatWithCarAI($message) {
+        $response = Http::post('http://localhost:11434/api/generate', [
+            'model' => 'carai',
+            'prompt' => $message,
+            'stream' => false
+        ]);
+
+        return $response->json('response');
+    }
+
 }
