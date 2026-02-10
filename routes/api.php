@@ -6,7 +6,10 @@ use App\Http\Controllers\API\EntrepriseController;
 use App\Http\Controllers\API\ServiceController;
 use App\Http\Controllers\API\Admin\EntrepriseAdminController;
 use App\Http\Controllers\API\MessageController;
-use App\Http\Controllers\API\UserSettingsController;    
+use App\Http\Controllers\API\UserSettingsController; 
+use App\Http\Controllers\Auth\GoogleAuthController;
+
+
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
 require __DIR__.'/auth.php';
@@ -95,4 +98,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Téléchargement de photo de profil
     Route::post('/user/profile-photo', [UserSettingsController::class, 'updateProfilePhoto']);
     Route::delete('/user/profile-photo', [UserSettingsController::class, 'deleteProfilePhoto']);
+});
+
+
+Route::prefix('auth')->group(function () {
+    Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirect');
+    Route::get('/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('google.callback');
 });
