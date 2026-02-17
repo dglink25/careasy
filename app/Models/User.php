@@ -22,6 +22,7 @@ class User extends Authenticatable
         'theme',
         'profile_photo_path',
         'settings',
+        'google_id',
     ];
 
     protected $hidden = [
