@@ -10,19 +10,18 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
-class GoogleAuthController extends Controller
-{
-    public function redirectToGoogle()
-    {
+class GoogleAuthController extends Controller{
+    public function redirectToGoogle(){
         return Socialite::driver('google')
             ->redirectUrl(config('services.google.redirect'))
             ->stateless()
+            ->with(['prompt' => 'select_account'])
             ->redirect();
     }
 
-    public function handleGoogleCallback(Request $request)
-    {
+    public function handleGoogleCallback(Request $request){
         try {
+           
             $googleUser = Socialite::driver('google')
                 ->redirectUrl(config('services.google.redirect'))
                 ->stateless()
@@ -41,7 +40,8 @@ class GoogleAuthController extends Controller
                     'email_verified_at' => now(), // Email vérifié via Google
                     'role' => 'prestataire', // Rôle par défaut
                 ]);
-            } else {
+            } 
+            else {
                 // Mettre à jour l'ID Google si nécessaire
                 if (empty($user->google_id)) {
                     $user->update(['google_id' => $googleUser->getId()]);
@@ -61,6 +61,7 @@ class GoogleAuthController extends Controller
 
             // Rediriger vers le frontend avec le token
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+            
             return redirect("$frontendUrl/auth/callback?token=" . $token . '&user=' . urlencode(json_encode([
                 'id' => $user->id,
                 'name' => $user->name,
@@ -68,7 +69,8 @@ class GoogleAuthController extends Controller
                 'role' => $user->role,
             ])));
 
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             // \Log::error('Google auth error: ' . $e->getMessage());
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
             return redirect("$frontendUrl/login?error=google_auth_failed&message=" . urlencode($e->getMessage()));

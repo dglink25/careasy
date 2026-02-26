@@ -99,9 +99,3 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/user/profile-photo', [UserSettingsController::class, 'updateProfilePhoto']);
     Route::delete('/user/profile-photo', [UserSettingsController::class, 'deleteProfilePhoto']);
 });
-
-
-Route::prefix('auth')->group(function () {
-    Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirect');
-    Route::get('/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('google.callback');
-});

@@ -40,20 +40,18 @@ class AuthenticatedSessionController extends Controller{
     /**
      * Destroy an authenticated session.
      */
-    public function destroy(Request $request)
-    {
-        // Vérifie si l'utilisateur est authentifié
+    public function destroy(Request $request){
+
         if ($request->user()) {
             $request->user()->currentAccessToken()->delete();
-            
-            return response()->json([
-                'message' => 'Logged out successfully'
-            ], 200);
         }
-        
-        // Si pas d'utilisateur authentifié, on retourne quand même un succès
+
+        // Supprimer les infos côté frontend (tu peux renvoyer un flag)
         return response()->json([
-            'message' => 'Already logged out'
+            'message' => 'Déconnecté avec succès',
+            'google_logout_url' => 'https://accounts.google.com/Logout'
         ], 200);
+
     }
+
 }
