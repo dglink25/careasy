@@ -422,7 +422,8 @@ class EntrepriseController extends Controller{
                 'champs_modifies' => array_intersect($modifiableFields, array_keys($request->all()))
             ], 200);
 
-        } catch (\Illuminate\Database\QueryException $e) {
+        } 
+        catch (\Illuminate\Database\QueryException $e) {
             DB::rollBack();
             Log::error('Erreur base de données lors de la mise à jour entreprise', [
                 'error' => $e->getMessage(),
