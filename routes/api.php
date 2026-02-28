@@ -1,5 +1,4 @@
 <?php
-// routes/api.php - VERSION CORRIGÉE
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\EntrepriseController;
