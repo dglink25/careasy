@@ -8,6 +8,10 @@ use App\Http\Controllers\API\Admin\EntrepriseAdminController;
 use App\Http\Controllers\API\MessageController;
 use App\Http\Controllers\API\UserSettingsController; 
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\API\AiServiceController;
+use App\Http\Controllers\API\AiMessageController;
+use App\Http\Controllers\API\AiLocationController;
+use App\Http\Controllers\API\AiLogController;
 
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
@@ -98,4 +102,37 @@ Route::middleware('auth:sanctum')->group(function () {
     // Téléchargement de photo de profil
     Route::post('/user/profile-photo', [UserSettingsController::class, 'updateProfilePhoto']);
     Route::delete('/user/profile-photo', [UserSettingsController::class, 'deleteProfilePhoto']);
+});
+
+
+Route::prefix('ai')->group(function () {
+
+    // Localisation Bénin
+    Route::get('/locations',          [AiLocationController::class, 'search']);
+    Route::get('/locations/communes', [AiLocationController::class, 'communes']);
+
+    // Domaines de services
+    Route::get('/domaines', [AiServiceController::class, 'domaines']);
+
+    // Services proches (public — pas besoin d'auth pour la carte)
+    Route::get('/services/nearby', [AiServiceController::class, 'nearby']);
+    Route::get('/services',        [AiServiceController::class, 'index']);
+});
+
+Route::prefix('ai')->middleware('auth:sanctum')->group(function () {
+
+    // Messages IA
+    Route::post('/messages', [AiMessageController::class, 'store']);
+
+    // Conversations
+    Route::get('/conversations/{id}/messages', [AiMessageController::class, 'history']);
+
+    // Sessions IA
+    Route::post('/sessions', [AiLogController::class, 'saveSession']);
+
+    // Logs IA
+    Route::post('/logs', [AiLogController::class, 'store']);
+
+    // Feedback
+    Route::post('/feedback', [AiLogController::class, 'feedback']);
 });

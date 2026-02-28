@@ -277,9 +277,6 @@ class ServiceController extends Controller{
         }
     }
 
-    /**
-     * Supprime une image de Cloudinary
-     */
     private function deleteImageFromCloudinary($url)  {
         try {
             if (empty($url)) {
@@ -309,11 +306,7 @@ class ServiceController extends Controller{
         }
     }
 
-    /**
-     * Extrait l'ID public d'une URL Cloudinary
-     */
-    private function extractPublicIdFromUrl($url)
-    {
+    private function extractPublicIdFromUrl($url){
         try {
             // Format: https://res.cloudinary.com/demo/image/upload/v1234567890/folder/abc123.jpg
             $pattern = '/\/v\d+\/(.+)\./';
