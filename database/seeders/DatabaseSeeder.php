@@ -5,29 +5,21 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
-class DatabaseSeeder extends Seeder{
+class DatabaseSeeder extends Seeder {
     use WithoutModelEvents;
 
-    /**
-     * Seed the application's database.
-     */
-    
-    public function run(): void{
-
+    public function run(): void {
         User::factory()->create([
-            'name' => 'CarAI',
-            'email' => 'carai@careasy.ai',
-            'password'  => 'ai',
+            'name'     => 'CarAI',
+            'email'    => 'carai@careasy.ai',
+            'password' => Hash::make('ai_careasy_2025'),
         ]);
 
         $this->call([
             DomainesSeeder::class,
-        ]);
-
-        $this->call([
-
-            LocationSeeder::class,
+            LocationSeeder::class,   // ← 547 arrondissements du Bénin
         ]);
     }
 }
