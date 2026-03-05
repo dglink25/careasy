@@ -1,33 +1,38 @@
 <?php
 
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Model;
 
-
-class Conversation extends Model {
+class Conversation extends Model
+{
     protected $fillable = [
-        'user_one_id', 
-        'user_two_id'
+        'user_one_id',
+        'user_two_id',
+        'service_id',
+        'service_name',
+        'entreprise_name'
     ];
 
-    public function messages() {
-        return $this->hasMany(Message::class);
+    protected $with = ['userOne', 'userTwo'];
+
+    public function messages()
+    {
+        return $this->hasMany(Message::class)->orderBy('created_at', 'asc');
     }
 
-
-    public function userOne() {
+    public function userOne()
+    {
         return $this->belongsTo(User::class, 'user_one_id');
     }
 
-
-    public function userTwo() {
+    public function userTwo()
+    {
         return $this->belongsTo(User::class, 'user_two_id');
     }
-    
-    public function unreadCountFor(int $userId): int{
-        return $this->messages()
-            ->where('sender_id', '!=', $userId)
-            ->whereNull('read_at')
-            ->count();
+
+    public function service()
+    {
+        return $this->belongsTo(Service::class);
     }
 }

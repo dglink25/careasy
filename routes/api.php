@@ -17,7 +17,7 @@ Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 require __DIR__.'/auth.php';
 
 Route::middleware('auth:sanctum')->group(function () {
-    
+
     Route::get('entreprises/mine', [EntrepriseController::class, 'mine']);
     Route::post('entreprises', [EntrepriseController::class, 'store']);
 
@@ -38,11 +38,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('user/{userId}/online-status', [MessageController::class, 'checkOnlineStatus']);
     
     Route::post('/user/online-status', [MessageController::class, 'updateOnlineStatus']);
-    Route::get('/user/{userId}/online-status', [MessageController::class, 'checkOnlineStatus']);
     
     //  NOUVEAU: Routes messagerie authentifiées
     Route::post('conversation/start', [MessageController::class, 'startConversation']);
-    Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
     Route::get('conversation/{id}', [MessageController::class, 'getMessages']);
 
     // Services
@@ -129,4 +127,15 @@ Route::prefix('ai')->middleware('auth:sanctum')->group(function () {
 
     // Feedback
     Route::post('/feedback', [AiLogController::class, 'feedback']);
+});
+
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('conversation/service', [MessageController::class, 'startServiceConversation']);
+
+    Route::post('conversation/{id}/send', [MessageController::class, 'sendMessage']);
+    
+    // Indicateurs en temps réel
+    Route::post('conversation/{id}/typing', [MessageController::class, 'typingIndicator']);
+    Route::post('conversation/{id}/recording', [MessageController::class, 'recordingIndicator']);
 });
