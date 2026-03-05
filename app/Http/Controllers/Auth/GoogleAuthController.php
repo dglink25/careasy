@@ -38,7 +38,7 @@ class GoogleAuthController extends Controller{
                     'password' => Hash::make(Str::random(24)), // Mot de passe aléatoire
                     'google_id' => $googleUser->getId(),
                     'email_verified_at' => now(), // Email vérifié via Google
-                    'role' => 'prestataire', // Rôle par défaut
+                    'role' => 'client', // Rôle par défaut
                 ]);
             } 
             else {

@@ -164,6 +164,10 @@ class EntrepriseController extends Controller{
             $entreprise = Entreprise::create($data);
             $entreprise->domaines()->sync($request->domaine_ids);
             
+            Auth::user()->update([
+                'role' => $request->role_user
+            ]);
+                        
             // Recharger avec relations
             $entreprise->load('domaines', 'prestataire');
 
@@ -174,7 +178,8 @@ class EntrepriseController extends Controller{
                 'entreprise' => $entreprise
             ], 201);
 
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             DB::rollBack();
             Log::error('Erreur création entreprise:', ['error' => $e->getMessage()]);
 

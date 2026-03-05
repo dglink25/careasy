@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
@@ -13,9 +12,9 @@ use Cloudinary\Configuration\Configuration;
 use Cloudinary\Api\Upload\UploadApi;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
-class ServiceController extends Controller{
+class ServiceController extends Controller
+{
     public function __construct(){
-        // Configuration Cloudinary globale
         Configuration::instance([
             'cloud' => [
                 'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
@@ -28,9 +27,6 @@ class ServiceController extends Controller{
         ]);
     }
 
-    /**
-     * Services de l'entreprise du prestataire
-     */
     public function mine() {
         $user = Auth::user();
 
@@ -59,10 +55,17 @@ class ServiceController extends Controller{
             'domaine_id'    => 'required|exists:domaines,id',
             'name'          => 'required|string|max:255',
             'price'         => 'nullable|numeric',
+            'price_promo'   => 'nullable|numeric|lt:price',
+            'is_price_on_request' => 'boolean',
+            'has_promo'     => 'boolean',
+            'promo_start_date' => 'nullable|date',
+            'promo_end_date'   => 'nullable|date|after:promo_start_date',
             'descriptions'  => 'nullable|string',
-            'start_time'    => 'nullable|date_format:H:i',
-            'end_time'      => 'nullable|date_format:H:i',
-            'is_open_24h'   => 'nullable|boolean',
+            'is_always_open' => 'nullable|boolean',
+            'schedule'      => 'nullable|array',
+            'schedule.*.is_open' => 'boolean',
+            'schedule.*.start' => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i',
+            'schedule.*.end'   => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i|after:schedule.*.start',
             'medias.*'      => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
@@ -87,7 +90,6 @@ class ServiceController extends Controller{
         }
 
         try {
-            // Upload des médias sur Cloudinary
             $medias = [];
             if ($request->hasFile('medias')) {
                 foreach ($request->file('medias') as $file) {
@@ -95,19 +97,78 @@ class ServiceController extends Controller{
                 }
             }
 
-            $service = Service::create([
+            // Préparer les données
+            $data = [
                 'entreprise_id' => $entreprise->id,
-                'prestataire_id'=> $user->id,
-                'domaine_id'    => $request->domaine_id,
-                'name'          => $request->name,
-                'price'         => $request->price,
-                'descriptions'  => $request->descriptions ?? '',
-                'start_time'    => $request->start_time,
-                'end_time'      => $request->end_time,
-                'is_open_24h'   => $request->is_open_24h ?? false,
-                'medias'        => $medias,
-            ]);
+                'prestataire_id' => $user->id,
+                'domaine_id' => $request->domaine_id,
+                'name' => $request->name,
+                'price' => $request->price,
+                'price_promo' => $request->price_promo,
+                'is_price_on_request' => $request->boolean('is_price_on_request', false),
+                'has_promo' => $request->boolean('has_promo', false),
+                'promo_start_date' => $request->promo_start_date,
+                'promo_end_date' => $request->promo_end_date,
+                'descriptions' => $request->descriptions ?? '',
+                'medias' => $medias,
+                'is_always_open' => $request->boolean('is_always_open', false),
+            ];
 
+            // Validation des règles de prix
+            if ($data['is_price_on_request']) {
+                $data['price'] = null;
+                $data['price_promo'] = null;
+                $data['has_promo'] = false;
+            }
+
+            if ($data['has_promo'] && !$data['price_promo']) {
+                return response()->json([
+                    'errors' => ['price_promo' => ['Le prix promotionnel est requis quand la promotion est activée']]
+                ], 422);
+            }
+
+            if ($data['has_promo'] && $data['price_promo'] && $data['price'] && $data['price_promo'] >= $data['price']) {
+                return response()->json([
+                    'errors' => ['price_promo' => ['Le prix promotionnel doit être inférieur au prix normal']]
+                ], 422);
+            }
+
+            // Gestion des horaires (inchangée)
+            if ($request->boolean('is_always_open')) {
+                $data['is_open_24h'] = true;
+                $data['schedule'] = null;
+                $data['start_time'] = null;
+                $data['end_time'] = null;
+            } 
+            else if ($request->has('schedule')) {
+                $data['schedule'] = $request->schedule;
+                $data['is_open_24h'] = false;
+                
+                $firstOpenDay = collect($request->schedule)->firstWhere('is_open', true);
+                if ($firstOpenDay) {
+                    $data['start_time'] = $firstOpenDay['start'];
+                    $data['end_time'] = $firstOpenDay['end'];
+                }
+            }
+            else {
+                $data['is_open_24h'] = $request->boolean('is_open_24h', false);
+                $data['start_time'] = $request->start_time;
+                $data['end_time'] = $request->end_time;
+                
+                if (!$data['is_open_24h'] && $request->start_time && $request->end_time) {
+                    $schedule = [];
+                    foreach (Service::DAYS as $day => $label) {
+                        $schedule[$day] = [
+                            'is_open' => true,
+                            'start' => $request->start_time,
+                            'end' => $request->end_time
+                        ];
+                    }
+                    $data['schedule'] = $schedule;
+                }
+            }
+
+            $service = Service::create($data);
             $service->load('entreprise', 'domaine');
 
             return response()->json([
@@ -123,7 +184,7 @@ class ServiceController extends Controller{
         }
     }
 
-    public function show($id) {
+    public function show($id)  {
         $service = Service::with('entreprise', 'domaine')->find($id);
 
         if (!$service) {
@@ -133,57 +194,7 @@ class ServiceController extends Controller{
         return response()->json($service);
     }
 
-
-    public function destroy($id) {
-        $user = Auth::user();
-
-        $service = Service::where('id', $id)
-            ->where('prestataire_id', $user->id)
-            ->first();
-
-        if (!$service) {
-            return response()->json(['message' => 'Service introuvable ou non autorisé'], 404);
-        }
-
-        try {
-            $service->delete();
-            return response()->json(['message' => 'Service supprimé']);
-        } catch (\Exception $e) {
-            Log::error('Erreur suppression service:', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erreur interne'], 500);
-        }
-    }
-
-    /**
-     * Upload fichier sur Cloudinary avec gestion des dossiers
-     */
-    private function uploadToCloudinary($file, $folder, $subfolder = null) {
-        if (!$file || !$file->isValid()) {
-            throw new \Exception('Fichier invalide pour upload');
-        }
-
-        $folderPath = $subfolder
-            ? "{$folder}/{$subfolder}"
-            : $folder;
-
-        try {
-            $result = (new UploadApi())->upload(
-                $file->getRealPath(),
-                [
-                    'folder' => $folderPath,
-                    'resource_type' => 'auto',
-                ]
-            );
-
-            return $result['secure_url'] ?? null;
-        } catch (\Exception $e) {
-            Log::error('Erreur upload Cloudinary:', ['error' => $e->getMessage()]);
-            throw new \Exception('Impossible d\'uploader le fichier sur Cloudinary');
-        }
-    }
-
-
-    public function update(Request $request, $id) {
+    public function update(Request $request, $id){
         $user = Auth::user();
 
         $service = Service::where('id', $id)
@@ -195,13 +206,20 @@ class ServiceController extends Controller{
         }
 
         $validator = Validator::make($request->all(), [
-            'name'         => 'sometimes|string|max:255',
-            'price'        => 'nullable|numeric',
-            'descriptions' => 'nullable|string',
-            'start_time'   => 'nullable',
-            'end_time'     => 'nullable',
-            'is_open_24h'  => 'nullable|boolean',
-            'medias.*'     => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
+            'name'          => 'sometimes|string|max:255',
+            'price'         => 'nullable|numeric',
+            'price_promo'   => 'nullable|numeric|lt:price',
+            'is_price_on_request' => 'boolean',
+            'has_promo'     => 'boolean',
+            'promo_start_date' => 'nullable|date',
+            'promo_end_date'   => 'nullable|date|after:promo_start_date',
+            'descriptions'  => 'nullable|string',
+            'is_always_open' => 'nullable|boolean',
+            'schedule'      => 'nullable|array',
+            'schedule.*.is_open' => 'boolean',
+            'schedule.*.start' => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i',
+            'schedule.*.end'   => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i|after:schedule.*.start',
+            'medias.*'      => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
             'deleted_medias.*' => 'nullable|string'
         ]);
 
@@ -210,21 +228,15 @@ class ServiceController extends Controller{
         }
 
         try {
-            // Récupérer les médias actuels
+            // Gestion des médias (inchangée)
             $medias = $service->medias ?? [];
             
-            // SUPPRIMER LES IMAGES MARQUÉES POUR SUPPRESSION
             if ($request->has('deleted_medias')) {
                 $deletedMedias = $request->input('deleted_medias');
                 
-                // Log pour déboguer
-                Log::info('Images à supprimer:', ['deleted_medias' => $deletedMedias]);
-                
-                // Traiter selon le type de données reçues
                 if (is_array($deletedMedias)) {
                     foreach ($deletedMedias as $mediaUrl) {
                         $this->deleteImageFromCloudinary($mediaUrl);
-                        // Retirer du tableau des médias
                         $medias = array_filter($medias, function($existingMedia) use ($mediaUrl) {
                             return $existingMedia !== $mediaUrl;
                         });
@@ -236,11 +248,9 @@ class ServiceController extends Controller{
                     });
                 }
                 
-                // Réindexer le tableau
                 $medias = array_values($medias);
             }
 
-            // AJOUTER LES NOUVEAUX MÉDIAS
             if ($request->hasFile('medias')) {
                 foreach ($request->file('medias') as $file) {
                     $uploadedFile = $this->uploadToCloudinary($file, 'services', $user->id);
@@ -248,14 +258,64 @@ class ServiceController extends Controller{
                 }
             }
 
-            // Mettre à jour le champ medias
-            $service->medias = $medias;
+            $data = $request->only([
+                'name', 
+                'price', 
+                'price_promo', 
+                'descriptions',
+                'promo_start_date',
+                'promo_end_date'
+            ]);
 
-            // Mettre à jour les autres champs
-            $service->fill($request->only([
-                'name', 'price', 'descriptions', 'start_time', 'end_time', 'is_open_24h'
-            ]));
-            
+            // Gestion des booléens
+            if ($request->has('is_price_on_request')) {
+                $data['is_price_on_request'] = $request->boolean('is_price_on_request');
+                
+                if ($data['is_price_on_request']) {
+                    $data['price'] = null;
+                    $data['price_promo'] = null;
+                    $data['has_promo'] = false;
+                }
+            }
+
+            if ($request->has('has_promo')) {
+                $data['has_promo'] = $request->boolean('has_promo');
+                
+                if ($data['has_promo'] && $request->price_promo && $request->price) {
+                    if ($request->price_promo >= $request->price) {
+                        return response()->json([
+                            'errors' => ['price_promo' => ['Le prix promotionnel doit être inférieur au prix normal']]
+                        ], 422);
+                    }
+                }
+            }
+
+            $data['medias'] = $medias;
+
+            // Gestion des horaires (inchangée)
+            if ($request->has('is_always_open')) {
+                $data['is_always_open'] = $request->boolean('is_always_open');
+                
+                if ($data['is_always_open']) {
+                    $data['is_open_24h'] = true;
+                    $data['schedule'] = null;
+                    $data['start_time'] = null;
+                    $data['end_time'] = null;
+                }
+            }
+
+            if ($request->has('schedule') && !$request->boolean('is_always_open')) {
+                $data['schedule'] = $request->schedule;
+                $data['is_open_24h'] = false;
+                                
+                $firstOpenDay = collect($request->schedule)->firstWhere('is_open', true);
+                if ($firstOpenDay) {
+                    $data['start_time'] = $firstOpenDay['start'];
+                    $data['end_time'] = $firstOpenDay['end'];
+                }
+            }
+
+            $service->fill($data);
             $service->save();
 
             $service->load('entreprise', 'domaine');
@@ -277,38 +337,83 @@ class ServiceController extends Controller{
         }
     }
 
-    private function deleteImageFromCloudinary($url)  {
+    public function destroy($id) {
+        $user = Auth::user();
+
+        $service = Service::where('id', $id)
+            ->where('prestataire_id', $user->id)
+            ->first();
+
+        if (!$service) {
+            return response()->json(['message' => 'Service introuvable ou non autorisé'], 404);
+        }
+
+        try {
+            if ($service->medias) {
+                foreach ($service->medias as $media) {
+                    $this->deleteImageFromCloudinary($media);
+                }
+            }
+
+            $service->delete();
+            return response()->json(['message' => 'Service supprimé']);
+        }
+        catch (\Exception $e) {
+            Log::error('Erreur suppression service:', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Erreur interne'], 500);
+        }
+    }
+
+    private function uploadToCloudinary($file, $folder, $subfolder = null) {
+        if (!$file || !$file->isValid()) {
+            throw new \Exception('Fichier invalide pour upload');
+        }
+
+        $folderPath = $subfolder
+            ? "{$folder}/{$subfolder}"
+            : $folder;
+
+        try {
+            $result = (new UploadApi())->upload(
+                $file->getRealPath(),
+                [
+                    'folder' => $folderPath,
+                    'resource_type' => 'auto',
+                ]
+            );
+
+            return $result['secure_url'] ?? null;
+        } 
+        catch (\Exception $e) {
+            Log::error('Erreur upload Cloudinary:', ['error' => $e->getMessage()]);
+            throw new \Exception('Impossible d\'uploader le fichier sur Cloudinary');
+        }
+    }
+
+    private function deleteImageFromCloudinary($url){
         try {
             if (empty($url)) {
                 return;
             }
 
-            // Extraire l'ID public de l'URL Cloudinary
             $publicId = $this->extractPublicIdFromUrl($url);
             
             if ($publicId) {
                 Log::info('Tentative de suppression Cloudinary:', ['public_id' => $publicId]);
-                
-                // Méthode 1: Via le facade
                 $result = Cloudinary::destroy($publicId);
-                
-                // Méthode 2: Alternative si la première ne fonctionne pas
-                // $result = cloudinary()->destroy($publicId);
-                
                 Log::info('Résultat suppression Cloudinary:', ['result' => $result]);
             }
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             Log::error('Erreur suppression Cloudinary:', [
                 'url' => $url,
                 'error' => $e->getMessage()
             ]);
-            // Ne pas bloquer la requête si la suppression échoue
         }
     }
 
-    private function extractPublicIdFromUrl($url){
+    private function extractPublicIdFromUrl($url) {
         try {
-            // Format: https://res.cloudinary.com/demo/image/upload/v1234567890/folder/abc123.jpg
             $pattern = '/\/v\d+\/(.+)\./';
             preg_match($pattern, $url, $matches);
             
@@ -316,7 +421,6 @@ class ServiceController extends Controller{
                 return $matches[1];
             }
             
-            // Format alternatif: https://res.cloudinary.com/demo/image/upload/folder/abc123.jpg
             $pattern2 = '/\/upload\/(.+)\./';
             preg_match($pattern2, $url, $matches2);
             

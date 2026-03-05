@@ -11,11 +11,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 
-class RegisteredUserController extends Controller
-{
+class RegisteredUserController extends Controller{
     /**
-     * Handle an incoming registration request.
-     *
+     
      * @throws \Illuminate\Validation\ValidationException
      */
     public function store(Request $request){
@@ -29,7 +27,7 @@ class RegisteredUserController extends Controller
             'name'      => $request->name,
             'email'     => $request->email,
             'password'  => Hash::make($request->string('password')),
-            'role'      => 'prestataire',
+            'role'      => 'client',
         ]);
 
         $token = $user->createToken('api_token')->plainTextToken;

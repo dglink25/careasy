@@ -12,17 +12,12 @@ use App\Http\Controllers\API\AiMessageController;
 use App\Http\Controllers\API\AiLocationController;
 use App\Http\Controllers\API\AiLogController;
 
-
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
 require __DIR__.'/auth.php';
 
-/**
- * AUTHENTIFIÉ - Token requis
- */
 Route::middleware('auth:sanctum')->group(function () {
     
-    // MES ENTREPRISES - DOIT ÊTRE AVANT /entreprises/{id}
     Route::get('entreprises/mine', [EntrepriseController::class, 'mine']);
     Route::post('entreprises', [EntrepriseController::class, 'store']);
 
@@ -38,7 +33,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('conversations', [MessageController::class, 'myConversations']);
     Route::post('conversation/{id}/mark-read', [MessageController::class, 'markAsRead']);
 
-    // 👉 STATUT EN LIGNE - NOUVEAU
+    // STATUT EN LIGNE - NOUVEAU
     Route::post('user/update-online-status', [MessageController::class, 'updateOnlineStatus']);
     Route::get('user/{userId}/online-status', [MessageController::class, 'checkOnlineStatus']);
     

@@ -250,7 +250,7 @@
         
         <!-- Content -->
         <div class="content">
-            <div class="greeting">Bonjour {{ $userName }} ! 👋</div>
+            <div class="greeting">Bonjour {{ $userName }}</div>
             
             <p class="message">
                 Vous recevez cet email car nous avons reçu une <strong>demande de réinitialisation de mot de passe</strong> pour votre compte CarEasy.
@@ -263,14 +263,13 @@
             <!-- Button -->
             <div class="button-container">
                 <a href="{{ $resetUrl }}" class="reset-button">
-                    🔑 Réinitialiser mon mot de passe
+                     Réinitialiser mon mot de passe
                 </a>
             </div>
             
             <!-- Timer Warning -->
             <div class="highlight-box">
                 <p class="highlight-text">
-                    <span class="timer-icon">⏰</span>
                     Ce lien est valide pendant <strong>60 minutes</strong>.
                 </p>
             </div>
@@ -278,7 +277,7 @@
             <!-- Warning -->
             <div class="warning-box">
                 <p class="warning-text">
-                    <strong>⚠️ Vous n'avez pas demandé cette réinitialisation ?</strong><br>
+                    <strong>Vous n'avez pas demandé cette réinitialisation ?</strong><br>
                     Aucune action n'est requise. Votre mot de passe actuel reste inchangé et sécurisé.
                 </p>
             </div>
@@ -286,7 +285,6 @@
             <!-- Security Tips -->
             <div class="security-section">
                 <div class="security-title">
-                    <span class="security-icon">🔒</span>
                     Conseils de sécurité
                 </div>
                 <ul class="security-tips">
@@ -323,7 +321,7 @@
             
             <p class="footer-text" style="margin-top: 20px; font-size: 12px;">
                 © {{ date('Y') }} CarEasy. Tous droits réservés.<br>
-                Cotonou, Bénin
+                Bénin
             </p>
         </div>
     </div>
