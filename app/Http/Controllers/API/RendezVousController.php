@@ -148,27 +148,35 @@ class RendezVousController extends Controller{
         }
     }
 
-    public function index() {
-        $user = Auth::user();
-        
-        $query = RendezVous::with(['service', 'entreprise', 'service.domaine']);
-        
+   public function index() {
+    $user = Auth::user();
+    
+    Log::info('DEBUG index rendez-vous', [
+        'user_id'        => $user->id,
+        'user_role'      => $user->role,
+        'isPrestataire'  => $user->isPrestataire(),
+    ]);
+    
+    $query = RendezVous::with(['service', 'entreprise', 'service.domaine', 'client', 'prestataire']);
 
-        if ($user->isPrestataire()) {
-            $query->where('prestataire_id', $user->id);
-        } 
-        // Sinon, voir ses rendez-vous en tant que client
-        else {
-            $query->where('client_id', $user->id);
-        }
-
-        $rendezVous = $query->orderBy('date', 'desc')
-                            ->orderBy('start_time', 'desc')
-                            ->get();
-
-        return response()->json($rendezVous);
+    if ($user->isPrestataire()) {
+        $query->where('prestataire_id', $user->id);
+    } else {
+        $query->where('client_id', $user->id);
     }
 
+    $rendezVous = $query->orderBy('date', 'desc')
+                        ->orderBy('start_time', 'desc')
+                        ->get();
+
+    Log::info('DEBUG résultats', [
+        'count'      => $rendezVous->count(),
+        'client_ids' => $rendezVous->pluck('client_id'),
+        'statuses'   => $rendezVous->pluck('status'),
+    ]);
+
+    return response()->json($rendezVous);
+}
     public function show($id) {
         $user = Auth::user();
         

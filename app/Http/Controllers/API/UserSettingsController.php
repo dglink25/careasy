@@ -90,6 +90,7 @@ class UserSettingsController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'phone' => $user->phone,  
                 'role' => $user->role,
                 'profile_photo_url' => $user->profile_photo_url,
                 'email_verified_at' => $user->email_verified_at,
@@ -100,54 +101,42 @@ class UserSettingsController extends Controller
         ]);
     }
 
-    /**
-     * Mettre à jour le profil
-     */
     public function updateProfile(Request $request) {
-        $user = $request->user();
-        
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-        ]);
+    $user = $request->user();
+    
+    $validator = Validator::make($request->all(), [
+        'name'  => 'required|string|max:255',
+        'phone' => 'nullable|regex:/^[0-9+\s\-]+$/',
+    ]);
 
-        if (empty($user->phone)) {
-
-            $validator = Validator::make($request->all(), [
-                'phone' => 'required|regex:/^[0-9+\s\-]+$/'
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $user->update([
-                'phone' => $request->phone
-            ]);
-        }
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        $user->name = $request->name;
-        $user->save();
-
+    if ($validator->fails()) {
         return response()->json([
-            'success' => true,
-            'message' => 'Profil mis à jour avec succès',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'profile_photo_url' => $user->profile_photo_url,
-            ]
-        ]);
+            'success' => false,
+            'errors'  => $validator->errors()
+        ], 422);
     }
+
+    $user->name = $request->name;
+
+    // Mettre à jour le phone si fourni (qu'il soit vide ou non)
+    if ($request->has('phone') && !empty($request->phone)) {
+        $user->phone = $request->phone;
+    }
+
+    $user->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Profil mis à jour avec succès',
+        'user'    => [
+            'id'                => $user->id,
+            'name'              => $user->name,
+            'email'             => $user->email,
+            'phone'             => $user->phone,
+            'profile_photo_url' => $user->profile_photo_url,
+        ]
+    ]);
+}
 
     /**
      * Mettre à jour l'email
