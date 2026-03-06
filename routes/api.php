@@ -11,6 +11,7 @@ use App\Http\Controllers\API\AiServiceController;
 use App\Http\Controllers\API\AiMessageController;
 use App\Http\Controllers\API\AiLocationController;
 use App\Http\Controllers\API\AiLogController;
+use App\Http\Controllers\API\RendezVousController;
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
@@ -138,4 +139,18 @@ Route::middleware('auth:sanctum')->group(function () {
     // Indicateurs en temps réel
     Route::post('conversation/{id}/typing', [MessageController::class, 'typingIndicator']);
     Route::post('conversation/{id}/recording', [MessageController::class, 'recordingIndicator']);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    // Rendez-vous
+    Route::get('/rendez-vous', [RendezVousController::class, 'index']);
+    Route::get('/rendez-vous/calendar', [RendezVousController::class, 'calendar']);
+    Route::get('/rendez-vous/{id}', [RendezVousController::class, 'show']);
+    Route::post('/rendez-vous', [RendezVousController::class, 'store']);
+    Route::post('/rendez-vous/{id}/confirm', [RendezVousController::class, 'confirm']);
+    Route::post('/rendez-vous/{id}/cancel', [RendezVousController::class, 'cancel']);
+    Route::post('/rendez-vous/{id}/complete', [RendezVousController::class, 'complete']);
+    
+    // Créneaux disponibles
+    Route::get('/services/{serviceId}/slots/{date}', [RendezVousController::class, 'getAvailableSlots']);
 });

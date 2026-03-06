@@ -10,8 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Notifications\CustomResetPasswordNotification;
 
 
-class User extends Authenticatable
-{
+class User extends Authenticatable{
     use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
@@ -30,29 +29,18 @@ class User extends Authenticatable
         'remember_token',
     ];
 
-    /**
-     * ✅ IMPORTANT: Ne PAS caster 'settings' en array ici
-     * Car on gère manuellement dans l'accessor
-     */
-    protected function casts(): array
-    {
+    protected function casts(): array  {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            // ❌ NE PAS METTRE 'settings' => 'array' ICI
         ];
     }
 
-    public function sendPasswordResetNotification($token)
-{
-    $this->notify(new CustomResetPasswordNotification($token));
-}
+    public function sendPasswordResetNotification($token){
+        $this->notify(new CustomResetPasswordNotification($token));
+    }
 
-    /**
-     * ✅ Accessor pour settings - Gestion manuelle du JSON
-     */
-    public function getSettingsAttribute($value)
-    {
+    public function getSettingsAttribute($value) {
         $defaultSettings = [
             'theme' => 'light',
             'notifications' => [
@@ -89,11 +77,7 @@ class User extends Authenticatable
         return array_replace_recursive($defaultSettings, $decoded);
     }
 
-    /**
-     * ✅ Setter pour settings - Encoder en JSON
-     */
-    public function setSettingsAttribute($value)
-    {
+    public function setSettingsAttribute($value)  {
         if (is_string($value)) {
             // Si c'est déjà une string JSON, vérifier qu'elle est valide
             $decoded = json_decode($value, true);
@@ -111,28 +95,20 @@ class User extends Authenticatable
         }
     }
 
-    /**
-     * Accès rapide au thème
-     */
-    public function getThemeAttribute()
-    {
+    public function getThemeAttribute(){
         $settings = $this->settings;
         return $settings['theme'] ?? 'light';
     }
 
-    /**
-     * Vérifie si l'utilisateur a une photo de profil
-     */
-    public function hasProfilePhoto()
-    {
+    public function hasProfilePhoto()  {
         return !empty($this->profile_photo_path);
     }
 
-    /**
-     * URL de la photo de profil
-     */
-    public function getProfilePhotoUrlAttribute()
-    {
+    public function isPrestataire(){
+        return $this->role === 'prestataire';
+    }
+
+    public function getProfilePhotoUrlAttribute() {
         if ($this->profile_photo_path) {
             // Si c'est une URL Cloudinary (commence par http)
             if (str_starts_with($this->profile_photo_path, 'http')) {
