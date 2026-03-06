@@ -44,6 +44,23 @@ class RendezVousController extends Controller{
     public function store(Request $request) {
         $user = Auth::user();
 
+        if (empty($user->phone)) {
+
+            $validator = Validator::make($request->all(), [
+                'phone' => 'required|regex:/^[0-9+\s\-]+$/'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user->update([
+                'phone' => $request->phone
+            ]);
+        }
+
         $validator = Validator::make($request->all(), [
             'service_id' => 'required|exists:services,id',
             'date' => 'required|date|after_or_equal:today',
@@ -313,7 +330,6 @@ class RendezVousController extends Controller{
 
             $rendezVous = $query->get();
 
-            // Formater pour FullCalendar - VERSION SIMPLIFIÉE
             $events = [];
             
             foreach ($rendezVous as $rdv) {

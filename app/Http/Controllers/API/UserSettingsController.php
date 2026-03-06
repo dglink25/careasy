@@ -18,8 +18,7 @@ class UserSettingsController extends Controller
     /**
      * Initialize Cloudinary configuration
      */
-    private function initCloudinary()
-    {
+    private function initCloudinary() {
         Configuration::instance([
             'cloud' => [
                 'cloud_name' => env('CLOUDINARY_CLOUD_NAME', 'dsumeoiga'),
@@ -35,8 +34,7 @@ class UserSettingsController extends Controller
     /**
      * Upload file to Cloudinary
      */
-    private function uploadToCloudinary($file, $folder, $subfolder = null)
-    {
+    private function uploadToCloudinary($file, $folder, $subfolder = null) {
         $this->initCloudinary();
         
         $folderPath = $subfolder
@@ -55,11 +53,7 @@ class UserSettingsController extends Controller
         return $result['secure_url'];
     }
 
-    /**
-     * Delete file from Cloudinary
-     */
-    private function deleteFromCloudinary($url)
-    {
+    private function deleteFromCloudinary($url){
         try {
             $this->initCloudinary();
             
@@ -87,11 +81,7 @@ class UserSettingsController extends Controller
         }
     }
 
-    /**
-     * Récupérer le profil utilisateur
-     */
-    public function getProfile(Request $request)
-    {
+    public function getProfile(Request $request){
         $user = $request->user();
         
         return response()->json([
@@ -113,13 +103,29 @@ class UserSettingsController extends Controller
     /**
      * Mettre à jour le profil
      */
-    public function updateProfile(Request $request)
-    {
+    public function updateProfile(Request $request) {
         $user = $request->user();
         
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
         ]);
+
+        if (empty($user->phone)) {
+
+            $validator = Validator::make($request->all(), [
+                'phone' => 'required|regex:/^[0-9+\s\-]+$/'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user->update([
+                'phone' => $request->phone
+            ]);
+        }
 
         if ($validator->fails()) {
             return response()->json([
@@ -180,8 +186,7 @@ class UserSettingsController extends Controller
      */
     // app/Http/Controllers/UserController.php
 
-public function updatePassword(Request $request)
-{
+public function updatePassword(Request $request){
     $validated = $request->validate([
         'current_password' => 'required|string',
         'new_password' => 'required|string|min:8|confirmed', // 👈 'confirmed' vérifie new_password_confirmation
@@ -215,11 +220,8 @@ public function updatePassword(Request $request)
     ]);
 }
 
-    /**
-     * Récupérer les paramètres
-     */
-    public function getSettings(Request $request)
-    {
+
+    public function getSettings(Request $request) {
         $user = $request->user();
         
         return response()->json([

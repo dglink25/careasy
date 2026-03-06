@@ -22,6 +22,7 @@ class User extends Authenticatable{
         'profile_photo_path',
         'settings',
         'google_id',
+        'phone'
     ];
 
     protected $hidden = [
