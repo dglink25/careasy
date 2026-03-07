@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\EntrepriseController;
 use App\Http\Controllers\API\ServiceController;
 use App\Http\Controllers\API\Admin\EntrepriseAdminController;
+use App\Http\Controllers\API\Admin\PlanController as AdminPlanController;
 use App\Http\Controllers\API\MessageController;
 use App\Http\Controllers\API\UserSettingsController; 
 use App\Http\Controllers\Auth\GoogleAuthController;
@@ -12,6 +13,8 @@ use App\Http\Controllers\API\AiMessageController;
 use App\Http\Controllers\API\AiLocationController;
 use App\Http\Controllers\API\AiLogController;
 use App\Http\Controllers\API\RendezVousController;
+
+use App\Http\Controllers\API\PlanController;
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
@@ -153,4 +156,31 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Créneaux disponibles
     Route::get('/services/{serviceId}/slots/{date}', [RendezVousController::class, 'getAvailableSlots']);
+});
+
+
+
+
+// Routes protégées par authentication
+Route::middleware('auth:sanctum')->group(function () {
+    
+    // Routes pour prestataires (plans publics)
+    Route::get('/plans', [PlanController::class, 'index']);
+    Route::get('/plans/{id}', [PlanController::class, 'show']);
+    Route::get('/plans/compare/all', [PlanController::class, 'compare']);
+    
+});
+
+// Routes admin (avec middleware admin)
+Route::prefix('admin')->middleware(['auth:sanctum'])->group(function () {
+    
+    // Gestion des plans
+    Route::get('/plans', [AdminPlanController::class, 'index']);
+    Route::post('/plans', [AdminPlanController::class, 'store']);
+    Route::get('/plans/{id}', [AdminPlanController::class, 'show']);
+    Route::put('/plans/{id}', [AdminPlanController::class, 'update']);
+    Route::delete('/plans/{id}', [AdminPlanController::class, 'destroy']);
+    Route::post('/plans/update-order', [AdminPlanController::class, 'updateOrder']);
+    Route::patch('/plans/{id}/toggle-status', [AdminPlanController::class, 'toggleStatus']);
+    
 });

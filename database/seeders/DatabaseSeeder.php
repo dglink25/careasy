@@ -17,9 +17,16 @@ class DatabaseSeeder extends Seeder {
             'password' => Hash::make('ai_careasy_2025'),
         ]);
 
+        User::factory()->create([
+            'name'     => 'CarEasy Support',
+            'email'    => 'careasy26@gmail.com',
+            'password' => Hash::make('123456789'),
+        ]);
+
         $this->call([
             DomainesSeeder::class,
-            LocationSeeder::class,   // ← 547 arrondissements du Bénin
+            LocationSeeder::class,   
+            PlanSeeder::class,
         ]);
     }
 }
