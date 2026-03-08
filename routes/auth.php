@@ -35,3 +35,9 @@ Route::post('/email/verification-notification', [EmailVerificationNotificationCo
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->middleware('auth:sanctum')
     ->name('logout');
+
+Route::post('/check-email', [AuthenticatedSessionController::class, 'checkEmail']);
+Route::post('/check-phone', [AuthenticatedSessionController::class, 'checkPhone']);
+
+Route::post('/check-email', [RegisteredUserController::class, 'checkEmail']);
+Route::post('/check-phone', [RegisteredUserController::class, 'checkPhone']);

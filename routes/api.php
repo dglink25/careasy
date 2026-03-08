@@ -202,3 +202,9 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::match(['get', 'post'], '/paiements/callback', [PaiementController::class, 'callback'])->name('paiements.callback');
 Route::get('/paiements/success', [PaiementController::class, 'success'])->name('paiements.success');
 Route::get('/paiements/cancel', [PaiementController::class, 'cancel'])->name('paiements.cancel');
+
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/check-email-availability', [UserSettingsController::class, 'checkEmailAvailability']);
+    Route::post('/check-phone-availability', [UserSettingsController::class, 'checkPhoneAvailability']);
+});

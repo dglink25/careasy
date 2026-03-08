@@ -32,6 +32,61 @@ class UserSettingsController extends Controller
     }
 
     /**
+     * Nettoyer un numéro de téléphone
+     */
+    private function cleanPhoneNumber($phone)
+    {
+        if (empty($phone)) {
+            return null;
+        }
+        
+        // Garder seulement les chiffres et le + au début
+        $clean = preg_replace('/[^0-9+]/', '', $phone);
+        
+        // S'assurer qu'il n'y a qu'un seul + au début
+        if (substr_count($clean, '+') > 1) {
+            $clean = preg_replace('/\+/', '', $clean);
+            $clean = '+' . $clean;
+        }
+        
+        return $clean;
+    }
+
+    /**
+     * Vérifier l'unicité de l'email
+     */
+    private function isEmailUnique($email, $excludeUserId = null)
+    {
+        $query = User::where('email', $email);
+        
+        if ($excludeUserId) {
+            $query->where('id', '!=', $excludeUserId);
+        }
+        
+        return !$query->exists();
+    }
+
+    /**
+     * Vérifier l'unicité du téléphone
+     */
+    private function isPhoneUnique($phone, $excludeUserId = null)
+    {
+        if (empty($phone)) {
+            return true;
+        }
+        
+        $cleanPhone = $this->cleanPhoneNumber($phone);
+        
+        $query = User::where('phone', $cleanPhone);
+        
+        if ($excludeUserId) {
+            $query->where('id', '!=', $excludeUserId);
+        }
+        
+        return !$query->exists();
+    }
+
+    /**
      * Upload file to Cloudinary
      */
     private function uploadToCloudinary($file, $folder, $subfolder = null) {
@@ -102,41 +157,55 @@ class UserSettingsController extends Controller
     }
 
     public function updateProfile(Request $request) {
-    $user = $request->user();
-    
-    $validator = Validator::make($request->all(), [
-        'name'  => 'required|string|max:255',
-        'phone' => 'nullable|regex:/^[0-9+\s\-]+$/',
-    ]);
+        $user = $request->user();
+        
+        // Nettoyer le téléphone si présent
+        $cleanPhone = null;
+        if ($request->has('phone') && !empty($request->phone)) {
+            $cleanPhone = $this->cleanPhoneNumber($request->phone);
+        }
+        
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'phone' => [
+                'nullable',
+                'regex:/^[0-9+\s\-]+$/',
+                function ($attribute, $value, $fail) use ($user, $cleanPhone) {
+                    if (!empty($value) && !$this->isPhoneUnique($value, $user->id)) {
+                        $fail('Ce numéro de téléphone est déjà utilisé par un autre compte.');
+                    }
+                },
+            ],
+        ]);
 
-    if ($validator->fails()) {
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $user->name = $request->name;
+
+        // Mettre à jour le phone si fourni (qu'il soit vide ou non)
+        if ($request->has('phone')) {
+            $user->phone = !empty($request->phone) ? $cleanPhone : null;
+        }
+
+        $user->save();
+
         return response()->json([
-            'success' => false,
-            'errors'  => $validator->errors()
-        ], 422);
+            'success' => true,
+            'message' => 'Profil mis à jour avec succès',
+            'user'    => [
+                'id'                => $user->id,
+                'name'              => $user->name,
+                'email'             => $user->email,
+                'phone'             => $user->phone,
+                'profile_photo_url' => $user->profile_photo_url,
+            ]
+        ]);
     }
-
-    $user->name = $request->name;
-
-    // Mettre à jour le phone si fourni (qu'il soit vide ou non)
-    if ($request->has('phone') && !empty($request->phone)) {
-        $user->phone = $request->phone;
-    }
-
-    $user->save();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Profil mis à jour avec succès',
-        'user'    => [
-            'id'                => $user->id,
-            'name'              => $user->name,
-            'email'             => $user->email,
-            'phone'             => $user->phone,
-            'profile_photo_url' => $user->profile_photo_url,
-        ]
-    ]);
-}
 
     /**
      * Mettre à jour l'email
@@ -146,7 +215,24 @@ class UserSettingsController extends Controller
         $user = $request->user();
         
         $validator = Validator::make($request->all(), [
-            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                function ($attribute, $value, $fail) use ($user) {
+                    // Vérifier que l'email n'est pas déjà utilisé par un autre utilisateur
+                    if (!$this->isEmailUnique($value, $user->id)) {
+                        $fail('Cet email est déjà utilisé par un autre compte.');
+                    }
+                    
+                    // Vérifier que l'email n'est pas déjà utilisé comme téléphone
+                    $cleanValue = $this->cleanPhoneNumber($value);
+                    if (!empty($cleanValue) && User::where('phone', $cleanValue)->where('id', '!=', $user->id)->exists()) {
+                        $fail('Cette valeur est déjà utilisée comme numéro de téléphone.');
+                    }
+                },
+            ],
             'password' => 'required|string|current_password',
         ]);
 
@@ -173,42 +259,39 @@ class UserSettingsController extends Controller
     /**
      * Mettre à jour le mot de passe
      */
-    // app/Http/Controllers/UserController.php
+    public function updatePassword(Request $request){
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ], [
+            'current_password.required' => 'Le mot de passe actuel est requis',
+            'new_password.required' => 'Le nouveau mot de passe est requis',
+            'new_password.min' => 'Le mot de passe doit contenir au moins 8 caractères',
+            'new_password.confirmed' => 'Les mots de passe ne correspondent pas',
+        ]);
 
-public function updatePassword(Request $request){
-    $validated = $request->validate([
-        'current_password' => 'required|string',
-        'new_password' => 'required|string|min:8|confirmed', // 👈 'confirmed' vérifie new_password_confirmation
-    ], [
-        'current_password.required' => 'Le mot de passe actuel est requis',
-        'new_password.required' => 'Le nouveau mot de passe est requis',
-        'new_password.min' => 'Le mot de passe doit contenir au moins 8 caractères',
-        'new_password.confirmed' => 'Les mots de passe ne correspondent pas',
-    ]);
+        $user = auth()->user();
 
-    $user = auth()->user();
+        // Vérifier le mot de passe actuel
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Le mot de passe actuel est incorrect',
+                'errors' => [
+                    'current_password' => ['Le mot de passe actuel est incorrect']
+                ]
+            ], 422);
+        }
 
-    // Vérifier le mot de passe actuel
-    if (!Hash::check($validated['current_password'], $user->password)) {
+        // Mettre à jour le mot de passe
+        $user->password = Hash::make($validated['new_password']);
+        $user->save();
+
         return response()->json([
-            'success' => false,
-            'message' => 'Le mot de passe actuel est incorrect',
-            'errors' => [
-                'current_password' => ['Le mot de passe actuel est incorrect']
-            ]
-        ], 422);
+            'success' => true,
+            'message' => 'Mot de passe mis à jour avec succès'
+        ]);
     }
-
-    // Mettre à jour le mot de passe
-    $user->password = Hash::make($validated['new_password']);
-    $user->save();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Mot de passe mis à jour avec succès'
-    ]);
-}
-
 
     public function getSettings(Request $request) {
         $user = $request->user();
@@ -443,9 +526,49 @@ public function updatePassword(Request $request){
     {
         $user = $request->user();
         
+        // Nettoyer le téléphone si présent
+        $cleanPhone = null;
+        if ($request->has('phone') && !empty($request->phone)) {
+            $cleanPhone = $this->cleanPhoneNumber($request->phone);
+        }
+        
         $validator = Validator::make($request->all(), [
             'name' => 'nullable|string|max:255',
-            'email' => 'nullable|string|email|max:255|unique:users,email,' . $user->id,
+            'email' => [
+                'nullable',
+                'string',
+                'email',
+                'max:255',
+                function ($attribute, $value, $fail) use ($user) {
+                    if (!empty($value) && !$this->isEmailUnique($value, $user->id)) {
+                        $fail('Cet email est déjà utilisé par un autre compte.');
+                    }
+                    
+                    // Vérifier que l'email n'est pas déjà utilisé comme téléphone
+                    if (!empty($value)) {
+                        $cleanValue = $this->cleanPhoneNumber($value);
+                        if (!empty($cleanValue) && User::where('phone', $cleanValue)->where('id', '!=', $user->id)->exists()) {
+                            $fail('Cette valeur est déjà utilisée comme numéro de téléphone.');
+                        }
+                    }
+                },
+            ],
+            'phone' => [
+                'nullable',
+                'regex:/^[0-9+\s\-]+$/',
+                function ($attribute, $value, $fail) use ($user, $cleanPhone) {
+                    if (!empty($value) && !$this->isPhoneUnique($value, $user->id)) {
+                        $fail('Ce numéro de téléphone est déjà utilisé par un autre compte.');
+                    }
+                    
+                    // Vérifier que le téléphone n'est pas déjà utilisé comme email
+                    if (!empty($value) && !empty($cleanPhone)) {
+                        if (User::where('email', $cleanPhone)->where('id', '!=', $user->id)->exists()) {
+                            $fail('Cette valeur est déjà utilisée comme adresse email.');
+                        }
+                    }
+                },
+            ],
             'current_password' => 'nullable|string|current_password:api',
             'new_password' => [
                 'nullable',
@@ -460,6 +583,10 @@ public function updatePassword(Request $request){
             'theme' => 'nullable|in:light,dark,system',
             'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             'settings' => 'nullable|array',
+        ], [
+            'email.unique' => 'Cet email est déjà utilisé.',
+            'phone.unique' => 'Ce numéro de téléphone est déjà utilisé.',
+            'current_password.current_password' => 'Le mot de passe actuel est incorrect.',
         ]);
 
         if ($validator->fails()) {
@@ -476,11 +603,19 @@ public function updatePassword(Request $request){
             }
 
             // Mettre à jour l'email
-            if ($request->has('email') && $request->email !== $user->email) {
+            if ($request->has('email') && !empty($request->email) && $request->email !== $user->email) {
                 $user->email = $request->email;
                 $user->email_verified_at = null;
                 // Envoyer un email de vérification
                 // $user->sendEmailVerificationNotification();
+            }
+
+            // Mettre à jour le téléphone
+            if ($request->has('phone')) {
+                $user->phone = !empty($request->phone) ? $cleanPhone : null;
+                if (!empty($request->phone)) {
+                    $user->phone_verified_at = null;
+                }
             }
 
             // Mettre à jour le mot de passe
@@ -535,6 +670,7 @@ public function updatePassword(Request $request){
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'phone' => $user->phone,
                     'profile_photo_url' => $user->profile_photo_url,
                     'theme' => $user->theme,
                     'settings' => $user->settings,
@@ -550,5 +686,57 @@ public function updatePassword(Request $request){
                 'error' => env('APP_DEBUG') ? $e->getMessage() : null
             ], 500);
         }
+    }
+
+    /**
+     * Vérifier si un email est disponible
+     */
+    public function checkEmailAvailability(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user = $request->user();
+        $isAvailable = $this->isEmailUnique($request->email, $user->id);
+
+        return response()->json([
+            'success' => true,
+            'available' => $isAvailable,
+            'message' => $isAvailable ? 'Email disponible' : 'Email déjà utilisé'
+        ]);
+    }
+
+    /**
+     * Vérifier si un téléphone est disponible
+     */
+    public function checkPhoneAvailability(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'phone' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user = $request->user();
+        $isAvailable = $this->isPhoneUnique($request->phone, $user->id);
+
+        return response()->json([
+            'success' => true,
+            'available' => $isAvailable,
+            'message' => $isAvailable ? 'Téléphone disponible' : 'Téléphone déjà utilisé'
+        ]);
     }
 }
