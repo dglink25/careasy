@@ -123,5 +123,23 @@ class User extends Authenticatable{
         return 'https://ui-avatars.com/api/?name=' . urlencode($this->name) . '&color=7F9CF5&background=EBF4FF';
     }
 
+    public function paiements() {
+        return $this->hasMany(Paiement::class);
+    }
+
+    public function abonnements(){
+        return $this->hasMany(Abonnement::class);
+    }
+
+    public function abonnementActif() {
+        return $this->hasOne(Abonnement::class)
+            ->where('statut', 'actif')
+            ->where('date_fin', '>', now());
+    }
+
+    public function aAbonnementActif()  {
+        return $this->abonnementActif()->exists();
+    }
+
     
 }

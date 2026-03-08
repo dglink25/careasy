@@ -13,7 +13,8 @@ use App\Http\Controllers\API\AiMessageController;
 use App\Http\Controllers\API\AiLocationController;
 use App\Http\Controllers\API\AiLogController;
 use App\Http\Controllers\API\RendezVousController;
-
+use App\Http\Controllers\API\PaiementController;
+use App\Http\Controllers\API\AbonnementController;
 use App\Http\Controllers\API\PlanController;
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
@@ -184,3 +185,20 @@ Route::prefix('admin')->middleware(['auth:sanctum'])->group(function () {
     Route::patch('/plans/{id}/toggle-status', [AdminPlanController::class, 'toggleStatus']);
     
 });
+
+// Routes de paiement (protégées)
+Route::middleware('auth:sanctum')->group(function () {
+    // Paiements
+    Route::post('/paiements/initier/{planId}', [PaiementController::class, 'initierPaiement']);
+    Route::get('/paiements/verifier/{reference}', [PaiementController::class, 'verifierStatut']);
+    
+    // Abonnements
+    Route::get('/abonnements', [AbonnementController::class, 'index']);
+    Route::get('/abonnements/actif', [AbonnementController::class, 'actif']);
+    Route::get('/abonnements/{id}', [AbonnementController::class, 'show']);
+});
+
+// Routes publiques (webhook)
+Route::match(['get', 'post'], '/paiements/callback', [PaiementController::class, 'callback'])->name('paiements.callback');
+Route::get('/paiements/success', [PaiementController::class, 'success'])->name('paiements.success');
+Route::get('/paiements/cancel', [PaiementController::class, 'cancel'])->name('paiements.cancel');
