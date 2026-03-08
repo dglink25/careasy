@@ -17,7 +17,7 @@ use Cloudinary\Api\Upload\UploadApi;
 
 class EntrepriseController extends Controller{
 
-   public function __construct() {
+    public function __construct() {
        
     }
     
@@ -49,8 +49,6 @@ class EntrepriseController extends Controller{
 
         return response()->json($entreprises);
     }
-
-    // Création d'une entreprise
    
 
     //Afficher une entreprise (public)
@@ -165,7 +163,7 @@ class EntrepriseController extends Controller{
             $entreprise->domaines()->sync($request->domaine_ids);
             
             Auth::user()->update([
-                'role' => $request->role_user
+                'role' => 'prestataire'
             ]);
                         
             // Recharger avec relations

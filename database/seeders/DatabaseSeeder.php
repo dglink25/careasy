@@ -15,12 +15,14 @@ class DatabaseSeeder extends Seeder {
             'name'     => 'CarAI',
             'email'    => 'carai@careasy.ai',
             'password' => Hash::make('ai_careasy_2025'),
+            'role'     => 'admin',
         ]);
 
         User::factory()->create([
             'name'     => 'CarEasy Support',
             'email'    => 'careasy26@gmail.com',
             'password' => Hash::make('123456789'),
+            'role'     => 'admin',
         ]);
 
         $this->call([

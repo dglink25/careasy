@@ -50,6 +50,18 @@ class ServiceController extends Controller
 
         $user = Auth::user();
 
+        $entreprise = Entreprise::find($request->entreprise_id);
+    
+        if ($entreprise && $entreprise->isInTrialPeriod()) {
+            if (!$entreprise->canAddService()) {
+                return response()->json([
+                    'message' => 'Vous avez atteint la limite de services autorisés pendant la période d\'essai',
+                    'max_services' => $entreprise->max_services_allowed,
+                    'current_services' => $entreprise->services()->count()
+                ], 403);
+            }
+        }
+
         $validator = Validator::make($request->all(), [
             'entreprise_id' => 'required|exists:entreprises,id',
             'domaine_id'    => 'required|exists:domaines,id',

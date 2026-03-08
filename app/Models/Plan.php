@@ -15,6 +15,7 @@ class Plan extends Model
         'code',
         'description',
         'price',
+        'type',
         'duration_days',
         'features',
         'limitations',
