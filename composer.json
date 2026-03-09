@@ -16,7 +16,7 @@
         "laravel/socialite": "^5.24",
         "laravel/tinker": "^2.10.1",
         "openai-php/client": "^0.18.0",
-        "pusher/pusher-php-server": "^7.2",
+        "pusher/pusher-php-server": "*",
         "socialiteproviders/twitter": "^4.1"
     },
     "require-dev": {
