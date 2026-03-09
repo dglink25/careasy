@@ -21,9 +21,6 @@ class PaiementController extends Controller{
         $this->frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
     }
 
-    /**
-     * Initier un paiement pour un plan
-     */
     public function initierPaiement(Request $request, $planId)  {
         $user = $request->user();
         
@@ -52,7 +49,9 @@ class PaiementController extends Controller{
             ], 404);
         }
 
-        // Vérifier si l'utilisateur a déjà un abonnement actif
+        /*
+        
+        Vérifier si l'utilisateur a déjà un abonnement actif
         $abonnementActif = Abonnement::where('user_id', $user->id)
             ->where('statut', 'actif')
             ->where('date_fin', '>', now())
@@ -65,6 +64,7 @@ class PaiementController extends Controller{
                 'abonnement' => $abonnementActif
             ], 400);
         }
+            */
 
         DB::beginTransaction();
 

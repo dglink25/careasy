@@ -10,8 +10,7 @@ use Illuminate\Support\Facades\Log;
 class AbonnementController extends Controller
 {
     
-    public function index(Request $request)
-    {
+    public function index(Request $request){
         $user = $request->user();
         
         $abonnements = Abonnement::with(['plan', 'paiement', 'entreprise'])
@@ -77,8 +76,7 @@ class AbonnementController extends Controller
     /**
      * Détails d'un abonnement
      */
-    public function show(Request $request, $id)
-    {
+    public function show(Request $request, $id) {
         $user = $request->user();
         
         $abonnement = Abonnement::with(['plan', 'paiement', 'entreprise'])
@@ -141,11 +139,7 @@ class AbonnementController extends Controller
         ]);
     }
 
-    /**
-     * Obtenir l'abonnement actif
-     */
-    public function actif(Request $request)
-    {
+    public function actif(Request $request)  {
         $user = $request->user();
         
         $abonnement = Abonnement::with(['plan'])
@@ -178,11 +172,8 @@ class AbonnementController extends Controller
         ]);
     }
 
-    /**
-     * Annuler un abonnement
-     */
-    public function cancel(Request $request, $id)
-    {
+
+    public function cancel(Request $request, $id) {
         $user = $request->user();
         
         $abonnement = Abonnement::where('user_id', $user->id)
