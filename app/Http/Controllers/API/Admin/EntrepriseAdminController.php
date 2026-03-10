@@ -217,7 +217,8 @@ class EntrepriseAdminController extends Controller{
                 'entreprise' => $entreprise
             ], 200);
             
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             DB::rollBack();
             Log::error('Erreur rejet entreprise: ' . $e->getMessage());
             return response()->json([
