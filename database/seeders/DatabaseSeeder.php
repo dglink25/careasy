@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder {
             'password' => Hash::make('ai_careasy_2025'),
             'role'     => 'admin',
         ]);
+        
 
         User::factory()->create([
             'name'     => 'CarEasy Support',
