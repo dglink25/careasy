@@ -161,11 +161,11 @@ class EntrepriseController extends Controller{
 
             $entreprise = Entreprise::create($data);
             $entreprise->domaines()->sync($request->domaine_ids);
-            
+            /** 
             Auth::user()->update([
                 'role' => 'prestataire'
             ]);
-                        
+             */       
             // Recharger avec relations
             $entreprise->load('domaines', 'prestataire');
 

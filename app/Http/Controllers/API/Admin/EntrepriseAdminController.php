@@ -92,6 +92,11 @@ class EntrepriseAdminController extends Controller{
             $entreprise->status = 'validated';
             $entreprise->admin_note = $request->admin_note ?? null;
             
+            // ✅ NOUVEAU: Changer le rôle de l'utilisateur en prestataire
+            if ($entreprise->prestataire) {
+                $entreprise->prestataire->update(['role' => 'prestataire']);
+            }
+            
             // Activer la période d'essai si ce n'est pas déjà fait
             if (!$entreprise->has_used_trial) {
                 $entreprise->activateTrialPeriod();
