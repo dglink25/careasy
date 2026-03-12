@@ -11,10 +11,12 @@ use Illuminate\Support\Facades\Log;
 use Cloudinary\Configuration\Configuration;
 use Cloudinary\Api\Upload\UploadApi;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use App\Models\Domaine;
 
 class ServiceController extends Controller
 {
-    public function __construct(){
+    public function __construct()
+    {
         Configuration::instance([
             'cloud' => [
                 'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
@@ -27,25 +29,118 @@ class ServiceController extends Controller
         ]);
     }
 
-    public function mine() {
+    public function mine()
+    {
         $user = Auth::user();
 
-        $services = Service::with('entreprise', 'domaine')
+        $services = Service::with(['entreprise', 'domaine'])
             ->where('prestataire_id', $user->id)
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($service) {
+                return $this->formatServiceResponse($service);
+            });
 
         return response()->json($services);
     }
 
-    public function index() {
-        return Service::with('entreprise', 'domaine')
+    public function index()
+    {
+        $services = Service::with(['entreprise', 'domaine'])
             ->whereHas('entreprise', fn($q) => $q->where('status', 'validated'))
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($service) {
+                return $this->formatServiceResponse($service);
+            });
+
+        return response()->json($services);
     }
 
-    public function store(Request $request) {
+    public function domaines()
+    {
+        return Domaine::get();
+    }
+
+    public function search(Request $request)
+    {
+        $query = $request->get('q');
+        $type = $request->get('type', 'all');
+
+        $results = [];
+
+        if ($type === 'all' || $type === 'service') {
+            $services = Service::with(['entreprise', 'domaine'])
+                ->where('name', 'LIKE', "%{$query}%")
+                ->orWhere('descriptions', 'LIKE', "%{$query}%")
+                ->whereHas('entreprise', fn($q) => $q->where('status', 'validated'))
+                ->limit(10)
+                ->get()
+                ->map(function ($service) {
+                    $data = $this->formatServiceResponse($service);
+                    $data['type'] = 'service';
+                    return $data;
+                });
+            
+            $results = array_merge($results, $services->toArray());
+        }
+
+        if ($type === 'all' || $type === 'entreprise') {
+            $entreprises = Entreprise::with('domaines')
+                ->where('name', 'LIKE', "%{$query}%")
+                ->orWhere('description', 'LIKE', "%{$query}%")
+                ->where('status', 'validated')
+                ->limit(10)
+                ->get()
+                ->map(function ($entreprise) {
+                    return [
+                        'id' => $entreprise->id,
+                        'name' => $entreprise->name,
+                        'logo' => $entreprise->logo,
+                        'type' => 'entreprise',
+                        'status' => $entreprise->status,
+                    ];
+                });
+            
+            $results = array_merge($results, $entreprises->toArray());
+        }
+
+        return response()->json($results);
+    }
+
+    private function formatServiceResponse($service)
+    {
+        return [
+            'id' => $service->id,
+            'name' => $service->name,
+            'price' => $service->price,
+            'price_promo' => $service->price_promo,
+            'is_price_on_request' => $service->is_price_on_request,
+            'has_promo' => $service->has_promo,
+            'is_promo_active' => $service->isPromoActive(),
+            'discount_percentage' => $service->discount_percentage,
+            'descriptions' => $service->descriptions,
+            'medias' => $service->medias,
+            'is_always_open' => $service->is_always_open,
+            'start_time' => $service->start_time,
+            'end_time' => $service->end_time,
+            'schedule' => $service->schedule,
+            'entreprise' => [
+                'id' => $service->entreprise->id,
+                'name' => $service->entreprise->name,
+                'logo' => $service->entreprise->logo,
+                'call_phone' => $service->entreprise->call_phone,
+                'whatsapp_phone' => $service->entreprise->whatsapp_phone,
+                'email' => $service->entreprise->email,
+                'address' => $service->entreprise->address,
+                'status' => $service->entreprise->status,
+            ],
+            'domaine' => $service->domaine,
+        ];
+    }
+
+    public function store(Request $request)
+    {
         Log::info('Création service - Données reçues:', $request->all());
 
         $user = Auth::user();
@@ -145,7 +240,7 @@ class ServiceController extends Controller
                 ], 422);
             }
 
-            // Gestion des horaires (inchangée)
+            // Gestion des horaires
             if ($request->boolean('is_always_open')) {
                 $data['is_open_24h'] = true;
                 $data['schedule'] = null;
@@ -185,7 +280,7 @@ class ServiceController extends Controller
 
             return response()->json([
                 'message' => 'Service créé avec succès',
-                'service' => $service
+                'service' => $this->formatServiceResponse($service)
             ], 201);
         } catch (\Exception $e) {
             Log::error('Erreur création service:', ['error' => $e->getMessage()]);
@@ -196,17 +291,19 @@ class ServiceController extends Controller
         }
     }
 
-    public function show($id)  {
+    public function show($id)
+    {
         $service = Service::with('entreprise', 'domaine')->find($id);
 
         if (!$service) {
             return response()->json(['message' => 'Service non trouvé'], 404);
         }
 
-        return response()->json($service);
+        return response()->json($this->formatServiceResponse($service));
     }
 
-    public function update(Request $request, $id){
+    public function update(Request $request, $id)
+    {
         $user = Auth::user();
 
         $service = Service::where('id', $id)
@@ -240,7 +337,7 @@ class ServiceController extends Controller
         }
 
         try {
-            // Gestion des médias (inchangée)
+            // Gestion des médias
             $medias = $service->medias ?? [];
             
             if ($request->has('deleted_medias')) {
@@ -304,7 +401,7 @@ class ServiceController extends Controller
 
             $data['medias'] = $medias;
 
-            // Gestion des horaires (inchangée)
+            // Gestion des horaires
             if ($request->has('is_always_open')) {
                 $data['is_always_open'] = $request->boolean('is_always_open');
                 
@@ -334,7 +431,7 @@ class ServiceController extends Controller
 
             return response()->json([
                 'message' => 'Service mis à jour avec succès',
-                'service' => $service
+                'service' => $this->formatServiceResponse($service)
             ]);
         } 
         catch (\Exception $e) {
@@ -349,7 +446,8 @@ class ServiceController extends Controller
         }
     }
 
-    public function destroy($id) {
+    public function destroy($id)
+    {
         $user = Auth::user();
 
         $service = Service::where('id', $id)
@@ -376,7 +474,8 @@ class ServiceController extends Controller
         }
     }
 
-    private function uploadToCloudinary($file, $folder, $subfolder = null) {
+    private function uploadToCloudinary($file, $folder, $subfolder = null)
+    {
         if (!$file || !$file->isValid()) {
             throw new \Exception('Fichier invalide pour upload');
         }
@@ -402,7 +501,8 @@ class ServiceController extends Controller
         }
     }
 
-    private function deleteImageFromCloudinary($url){
+    private function deleteImageFromCloudinary($url)
+    {
         try {
             if (empty($url)) {
                 return;
@@ -424,7 +524,8 @@ class ServiceController extends Controller
         }
     }
 
-    private function extractPublicIdFromUrl($url) {
+    private function extractPublicIdFromUrl($url)
+    {
         try {
             $pattern = '/\/v\d+\/(.+)\./';
             preg_match($pattern, $url, $matches);

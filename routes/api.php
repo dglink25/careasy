@@ -115,6 +115,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/abonnements',                       [AbonnementController::class, 'index']);
     Route::get('/abonnements/actif',                 [AbonnementController::class, 'actif']);
     Route::get('/abonnements/{id}',                  [AbonnementController::class, 'show']);
+
+    // Domaines
+    Route::get('/domaines', [ServiceController::class, 'domaines']);
+    
+    // Recherche
+    Route::get('/search', [ServiceController::class, 'search']);
 });
 
 /**
