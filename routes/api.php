@@ -117,8 +117,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/abonnements/{id}',                  [AbonnementController::class, 'show']);
 });
 
-// ── Public ────────────────────────────────────────────────────
-Route::get('entreprises',              [EntrepriseController::class, 'index']);
+/**
+ * PUBLIC - Pas besoin d'authentification
+ */
+Route::get('entreprises', [EntrepriseController::class, 'index']);
 Route::get('entreprises/domaine/{id}', [EntrepriseController::class, 'indexByDomaine']);
 Route::get('entreprises/form/data',    [EntrepriseController::class, 'getFormData']);
 Route::get('entreprises/{id}',         [EntrepriseController::class, 'show']);
