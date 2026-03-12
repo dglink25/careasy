@@ -5,18 +5,19 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Entreprise;
 use App\Models\Domaine;
+use App\Models\User;
+use App\Notifications\NewEntrepriseCreatedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use Cloudinary\Configuration\Configuration;
 use Cloudinary\Api\Upload\UploadApi;
 
-class EntrepriseController extends Controller{
-
+class EntrepriseController extends Controller
+{
     public function __construct() {
        
     }
@@ -27,14 +28,12 @@ class EntrepriseController extends Controller{
         ]);
     }
 
-    //Liste toutes les entreprises validées (public)
     public function index(){
         return Entreprise::with('domaines', 'services')
             ->where('status', 'validated')
             ->get();
     }
 
-    //Les entreprises du prestataire connecté
     public function mine(){
         $user = Auth::user();
         
@@ -51,7 +50,6 @@ class EntrepriseController extends Controller{
     }
    
 
-    //Afficher une entreprise (public)
     public function show($id){
         $entreprise = Entreprise::with('domaines', 'services', 'prestataire')->find($id);
 
@@ -62,7 +60,6 @@ class EntrepriseController extends Controller{
         return response()->json($entreprise);
     }
 
-    // Filtrer les entreprises par domaine
     public function indexByDomaine($domaineId){
         $entreprises = Entreprise::where('status', 'validated')
             ->whereHas('domaines', function ($q) use ($domaineId) {
@@ -161,12 +158,31 @@ class EntrepriseController extends Controller{
 
             $entreprise = Entreprise::create($data);
             $entreprise->domaines()->sync($request->domaine_ids);
-            /** 
-            Auth::user()->update([
-                'role' => 'prestataire'
-            ]);
-             */       
-            // Recharger avec relations
+
+            try {
+                $admins = User::where('role', 'admin')->get();
+                
+                foreach ($admins as $admin) {
+                    $admin->notify(new NewEntrepriseCreatedNotification($entreprise, $request->user()));
+                }
+
+                foreach ($admins as $admin) {
+                    event(new \App\Events\EntreprisePendingEvent($entreprise, $admin->id));
+                }
+
+                Log::info('Notifications envoyées aux admins pour la nouvelle entreprise', [
+                    'entreprise_id' => $entreprise->id,
+                    'admins_notified' => $admins->count()
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error('Erreur lors de l\'envoi des notifications aux admins', [
+                    'error' => $e->getMessage(),
+                    'entreprise_id' => $entreprise->id
+                ]);
+            }
+           
+
             $entreprise->load('domaines', 'prestataire');
 
             DB::commit();
@@ -189,7 +205,6 @@ class EntrepriseController extends Controller{
     }
 
     private function uploadToCloudinary($file, $folder, $subfolder = null){
-        // Initialisation EXPLICITE
         Configuration::instance([
             'cloud' => [
                 'cloud_name' => env('CLOUDINARY_CLOUD_NAME', 'dsumeoiga'),
@@ -216,7 +231,6 @@ class EntrepriseController extends Controller{
         return $result['secure_url'];
     }
 
-    //Complèter profil entreprise
     public function completeProfile(Request $request, $id){
         $user = Auth::user();
 
@@ -268,7 +282,6 @@ class EntrepriseController extends Controller{
     public function update(Request $request, $id){
         $user = Auth::user();
         
-        // Vérifier que l'utilisateur est authentifié
         if (!$user) {
             return response()->json([
                 'message' => 'Non authentifié',
@@ -276,7 +289,6 @@ class EntrepriseController extends Controller{
             ], 401);
         }
 
-        // Récupérer l'entreprise avec vérification des permissions
         $entreprise = Entreprise::where('id', $id)
             ->where('prestataire_id', $user->id)
             ->first();
@@ -288,7 +300,6 @@ class EntrepriseController extends Controller{
             ], 404);
         }
 
-        // Vérifier le statut de l'entreprise
         if ($entreprise->status !== 'validated') {
             return response()->json([
                 'message' => 'Seules les entreprises validées peuvent être modifiées',
@@ -375,15 +386,7 @@ class EntrepriseController extends Controller{
             // Gérer l'upload du logo
             if ($request->hasFile('logo')) {
                 try {
-                    // Gérer l'upload du logo
-                    if ($request->hasFile('logo')) {
-                        try {
-                            $entreprise->logo = $this->uploadToCloudinary($request->file('logo'), 'logos');
-                        } catch (\Exception $e) {
-                            throw new \Exception("Erreur lors du upload du logo: &quot; " . $e->getMessage());
-                        }
-                    }
-                
+                    $entreprise->logo = $this->uploadToCloudinary($request->file('logo'), 'logos');
                 } catch (\Exception $e) {
                     throw new \Exception("Erreur lors de l'upload du logo: " . $e->getMessage());
                 }
@@ -394,7 +397,7 @@ class EntrepriseController extends Controller{
                 try {
                     $entreprise->image_boutique = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
                 } catch (\Exception $e) {
-                    throw new \Exception("Erreur lors de l'upload de l'image boutique ". $e->getMessage());
+                    throw new \Exception("Erreur lors de l'upload de l'image boutique: " . $e->getMessage());
                 }
             }
 
@@ -455,6 +458,4 @@ class EntrepriseController extends Controller{
             ], 500);
         }
     }
-
-
 }

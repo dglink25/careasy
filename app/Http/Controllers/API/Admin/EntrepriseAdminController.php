@@ -12,8 +12,10 @@ use App\Notifications\EntrepriseStatusChangedNotification;
 use App\Notifications\TrialPeriodStartedNotification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\API\PushNotificationController; // ← AJOUT
 
-class EntrepriseAdminController extends Controller{
+class EntrepriseAdminController extends Controller
+{
     protected function ensureAdmin() {
         $user = Auth::user();
         if (!$user || $user->role !== 'admin') {
@@ -109,6 +111,7 @@ class EntrepriseAdminController extends Controller{
 
             // Notifier le prestataire
             if ($entreprise->prestataire) {
+                // Notification Laravel classique
                 $entreprise->prestataire->notify(
                     new EntrepriseStatusChangedNotification($entreprise, 'validée', $entreprise->admin_note)
                 );
@@ -117,8 +120,34 @@ class EntrepriseAdminController extends Controller{
                     $entreprise->prestataire->notify(
                         new TrialPeriodStartedNotification($entreprise)
                     );
-                }   
-                
+                }
+
+                // ✅ AJOUT: Notification Push Web
+                try {
+                    PushNotificationController::sendToUser($entreprise->prestataire, [
+                        'title' => '🎉 Entreprise validée !',
+                        'body'  => "Votre entreprise \"{$entreprise->name}\" a été approuvée et est maintenant en ligne !",
+                        'type'  => 'entreprise_approved',
+                        'url'   => '/mes-entreprises',
+                        'icon'  => '/logo192.png',
+                        'badge' => '/badge.png',
+                        'data'  => [
+                            'entreprise_id' => $entreprise->id,
+                            'entreprise_name' => $entreprise->name,
+                            'status' => 'approved'
+                        ]
+                    ]);
+                    
+                    Log::info('Notification push envoyée au prestataire', [
+                        'user_id' => $entreprise->prestataire->id,
+                        'entreprise_id' => $entreprise->id
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('Erreur envoi notification push (approve)', [
+                        'error' => $e->getMessage(),
+                        'user_id' => $entreprise->prestataire->id
+                    ]);
+                }
             }
 
             DB::commit();
@@ -205,9 +234,38 @@ class EntrepriseAdminController extends Controller{
 
             // Notifier le prestataire
             if ($entreprise->prestataire) {
+                // Notification Laravel classique
                 $entreprise->prestataire->notify(
                     new EntrepriseStatusChangedNotification($entreprise, 'rejetée', $entreprise->admin_note)
                 );
+
+                // ✅ AJOUT: Notification Push Web
+                try {
+                    PushNotificationController::sendToUser($entreprise->prestataire, [
+                        'title' => '⚠️ Entreprise refusée',
+                        'body'  => "Votre entreprise \"{$entreprise->name}\" a été refusée. Motif: " . substr($request->admin_note, 0, 100) . (strlen($request->admin_note) > 100 ? '...' : ''),
+                        'type'  => 'entreprise_rejected',
+                        'url'   => '/mes-entreprises',
+                        'icon'  => '/logo192.png',
+                        'badge' => '/badge.png',
+                        'data'  => [
+                            'entreprise_id' => $entreprise->id,
+                            'entreprise_name' => $entreprise->name,
+                            'status' => 'rejected',
+                            'admin_note' => $request->admin_note
+                        ]
+                    ]);
+                    
+                    Log::info('Notification push de rejet envoyée au prestataire', [
+                        'user_id' => $entreprise->prestataire->id,
+                        'entreprise_id' => $entreprise->id
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('Erreur envoi notification push (reject)', [
+                        'error' => $e->getMessage(),
+                        'user_id' => $entreprise->prestataire->id
+                    ]);
+                }
             }
 
             DB::commit();
@@ -278,6 +336,27 @@ class EntrepriseAdminController extends Controller{
             }
 
             DB::commit();
+
+            // Optionnel: Notifier le prestataire de la prolongation
+            if ($entreprise->prestataire) {
+                try {
+                    PushNotificationController::sendToUser($entreprise->prestataire, [
+                        'title' => '📅 Période d\'essai prolongée',
+                        'body'  => "Votre période d'essai pour \"{$entreprise->name}\" a été prolongée de {$request->days} jours.",
+                        'type'  => 'trial_extended',
+                        'url'   => '/abonnements',
+                        'icon'  => '/logo192.png',
+                        'data'  => [
+                            'entreprise_id' => $entreprise->id,
+                            'new_end_date' => $nouvelleDateFin->format('Y-m-d')
+                        ]
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning('Erreur envoi notification push (extend trial)', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
 
             return response()->json([
                 'message' => "Période d'essai prolongée de {$request->days} jours avec succès",

@@ -1,65 +1,105 @@
 <?php
+// app/Notifications/EntrepriseStatusChangedNotification.php
+//
+// ✅ CORRECTIONS :
+//   1. ShouldQueue supprimé → envoi immédiat sans worker
+//   2. broadcastOn() supprimé → géré par User::receivesBroadcastNotificationsOn()
+//   3. broadcastAs() retourne le bon nom d'event côté frontend
 
 namespace App\Notifications;
 
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Models\Entreprise;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class EntrepriseStatusChangedNotification extends Notification
 {
-    use Queueable;
+    // ⚠️  PAS de ShouldQueue — envoi synchrone
+    // Si vous avez un worker : ajoutez "implements ShouldQueue" + "use Queueable"
 
-    private $entreprise;
-    private $status;
-    private $adminNote;
+    protected Entreprise $entreprise;
+    protected string     $status;    // 'validée' | 'rejetée'
+    protected ?string    $adminNote;
 
-    public function __construct($entreprise, $status, $adminNote = null)
+    public function __construct(Entreprise $entreprise, string $status, ?string $adminNote = null)
     {
         $this->entreprise = $entreprise;
-        $this->status = $status;
-        $this->adminNote = $adminNote;
+        $this->status     = $status;
+        $this->adminNote  = $adminNote;
     }
 
-    /**
-     * Canaux de notification - SANS NEXMO pour éviter l'erreur
-     */
-    public function via($notifiable)
+    public function via($notifiable): array
     {
-        // Seulement database et mail (nexmo retiré temporairement)
-        return ['database', 'mail'];
+        return ['database', 'broadcast', 'mail'];
     }
 
-    /**
-     * Email notification
-     */
-    public function toMail($notifiable)
+    // ── Nom de l'event Pusher ────────────────────────────────────
+    // Le canal est déterminé par User::receivesBroadcastNotificationsOn()
+    // L'event arrive côté client sous ce nom exact
+    public function broadcastAs(): string
     {
-        $message = (new MailMessage)
-            ->subject("Votre demande d'entreprise a été {$this->status}")
-            ->greeting("Bonjour {$notifiable->name},")
-            ->line("La demande d'enregistrement de l'entreprise \"{$this->entreprise->name}\" a été {$this->status}.");
-
-        if ($this->adminNote) {
-            $message->line("Remarque de l'administrateur : {$this->adminNote}");
-        }
-
-        $message->line('Merci d\'utiliser CarEasy.');
-
-        return $message;
+        return $this->status === 'validée'
+            ? 'entreprise-approved'
+            : 'entreprise-rejected';
     }
 
-    /**
-     * Database notification
-     */
-    public function toDatabase($notifiable)
+    // ── Payload Pusher ────────────────────────────────────────────
+    public function toBroadcast($notifiable): BroadcastMessage
     {
-        return [
-            'entreprise_id' => $this->entreprise->id,
+        $isApproved = $this->status === 'validée';
+        return new BroadcastMessage([
+            'type'            => $isApproved ? 'entreprise_approved' : 'entreprise_rejected',
+            'title'           => $isApproved
+                ? '🎉 Entreprise validée !'
+                : '⚠️ Entreprise refusée',
+            'body'            => $isApproved
+                ? "Votre entreprise \"{$this->entreprise->name}\" a été approuvée ! Période d'essai de 30 jours activée."
+                : "Votre demande pour \"{$this->entreprise->name}\" a été refusée."
+                  . ($this->adminNote ? " Raison : {$this->adminNote}" : ''),
+            'entreprise_id'   => $this->entreprise->id,
             'entreprise_name' => $this->entreprise->name,
-            'status' => $this->status,
-            'admin_note' => $this->adminNote,
+            'reason'          => $this->adminNote,
+            'url'             => $isApproved ? '/mes-entreprises' : '/entreprises/creer',
+        ]);
+    }
+
+    // ── Base de données ───────────────────────────────────────────
+    public function toDatabase($notifiable): array
+    {
+        $isApproved = $this->status === 'validée';
+        return [
+            'type'            => $isApproved ? 'entreprise_approved' : 'entreprise_rejected',
+            'title'           => $isApproved ? '🎉 Entreprise validée !' : '⚠️ Entreprise refusée',
+            'body'            => $isApproved
+                ? "Votre entreprise \"{$this->entreprise->name}\" a été approuvée ! Période d'essai de 30 jours démarre."
+                : "Votre demande pour \"{$this->entreprise->name}\" a été refusée."
+                  . ($this->adminNote ? " Raison : {$this->adminNote}" : ''),
+            'entreprise_id'   => $this->entreprise->id,
+            'entreprise_name' => $this->entreprise->name,
+            'admin_note'      => $this->adminNote,
+            'url'             => $isApproved ? '/mes-entreprises' : '/entreprises/creer',
         ];
+    }
+
+    // ── Email HTML ────────────────────────────────────────────────
+    public function toMail($notifiable): MailMessage
+    {
+        $isApproved   = $this->status === 'validée';
+        $frontendUrl  = config('app.frontend_url', 'http://localhost:5173');
+        $dashboardUrl = $frontendUrl . ($isApproved ? '/mes-entreprises' : '/entreprises/creer');
+
+        return (new MailMessage)
+            ->subject($isApproved
+                ? '🎉 Votre entreprise a été validée — CarEasy'
+                : '⚠️ Demande d\'entreprise refusée — CarEasy')
+            ->view('emails.entreprise-validation', [
+                'userName'     => $notifiable->name,
+                'entreprise'   => $this->entreprise,
+                'isApproved'   => $isApproved,
+                'adminNote'    => $this->adminNote,
+                'dashboardUrl' => $dashboardUrl,
+            ]);
     }
 }

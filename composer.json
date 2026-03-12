@@ -11,10 +11,12 @@
         "cloudinary/cloudinary_php": "^3.1",
         "fedapay/fedapay-php": "^0.4.7",
         "laravel-lang/lang": "^15.28",
+        "laravel-notification-channels/webpush": "^10.5",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.24",
         "laravel/tinker": "^2.10.1",
+        "minishlink/web-push": "^10.0",
         "openai-php/client": "^0.18.0",
         "pusher/pusher-php-server": "*",
         "socialiteproviders/twitter": "^4.1"

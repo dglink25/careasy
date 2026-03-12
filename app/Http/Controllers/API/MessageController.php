@@ -161,7 +161,6 @@ class MessageController extends Controller
         return response()->json($conversation);
     }
 
-    // ✅ CORRECTION
 public function sendMessage(Request $request, $conversationId) {
     return $this->sendMessageWithData($conversationId, $request);
 }
@@ -232,7 +231,6 @@ public function sendMessage(Request $request, $conversationId) {
                 : $conv->user_one_id;
 
             if ($receiverId) {
-                // Canal du destinataire (notifications globales)
                 $this->triggerPusher('private-user.' . $receiverId, 'new-message', [
                     'conversation_id' => $conv->id,
                     'message'         => $messageData,
@@ -240,11 +238,19 @@ public function sendMessage(Request $request, $conversationId) {
                     'sender_name'     => Auth::user()->name
                 ]);
 
-                // Canal de la conversation (messages en temps réel dans le modal)
                 $this->triggerPusher('private-conversation.' . $conv->id, 'message-sent', [
                     'message'   => $messageData,
                     'sender_id' => $userId
                 ]);
+
+ $recipient = User::find($receiverId);
+                if ($recipient && $recipient->id !== $userId) {
+                    $recipient->notify(new \App\Notifications\NewMessageNotification($message));
+                    Log::info('Notification de message envoyée', [
+                        'recipient_id' => $recipient->id,
+                        'message_id' => $message->id
+                    ]);
+                }
             }
 
             return response()->json($messageData, 201);

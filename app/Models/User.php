@@ -9,8 +9,8 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\Storage;
 use App\Notifications\CustomResetPasswordNotification;
 
-
-class User extends Authenticatable{
+class User extends Authenticatable
+{
     use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
@@ -30,7 +30,8 @@ class User extends Authenticatable{
         'remember_token',
     ];
 
-    protected function casts(): array  {
+    protected function casts(): array
+    {
         return [
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
@@ -38,11 +39,23 @@ class User extends Authenticatable{
         ];
     }
 
-    public function sendPasswordResetNotification($token){
+    // ══════════════════════════════════════════════════════════════
+    // ✅ MÉTHODE CLÉE — définit le canal Pusher pour les notifications broadcast
+    //    Sans cette méthode, les Notifications broadcast ne savent pas
+    //    sur quel canal envoyer → silence total côté client.
+    // ══════════════════════════════════════════════════════════════
+    public function receivesBroadcastNotificationsOn(): string
+    {
+        return 'private-user.' . $this->id;
+    }
+
+    public function sendPasswordResetNotification($token)
+    {
         $this->notify(new CustomResetPasswordNotification($token));
     }
 
-    public function getSettingsAttribute($value) {
+    public function getSettingsAttribute($value)
+    {
         $defaultSettings = [
             'theme' => 'light',
             'notifications' => [
@@ -79,7 +92,8 @@ class User extends Authenticatable{
         return array_replace_recursive($defaultSettings, $decoded);
     }
 
-    public function setSettingsAttribute($value)  {
+    public function setSettingsAttribute($value)
+    {
         if (is_string($value)) {
             // Si c'est déjà une string JSON, vérifier qu'elle est valide
             $decoded = json_decode($value, true);
@@ -97,20 +111,35 @@ class User extends Authenticatable{
         }
     }
 
-    public function getThemeAttribute(){
+    public function getThemeAttribute()
+    {
         $settings = $this->settings;
         return $settings['theme'] ?? 'light';
     }
 
-    public function hasProfilePhoto()  {
+    public function hasProfilePhoto()
+    {
         return !empty($this->profile_photo_path);
     }
 
-    public function isPrestataire(){
+    // ── Helpers rôle ─────────────────────────────────────────────
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isPrestataire(): bool
+    {
         return $this->role === 'prestataire';
     }
 
-    public function getProfilePhotoUrlAttribute() {
+    public function isClient(): bool
+    {
+        return $this->role === 'client';
+    }
+
+    public function getProfilePhotoUrlAttribute()
+    {
         if ($this->profile_photo_path) {
             // Si c'est une URL Cloudinary (commence par http)
             if (str_starts_with($this->profile_photo_path, 'http')) {
@@ -124,23 +153,36 @@ class User extends Authenticatable{
         return 'https://ui-avatars.com/api/?name=' . urlencode($this->name) . '&color=7F9CF5&background=EBF4FF';
     }
 
-    public function paiements() {
+    // ── Relations ────────────────────────────────────────────────
+    public function entreprises()
+    {
+        return $this->hasMany(Entreprise::class, 'prestataire_id');
+    }
+
+    public function rendezVous()
+    {
+        return $this->hasMany(RendezVous::class, 'client_id');
+    }
+
+    public function paiements()
+    {
         return $this->hasMany(Paiement::class);
     }
 
-    public function abonnements(){
+    public function abonnements()
+    {
         return $this->hasMany(Abonnement::class);
     }
 
-    public function abonnementActif() {
+    public function abonnementActif()
+    {
         return $this->hasOne(Abonnement::class)
             ->where('statut', 'actif')
             ->where('date_fin', '>', now());
     }
 
-    public function aAbonnementActif()  {
+    public function aAbonnementActif()
+    {
         return $this->abonnementActif()->exists();
     }
-
-    
 }

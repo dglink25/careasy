@@ -1,6 +1,6 @@
 <?php
 // app/Http/Controllers/BroadcastingController.php
-// VERSION 3 — Broadcast::auth() retourne null dans Laravel 12, on signe manuellement
+// VERSION FINALE — Avec support des admins
 
 namespace App\Http\Controllers;
 
@@ -20,6 +20,7 @@ class BroadcastingController extends Controller
 
         Log::info('Broadcasting auth', [
             'user_id' => $request->user()->id,
+            'role'    => $request->user()->role,
             'channel' => $channelName,
             'socket'  => $socketId,
         ]);
@@ -32,6 +33,7 @@ class BroadcastingController extends Controller
         if (!$this->isAuthorized($request->user(), $channelName)) {
             Log::warning('Broadcasting auth: accès refusé', [
                 'user_id' => $request->user()->id,
+                'role'    => $request->user()->role,
                 'channel' => $channelName,
             ]);
             return response()->json(['error' => 'Forbidden'], 403);
@@ -49,27 +51,35 @@ class BroadcastingController extends Controller
         $signature = hash_hmac('sha256', "{$socketId}:{$channelName}", $secret);
         $auth      = "{$key}:{$signature}";
 
-        Log::info('Broadcasting auth OK', ['auth' => substr($auth, 0, 20) . '...']);
+        Log::info('Broadcasting auth OK', [
+            'auth' => substr($auth, 0, 20) . '...',
+            'user_id' => $request->user()->id
+        ]);
 
         return response()->json(['auth' => $auth]);
     }
 
     /**
      * Vérifie si l'utilisateur peut accéder au canal demandé.
+     * Les règles doivent correspondre à celles définies dans routes/channels.php
      */
     private function isAuthorized($user, string $channelName): bool
     {
         // Canal privé utilisateur : private-user.{userId}
         if (preg_match('/^private-user\.(\d+)$/', $channelName, $m)) {
-            return (int) $user->id === (int) $m[1];
+            // Autoriser si c'est son propre canal OU si c'est un admin
+            return (int) $user->id === (int) $m[1] || $user->role === 'admin';
         }
 
         // Canal privé conversation : private-conversation.{conversationId}
         if (preg_match('/^private-conversation\.(\d+)$/', $channelName, $m)) {
             $conv = \App\Models\Conversation::find((int) $m[1]);
             if (!$conv) return false;
+            
+            // Autoriser si membre de la conversation OU si c'est un admin
             return (int) $conv->user_one_id === (int) $user->id
-                || (int) $conv->user_two_id === (int) $user->id;
+                || (int) $conv->user_two_id === (int) $user->id
+                || $user->role === 'admin';
         }
 
         return false;

@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Broadcast;
 */
 Broadcast::channel('user.{userId}', function ($user, $userId) {
     \Log::info("Auth canal user.{$userId} par user #{$user->id}");
-    return (int) $user->id === (int) $userId;
+    
+    // Un user peut s'abonner à son canal OU un admin peut s'abonner à n'importe quel canal
+    return (int) $user->id === (int) $userId || $user->role === 'admin';
 });
 
 /*
@@ -29,5 +31,6 @@ Broadcast::channel('conversation.{conversationId}', function ($user, $conversati
     $isMember = (int) $conv->user_one_id === (int) $user->id
              || (int) $conv->user_two_id === (int) $user->id;
 
-    return $isMember ? ['id' => $user->id, 'name' => $user->name] : false;
+    // Membres de la conversation OU admin
+    return $isMember || $user->role === 'admin' ? ['id' => $user->id, 'name' => $user->name] : false;
 });
