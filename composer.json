@@ -10,6 +10,7 @@
         "cloudinary-labs/cloudinary-laravel": "^3.0",
         "cloudinary/cloudinary_php": "^3.1",
         "fedapay/fedapay-php": "^0.4.7",
+        "google/apiclient": "^2.19",
         "laravel-lang/lang": "^15.28",
         "laravel-notification-channels/webpush": "^10.5",
         "laravel/framework": "^12.0",

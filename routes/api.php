@@ -27,13 +27,16 @@ require __DIR__.'/auth.php';
 
 Route::middleware('auth:sanctum')->group(function () {
 
+
     // ── Pusher broadcasting auth ──────────────────────────────
     Route::post('/broadcasting/auth', [BroadcastingController::class, 'authenticate']);
 
-    // ════════════════════════════════════════════════════════════
-    // NOTIFICATIONS — ⚠️ ORDRE CRITIQUE : fixes AVANT {id}
-    // Sans ça, "mark-all-read" est capturé comme un {id}
-    // ════════════════════════════════════════════════════════════
+    Route::post('/broadcasting/auth', function (Illuminate\Http\Request $request) {
+        return Broadcast::auth($request);
+    });
+    Route::post('/broadcasting/auth', [BroadcastingController::class, 'authenticate'])
+    ->middleware('auth:sanctum');
+
 
     // Routes fixes (pas de paramètre dynamique)
     Route::get('/notifications',                [NotificationController::class, 'index']);
@@ -123,7 +126,6 @@ Route::get('search',                   [EntrepriseController::class, 'search']);
 Route::get('services',                 [ServiceController::class, 'index']);
 Route::get('services/{id}',            [ServiceController::class, 'show']);
 
-// ── Admin ─────────────────────────────────────────────────────
 Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::get('entreprises',                      [EntrepriseAdminController::class, 'index']);
     Route::get('entreprises/{id}',                 [EntrepriseAdminController::class, 'show']);
@@ -158,4 +160,10 @@ Route::prefix('ai')->middleware('auth:sanctum')->group(function () {
 // ── Paiement webhooks (public) ────────────────────────────────
 Route::match(['get', 'post'], '/paiements/callback', [PaiementController::class, 'callback'])->name('paiements.callback');
 Route::get('/paiements/success', [PaiementController::class, 'success'])->name('paiements.success');
+
 Route::get('/paiements/cancel',  [PaiementController::class, 'cancel'])->name('paiements.cancel');
+Route::get('/paiements/cancel', [PaiementController::class, 'cancel'])->name('paiements.cancel');
+
+Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirect');
+Route::post('/google/callback/mobile', [GoogleAuthController::class, 'handleGoogleCallbackMobile']);
+
