@@ -44,8 +44,7 @@ class ServiceController extends Controller
         return response()->json($services);
     }
 
-    public function index()
-    {
+    public function index() {
         $services = Service::with(['entreprise', 'domaine'])
             ->whereHas('entreprise', fn($q) => $q->where('status', 'validated'))
             ->orderBy('created_at', 'desc')
@@ -57,13 +56,11 @@ class ServiceController extends Controller
         return response()->json($services);
     }
 
-    public function domaines()
-    {
+    public function domaines() {
         return Domaine::get();
     }
 
-    public function search(Request $request)
-    {
+    public function search(Request $request)  {
         $query = $request->get('q');
         $type = $request->get('type', 'all');
 
@@ -108,8 +105,7 @@ class ServiceController extends Controller
         return response()->json($results);
     }
 
-    private function formatServiceResponse($service)
-    {
+    private function formatServiceResponse($service) {
         return [
             'id' => $service->id,
             'name' => $service->name,
@@ -139,8 +135,7 @@ class ServiceController extends Controller
         ];
     }
 
-    public function store(Request $request)
-    {
+    public function store(Request $request){
         Log::info('Création service - Données reçues:', $request->all());
 
         $user = Auth::user();
@@ -291,8 +286,7 @@ class ServiceController extends Controller
         }
     }
 
-    public function show($id)
-    {
+    public function show($id)   {
         $service = Service::with('entreprise', 'domaine')->find($id);
 
         if (!$service) {
@@ -302,8 +296,7 @@ class ServiceController extends Controller
         return response()->json($this->formatServiceResponse($service));
     }
 
-    public function update(Request $request, $id)
-    {
+    public function update(Request $request, $id){
         $user = Auth::user();
 
         $service = Service::where('id', $id)
@@ -446,8 +439,7 @@ class ServiceController extends Controller
         }
     }
 
-    public function destroy($id)
-    {
+    public function destroy($id) {
         $user = Auth::user();
 
         $service = Service::where('id', $id)
@@ -474,8 +466,7 @@ class ServiceController extends Controller
         }
     }
 
-    private function uploadToCloudinary($file, $folder, $subfolder = null)
-    {
+    private function uploadToCloudinary($file, $folder, $subfolder = null) {
         if (!$file || !$file->isValid()) {
             throw new \Exception('Fichier invalide pour upload');
         }
@@ -501,8 +492,7 @@ class ServiceController extends Controller
         }
     }
 
-    private function deleteImageFromCloudinary($url)
-    {
+    private function deleteImageFromCloudinary($url) {
         try {
             if (empty($url)) {
                 return;
@@ -524,8 +514,7 @@ class ServiceController extends Controller
         }
     }
 
-    private function extractPublicIdFromUrl($url)
-    {
+    private function extractPublicIdFromUrl($url) {
         try {
             $pattern = '/\/v\d+\/(.+)\./';
             preg_match($pattern, $url, $matches);
