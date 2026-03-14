@@ -16,7 +16,7 @@ class Message extends Model
         'type',
         'file_path',
         'temporary_id',
-        'reply_to_id',   // ✅ AJOUTÉ
+        'reply_to_id',  
     ];
 
     protected $casts = [

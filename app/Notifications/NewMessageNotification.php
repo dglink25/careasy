@@ -19,16 +19,14 @@ class NewMessageNotification extends Notification
         return ['database', 'broadcast'];
     }
 
-    public function broadcastAs(): string
-    {
+    public function broadcastAs(): string {
         return 'new-message';
     }
 
-    public function toBroadcast($notifiable): BroadcastMessage
-    {
+    public function toBroadcast($notifiable): BroadcastMessage {
         return new BroadcastMessage([
             'type'            => 'message',
-            'title'           => '💬 Nouveau message',
+            'title'           => 'Nouveau message',
             'body'            => substr($this->message->content ?? '', 0, 80),
             'sender_id'       => $this->message->sender_id,
             'sender_name'     => $this->message->sender?->name ?? 'Quelqu\'un',

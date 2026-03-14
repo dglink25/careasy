@@ -18,8 +18,7 @@ use Exception;
 use Illuminate\Support\Str;
 use Pusher\Pusher;
 
-class MessageController extends Controller
-{
+class MessageController extends Controller{
     private $pusher = null;
     private $pusherEnabled = false;
 
@@ -293,9 +292,8 @@ public function sendMessage(Request $request, $conversationId) {
         return response()->json($conv);
     }
 
-    // ✅ SEULE MÉTHODE MODIFIÉE — retourne le dernier message (desc limit 1)
-    public function myConversations()
-    {
+    // SEULE MÉTHODE MODIFIÉE — retourne le dernier message (desc limit 1)
+    public function myConversations() {
         $userId = Auth::id();
 
         $conversations = Conversation::where('user_one_id', $userId)
@@ -328,8 +326,7 @@ public function sendMessage(Request $request, $conversationId) {
         return response()->json($conversations);
     }
 
-    public function markAsRead($conversationId)
-    {
+    public function markAsRead($conversationId){
         $conv = Conversation::find($conversationId);
         if (!$conv) {
             return response()->json(['message' => 'Conversation introuvable'], 404);
@@ -361,8 +358,7 @@ public function sendMessage(Request $request, $conversationId) {
         return response()->json(['message' => 'Messages marqués lus', 'count' => $updated]);
     }
 
-    public function typingIndicator(Request $request, $conversationId)
-    {
+    public function typingIndicator(Request $request, $conversationId) {
         $validator = Validator::make($request->all(), [
             'is_typing' => 'required|boolean'
         ]);
@@ -402,8 +398,7 @@ public function sendMessage(Request $request, $conversationId) {
         return response()->json(['success' => true]);
     }
 
-    public function updateOnlineStatus()
-    {
+    public function updateOnlineStatus(){
         $user = Auth::user();
         if (!$user) {
             return response()->json(['message' => 'Non authentifié'], 401);
@@ -560,5 +555,212 @@ public function sendMessage(Request $request, $conversationId) {
             'document' => 'Document',
             default    => 'Message',
         };
+    }
+
+    public function sendMessageMobile(Request $request, $conversationId) {
+        Log::info('Tentative d\'envoi de message', [
+            'conversation_id' => $conversationId,
+            'user_id' => Auth::id(),
+            'has_file' => $request->hasFile('file'),
+            'content' => $request->content
+        ]);
+
+        $validator = Validator::make($request->all(), [
+            'type'         => 'required|in:text,image,video,vocal,document',
+            'content'      => 'nullable|string',
+            'file'         => 'nullable|file|max:20480', // 20MB max
+            'latitude'     => 'nullable|numeric',
+            'longitude'    => 'nullable|numeric',
+            'temporary_id' => 'nullable|string'
+        ]);
+
+        if ($validator->fails()) {
+            Log::warning('Validation échouée', ['errors' => $validator->errors()]);
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $conv = Conversation::find($conversationId);
+        if (!$conv) {
+            Log::error('Conversation introuvable', ['conversation_id' => $conversationId]);
+            return response()->json(['message' => 'Conversation introuvable'], 404);
+        }
+
+        $userId = Auth::id();
+        if (!$this->isMember($conv, $userId)) {
+            Log::warning('Utilisateur non autorisé', ['user_id' => $userId, 'conv_id' => $conversationId]);
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        $filePath = null;
+        $fileUrl  = null;
+
+        try {
+            DB::beginTransaction();
+
+            // Upload du fichier si présent
+            if ($request->hasFile('file')) {
+                $filePath = $this->uploadFile($request->file('file'), $conv->id, $request->type);
+                $fileUrl  = $this->getFileUrl($filePath);
+                Log::info('Fichier uploadé', ['file_path' => $filePath, 'file_url' => $fileUrl]);
+            }
+
+            // Contenu par défaut si non fourni
+            $content = $request->input('content');
+            if (!$content && $filePath) {
+                $content = $this->getDefaultContent($request->type);
+            }
+
+            // Création du message
+            $message = Message::create([
+                'conversation_id' => $conv->id,
+                'sender_id'       => $userId,
+                'content'         => $content,
+                'type'            => $request->type,
+                'file_path'       => $filePath,
+                'latitude'        => $request->latitude,
+                'longitude'       => $request->longitude,
+                'temporary_id'    => $request->temporary_id,
+                'reply_to_id'     => $request->reply_to_id ?? null
+            ]);
+
+            // Mettre à jour le timestamp de la conversation
+            $conv->touch();
+            
+            // Charger les relations
+            $message->load(['sender:id,name,profile_photo_path', 'replyTo']);
+
+            $messageData = $message->toArray();
+            $messageData['file_url'] = $fileUrl ?: $message->file_url;
+            $messageData['is_me'] = true; // Pour le frontend
+
+            DB::commit();
+
+            Log::info('Message créé avec succès', ['message_id' => $message->id]);
+
+            // Déterminer le destinataire
+            $receiverId = $conv->user_one_id === $userId
+                ? $conv->user_two_id
+                : $conv->user_one_id;
+
+            // Notifications Pusher
+            if ($receiverId) {
+                // Notifier le destinataire
+                $this->triggerPusher('private-user.' . $receiverId, 'new-message', [
+                    'conversation_id' => $conv->id,
+                    'message'         => $messageData,
+                    'sender_id'       => $userId,
+                    'sender_name'     => Auth::user()->name
+                ]);
+
+                // Notifier la conversation
+                $this->triggerPusher('private-conversation.' . $conv->id, 'message-sent', [
+                    'message'   => $messageData,
+                    'sender_id' => $userId
+                ]);
+
+                // Notification database
+                try {
+                    $recipient = User::find($receiverId);
+                    if ($recipient && $recipient->id !== $userId) {
+                        $recipient->notify(new \App\Notifications\NewMessageNotification($message));
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Erreur envoi notification', ['error' => $e->getMessage()]);
+                }
+            }
+
+            return response()->json($messageData, 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            if ($filePath) {
+                $this->deleteFile($filePath);
+            }
+            Log::error('Erreur envoi message: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Erreur interne: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function startServiceConversationMobile(Request $request, $serviceId = null) {
+        // Si $serviceId est passé dans l'URL
+        if ($serviceId) {
+            $request->merge(['service_id' => $serviceId]);
+        }
+        
+        $validator = Validator::make($request->all(), [
+            'service_id' => 'required|exists:services,id',
+            'message'    => 'nullable|string'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $userId    = Auth::id();
+        $serviceId = $request->service_id;
+        $service   = Service::with('entreprise.prestataire')->find($serviceId);
+
+        if (!$service || !$service->entreprise) {
+            return response()->json(['message' => 'Service introuvable'], 404);
+        }
+
+        $receiverId = $service->entreprise->prestataire_id;
+
+        if ($userId == $receiverId) {
+            return response()->json(['message' => 'Vous ne pouvez pas démarrer une conversation avec vous-même'], 422);
+        }
+
+        // Chercher une conversation existante
+        $conversation = Conversation::where(function($q) use ($userId, $receiverId) {
+                $q->where('user_one_id', $userId)->where('user_two_id', $receiverId);
+            })
+            ->orWhere(function($q) use ($userId, $receiverId) {
+                $q->where('user_one_id', $receiverId)->where('user_two_id', $userId);
+            })
+            ->first();
+
+        if (!$conversation) {
+            // Créer une nouvelle conversation avec les infos du service
+            $conversation = Conversation::create([
+                'user_one_id'     => $userId,
+                'user_two_id'     => $receiverId,
+                'service_id'      => $serviceId,
+                'service_name'    => $service->name,
+                'entreprise_name' => $service->entreprise->name
+            ]);
+            Log::info('Nouvelle conversation créée', [
+                'conversation_id' => $conversation->id,
+                'service_id' => $serviceId
+            ]);
+        } else {
+            // Mettre à jour la conversation avec les infos du service
+            $conversation->update([
+                'service_id'      => $serviceId,
+                'service_name'    => $service->name,
+                'entreprise_name' => $service->entreprise->name
+            ]);
+            Log::info('Conversation existante mise à jour', [
+                'conversation_id' => $conversation->id
+            ]);
+        }
+
+        // Si un message initial est fourni, l'envoyer
+        if ($request->filled('message')) {
+            // Créer un nouveau request pour l'envoi du message
+            $messageRequest = new Request([
+                'type'    => 'text',
+                'content' => $request->message
+            ]);
+            
+            // Appeler la méthode sendMessage
+            return $this->sendMessage($messageRequest, $conversation->id);
+        }
+
+        $conversation->load(['userOne', 'userTwo', 'service']);
+        return response()->json($conversation);
     }
 }

@@ -13,10 +13,8 @@ use Cloudinary\Api\Upload\UploadApi;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use App\Models\Domaine;
 
-class ServiceController extends Controller
-{
-    public function __construct()
-    {
+class ServiceController extends Controller{
+    public function __construct(){
         Configuration::instance([
             'cloud' => [
                 'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
@@ -29,8 +27,7 @@ class ServiceController extends Controller
         ]);
     }
 
-    public function mine()
-    {
+    public function mine() {
         $user = Auth::user();
 
         $services = Service::with(['entreprise', 'domaine'])
@@ -59,18 +56,22 @@ class ServiceController extends Controller
     public function domaines() {
         return Domaine::get();
     }
-
-    public function search(Request $request)  {
+    public function search(Request $request) {
         $query = $request->get('q');
         $type = $request->get('type', 'all');
-
+        
         $results = [];
 
+        // Recherche de services
         if ($type === 'all' || $type === 'service') {
             $services = Service::with(['entreprise', 'domaine'])
-                ->where('name', 'LIKE', "%{$query}%")
-                ->orWhere('descriptions', 'LIKE', "%{$query}%")
-                ->whereHas('entreprise', fn($q) => $q->where('status', 'validated'))
+                ->where(function($q) use ($query) {
+                    $q->where('name', 'LIKE', "%{$query}%")
+                    ->orWhere('descriptions', 'LIKE', "%{$query}%");
+                })
+                ->whereHas('entreprise', function($q) {
+                    $q->where('status', 'validated');
+                })
                 ->limit(10)
                 ->get()
                 ->map(function ($service) {
@@ -82,10 +83,13 @@ class ServiceController extends Controller
             $results = array_merge($results, $services->toArray());
         }
 
+        // Recherche d'entreprises
         if ($type === 'all' || $type === 'entreprise') {
             $entreprises = Entreprise::with('domaines')
-                ->where('name', 'LIKE', "%{$query}%")
-                ->orWhere('description', 'LIKE', "%{$query}%")
+                ->where(function($q) use ($query) {
+                    $q->where('name', 'LIKE', "%{$query}%")
+                    ->orWhere('description', 'LIKE', "%{$query}%");
+                })
                 ->where('status', 'validated')
                 ->limit(10)
                 ->get()
@@ -94,14 +98,22 @@ class ServiceController extends Controller
                         'id' => $entreprise->id,
                         'name' => $entreprise->name,
                         'logo' => $entreprise->logo,
+                        'description' => $entreprise->description,
                         'type' => 'entreprise',
                         'status' => $entreprise->status,
+                        'email' => $entreprise->email,
+                        'call_phone' => $entreprise->call_phone,
+                        'whatsapp_phone' => $entreprise->whatsapp_phone,
+                        'address' => $entreprise->address,
                     ];
                 });
             
             $results = array_merge($results, $entreprises->toArray());
         }
 
+        // Mélanger les résultats pour avoir un mix
+        shuffle($results);
+        
         return response()->json($results);
     }
 
