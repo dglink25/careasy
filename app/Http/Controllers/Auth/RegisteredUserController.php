@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 
+use Twilio\Rest\Client;
+
 class RegisteredUserController extends Controller
 {
     /**
@@ -148,6 +150,18 @@ class RegisteredUserController extends Controller
         // Étape 9: Connecter l'utilisateur
         Auth::login($user);
 
+        $sid = env('TWILIO_ACCOUNT_SID');
+        $tokenTwilio = env('TWILIO_AUTH_TOKEN');
+        $twilio = new Client($sid, $tokenTwilio);
+        $message = $twilio->messages
+        ->create("+2290194119476", // to
+            array(
+            "messagingServiceSid" => "MGb1f770e5197be92255c57a07d25094f7",
+            "body" => "Bonjour, votre inscription sur Careasy a été réussie. Bienvenue parmi nous !"
+            )
+        );
+
+
         // Étape 10: Retourner la réponse
         return response()->json([
             'success' => true,
@@ -164,8 +178,7 @@ class RegisteredUserController extends Controller
         ], 201);
     }
 
-    public function checkEmail(Request $request)
-    {
+    public function checkEmail(Request $request){
         $request->validate([
             'email' => ['required', 'email'],
         ]);

@@ -22,7 +22,8 @@ class User extends Authenticatable
         'profile_photo_path',
         'settings',
         'google_id',
-        'phone'
+        'phone',
+        'fcm_token',
     ];
 
     protected $hidden = [
@@ -39,11 +40,9 @@ class User extends Authenticatable
         ];
     }
 
-    // ══════════════════════════════════════════════════════════════
-    // ✅ MÉTHODE CLÉE — définit le canal Pusher pour les notifications broadcast
-    //    Sans cette méthode, les Notifications broadcast ne savent pas
-    //    sur quel canal envoyer → silence total côté client.
-    // ══════════════════════════════════════════════════════════════
+    public function routeNotificationForFcm() {
+        return $this->fcm_token;
+    }
     public function receivesBroadcastNotificationsOn(): string
     {
         return 'private-user.' . $this->id;
