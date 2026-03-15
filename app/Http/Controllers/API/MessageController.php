@@ -815,10 +815,10 @@ class MessageController extends Controller
     private function getDefaultContent($type): string
     {
         return match ($type) {
-            'image'    => '📷 Image',
-            'video'    => '🎥 Vidéo',
-            'vocal'    => '🎤 Message vocal',
-            'document' => '📄 Document',
+            'image'    => '',
+            'video'    => '',
+            'vocal'    => '',
+            'document' => '',
             default    => 'Message',
         };
     }
