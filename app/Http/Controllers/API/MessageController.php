@@ -242,7 +242,7 @@ public function sendMessage(Request $request, $conversationId) {
                     'sender_id' => $userId
                 ]);
 
- $recipient = User::find($receiverId);
+                $recipient = User::find($receiverId);
                 if ($recipient && $recipient->id !== $userId) {
                     $recipient->notify(new \App\Notifications\NewMessageNotification($message));
                     Log::info('Notification de message envoyée', [
