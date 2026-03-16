@@ -671,8 +671,7 @@ public function sendMessage(Request $request, $conversationId) {
 
             return response()->json($messageData, 201);
 
-        } 
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             DB::rollBack();
             if ($filePath) {
                 $this->deleteFile($filePath);
