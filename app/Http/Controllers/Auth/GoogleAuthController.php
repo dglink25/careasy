@@ -56,6 +56,8 @@ class GoogleAuthController extends Controller{
             // Connecter l'utilisateur
             Auth::login($user);
 
+            $user->update(['last_seen_at' => now()]);
+
             // Générer un token Sanctum pour l'API
             $token = $user->createToken('google-auth-token')->plainTextToken;
 

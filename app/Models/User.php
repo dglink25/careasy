@@ -24,6 +24,7 @@ class User extends Authenticatable
         'google_id',
         'phone',
         'fcm_token',
+        'last_seen_at'
     ];
 
     protected $hidden = [

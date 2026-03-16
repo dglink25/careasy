@@ -13,8 +13,7 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-    public function store(Request $request)
-    {
+    public function store(Request $request) {
         // Validation conditionnelle : soit email, soit téléphone
         $rules = [
             'password' => 'required|string|min:8',
@@ -83,6 +82,8 @@ class AuthenticatedSessionController extends Controller
         
         // Supprimer les anciens tokens
         $user->tokens()->delete();
+
+        $user->update(['last_seen_at' => now()]);
         
         // Créer un nouveau token
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -101,14 +102,12 @@ class AuthenticatedSessionController extends Controller
         ]);
     }
 
-    /**
-     * Destroy an authenticated session.
-     */
-    public function destroy(Request $request)
-    {
+    public function destroy(Request $request) {
         if ($request->user()) {
             $request->user()->currentAccessToken()->delete();
         }
+
+        $request->user()->update(['last_seen_at' => now()]);
 
         return response()->json([
             'success' => true,

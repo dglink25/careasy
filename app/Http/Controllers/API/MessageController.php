@@ -658,7 +658,7 @@ public function sendMessage(Request $request, $conversationId) {
                     'sender_id' => $userId
                 ]);
 
-                // Notification database
+                // Notification databaseaaa
                 try {
                     $recipient = User::find($receiverId);
                     if ($recipient && $recipient->id !== $userId) {
