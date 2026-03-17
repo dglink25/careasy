@@ -97,7 +97,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/check-email-availability',         [UserSettingsController::class, 'checkEmailAvailability']);
     Route::post('/check-phone-availability',         [UserSettingsController::class, 'checkPhoneAvailability']);
 
-    // ── Rendez-vous ───────────────────────────────────────────────────────
     Route::get('/rendez-vous',                       [RendezVousController::class, 'index']);
     Route::get('/rendez-vous/calendar',              [RendezVousController::class, 'calendar']);
     Route::post('/rendez-vous',                      [RendezVousController::class, 'store']);
@@ -107,7 +106,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/rendez-vous/{id}/complete',        [RendezVousController::class, 'complete']);
     Route::get('/services/{serviceId}/slots/{date}', [RendezVousController::class, 'getAvailableSlots']);
 
-    // ── Plans & Abonnements ───────────────────────────────────────────────
     Route::get('/plans',                           [PlanController::class, 'index']);
     Route::get('/plans/compare/all',               [PlanController::class, 'compare']);
     Route::get('/plans/{id}',                      [PlanController::class, 'show']);
