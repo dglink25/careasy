@@ -51,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ── Entreprises ───────────────────────────────────────────────────────
     Route::get('entreprises/mine',                   [EntrepriseController::class, 'mine']);
     Route::post('entreprises',                       [EntrepriseController::class, 'store']);
+    Route::get('mes-entreprises',                    [EntrepriseController::class, 'mine']);
     Route::put('entreprises/{id}',                   [EntrepriseController::class, 'update']);
     Route::post('entreprises/{id}/complete-profile', [EntrepriseController::class, 'completeProfile']);
 
@@ -143,6 +144,7 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::delete('/plans/{id}',               [AdminPlanController::class, 'destroy']);
     Route::post('/plans/update-order',         [AdminPlanController::class, 'updateOrder']);
     Route::patch('/plans/{id}/toggle-status',  [AdminPlanController::class, 'toggleStatus']);
+    Route::post('entreprises/{id}/extend-trial', [EntrepriseAdminController::class, 'extendTrial']);
 });
 
 // ── IA ────────────────────────────────────────────────────────────────────────

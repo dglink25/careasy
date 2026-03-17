@@ -74,12 +74,11 @@ class Entreprise extends Model{
         return $this->hasMany(Abonnement::class);
     }
 
-    public function abonnementActif()  {
+    public function abonnementActif() {
         return $this->hasOne(Abonnement::class)
             ->where('statut', 'actif')
             ->where('date_fin', '>', now());
     }
-
 
     public function activateTrialPeriod() {
         if ($this->has_used_trial) {
@@ -89,19 +88,14 @@ class Entreprise extends Model{
         $this->trial_starts_at = now();
         $this->trial_ends_at = now()->addDays(30);
         $this->has_used_trial = true;
-        
-        // Configuration de l'essai gratuit
         $this->max_services_allowed = 3;
         $this->max_employees_allowed = 1;
         $this->has_api_access = false;
-        
+
         return $this->save();
     }
 
-    /**
-     * Vérifier si l'entreprise est en période d'essai
-     */
-    public function isInTrialPeriod()
+    public function isInTrialPeriod(): bool
     {
         if (!$this->trial_starts_at || !$this->trial_ends_at) {
             return false;
@@ -110,10 +104,12 @@ class Entreprise extends Model{
         return now()->between($this->trial_starts_at, $this->trial_ends_at);
     }
 
-    /**
-     * Vérifier si la période d'essai est expirée
-     */
-    public function isTrialExpired()
+    public function getIsInTrialPeriodAttribute(): bool
+    {
+        return $this->isInTrialPeriod();
+    }
+
+    public function isTrialExpired(): bool
     {
         if (!$this->trial_ends_at) {
             return false;
@@ -125,19 +121,19 @@ class Entreprise extends Model{
     /**
      * Obtenir le nombre de jours restants dans l'essai
      */
-    public function getTrialDaysRemainingAttribute()
+    public function getTrialDaysRemainingAttribute(): int
     {
         if (!$this->isInTrialPeriod()) {
             return 0;
         }
 
-        return now()->diffInDays($this->trial_ends_at, false);
+        return (int) now()->diffInDays($this->trial_ends_at, false);
     }
 
     /**
      * Vérifier si l'entreprise peut ajouter un nouveau service
      */
-    public function canAddService()
+    public function canAddService(): bool
     {
         if (!$this->isInTrialPeriod()) {
             return false;
@@ -149,48 +145,47 @@ class Entreprise extends Model{
     /**
      * Vérifier si l'entreprise peut ajouter un employé
      */
-    public function canAddEmployee()
+    public function canAddEmployee(): bool
     {
         if (!$this->isInTrialPeriod()) {
             return false;
         }
 
-        // À implémenter selon votre logique de gestion des employés
         return true;
     }
 
     /**
      * Obtenir le statut textuel de l'essai
      */
-    public function getTrialStatusAttribute()
+    public function getTrialStatusAttribute(): array
     {
         if ($this->isInTrialPeriod()) {
             return [
-                'status' => 'active',
-                'message' => 'Période d\'essai en cours',
+                'status'         => 'active',
+                'message'        => 'Période d\'essai en cours',
                 'days_remaining' => $this->trial_days_remaining,
-                'ends_at' => $this->trial_ends_at->format('d/m/Y')
+                'ends_at'        => $this->trial_ends_at->format('d/m/Y'),
             ];
         }
 
         if ($this->isTrialExpired()) {
             return [
-                'status' => 'expired',
-                'message' => 'Période d\'essai expirée',
-                'ended_at' => $this->trial_ends_at->format('d/m/Y')
+                'status'   => 'expired',
+                'message'  => 'Période d\'essai expirée',
+                'ended_at' => $this->trial_ends_at->format('d/m/Y'),
             ];
         }
 
         if ($this->has_used_trial) {
             return [
-                'status' => 'used',
-                'message' => 'Période d\'essai déjà utilisée'
+                'status'  => 'used',
+                'message' => 'Période d\'essai déjà utilisée',
             ];
         }
 
         return [
-            'status' => 'available',
-            'message' => 'Période d\'essai disponible'
+            'status'  => 'available',
+            'message' => 'Période d\'essai disponible',
         ];
     }
 }
