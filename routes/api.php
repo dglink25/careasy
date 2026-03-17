@@ -78,8 +78,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/user/online-status',         [MessageController::class, 'updateOnlineStatus']);
     Route::get('user/{userId}/online-status',  [MessageController::class, 'checkOnlineStatus']);
 
-    // ── Token FCM (notifications push mobiles) ────────────────────────────
-    // ⭐ NOUVELLE ROUTE — enregistrer le token Firebase du device
     Route::post('/user/fcm-token',             [MessageController::class, 'saveFcmToken']);
 
     // ── Profil utilisateur ────────────────────────────────────────────────
