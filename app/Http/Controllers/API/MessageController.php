@@ -81,6 +81,9 @@ class MessageController extends Controller{
         }
 
         $userId     = Auth::id();
+        $user = User::find($userId);
+        $user->update(['last_seen_at' => now()]);
+        
         $receiverId = $request->receiver_id;
 
         if ($userId == $receiverId) {
@@ -117,6 +120,9 @@ class MessageController extends Controller{
         }
 
         $userId    = Auth::id();
+        $user = User::find($userId);
+        $user->update(['last_seen_at' => now()]);
+
         $serviceId = $request->service_id;
         $service   = Service::with('entreprise.prestataire')->find($serviceId);
 
@@ -160,9 +166,9 @@ class MessageController extends Controller{
         return response()->json($conversation);
     }
 
-public function sendMessage(Request $request, $conversationId) {
-    return $this->sendMessageWithData($conversationId, $request);
-}
+    public function sendMessage(Request $request, $conversationId) {
+        return $this->sendMessageWithData($conversationId, $request);
+    }
 
     private function sendMessageWithData($conversationId, Request $request) {
         $validator = Validator::make($request->all(), [
@@ -184,6 +190,8 @@ public function sendMessage(Request $request, $conversationId) {
         }
 
         $userId = Auth::id();
+        $user = User::find($userId);
+        $user->update(['last_seen_at' => now()]);
         if (!$this->isMember($conv, $userId)) {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
@@ -242,7 +250,7 @@ public function sendMessage(Request $request, $conversationId) {
                     'sender_id' => $userId
                 ]);
 
- $recipient = User::find($receiverId);
+                $recipient = User::find($receiverId);
                 if ($recipient && $recipient->id !== $userId) {
                     $recipient->notify(new \App\Notifications\NewMessageNotification($message));
                     Log::info('Notification de message envoyée', [
@@ -275,6 +283,9 @@ public function sendMessage(Request $request, $conversationId) {
         }
 
         $userId = Auth::id();
+        $user = User::find($userId);
+        $user->update(['last_seen_at' => now()]);
+
         if (!$this->isMember($conv, $userId)) {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
@@ -295,6 +306,8 @@ public function sendMessage(Request $request, $conversationId) {
     // SEULE MÉTHODE MODIFIÉE — retourne le dernier message (desc limit 1)
     public function myConversations() {
         $userId = Auth::id();
+        $user = User::find($userId);
+        $user->update(['last_seen_at' => now()]);
 
         $conversations = Conversation::where('user_one_id', $userId)
             ->orWhere('user_two_id', $userId)
@@ -382,7 +395,6 @@ public function sendMessage(Request $request, $conversationId) {
             : $conv->user_one_id;
 
         if ($receiverId) {
-            // Envoyer au canal de la conversation ET au canal user
             $this->triggerPusher('private-conversation.' . $conv->id, 'typing-indicator', [
                 'conversation_id' => $conv->id,
                 'user_id'         => $userId,
@@ -403,6 +415,12 @@ public function sendMessage(Request $request, $conversationId) {
         if (!$user) {
             return response()->json(['message' => 'Non authentifié'], 401);
         }
+
+        $user = User::find(Auth::id());
+        if (!$user) {
+            return response()->json(['message' => 'Utilisateur introuvable'], 404);
+        }
+        $user->update(['last_seen_at' => now()]);
 
         try {
             $user->last_seen_at = now();
