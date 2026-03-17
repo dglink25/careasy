@@ -34,8 +34,7 @@ class UserSettingsController extends Controller
     /**
      * Nettoyer un numéro de téléphone
      */
-    private function cleanPhoneNumber($phone)
-    {
+    private function cleanPhoneNumber($phone) {
         if (empty($phone)) {
             return null;
         }
@@ -55,8 +54,7 @@ class UserSettingsController extends Controller
     /**
      * Vérifier l'unicité de l'email
      */
-    private function isEmailUnique($email, $excludeUserId = null)
-    {
+    private function isEmailUnique($email, $excludeUserId = null) {
         $query = User::where('email', $email);
         
         if ($excludeUserId) {
@@ -66,9 +64,7 @@ class UserSettingsController extends Controller
         return !$query->exists();
     }
 
-    /**
-     * Vérifier l'unicité du téléphone
-     */
+
     private function isPhoneUnique($phone, $excludeUserId = null)
     {
         if (empty($phone)) {
@@ -207,11 +203,7 @@ class UserSettingsController extends Controller
         ]);
     }
 
-    /**
-     * Mettre à jour l'email
-     */
-    public function updateEmail(Request $request)
-    {
+    public function updateEmail(Request $request) {
         $user = $request->user();
         
         $validator = Validator::make($request->all(), [

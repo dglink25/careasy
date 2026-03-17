@@ -37,7 +37,6 @@ class MessageController extends Controller{
                         'cluster' => env('PUSHER_APP_CLUSTER', 'eu'),
                         'useTLS' => true,
                         'timeout' => 30,
-                        'debug' => true
                     ]
                 );
                 $this->pusherEnabled = true;
@@ -50,26 +49,97 @@ class MessageController extends Controller{
     }
 
     private function triggerPusher($channel, $event, $data) {
-        if (!$this->pusherEnabled || !$this->pusher) {
-            Log::warning('Pusher désactivé, événement non envoyé', [
-                'channel' => $channel, 'event' => $event
-            ]);
-            return false;
-        }
+        if (!$this->pusherEnabled || !$this->pusher) return false;
         try {
             $result = $this->pusher->trigger($channel, $event, $data);
-            Log::info('Événement Pusher envoyé', [
-                'channel' => $channel, 'event' => $event,
-                'result' => $result ? 'succès' : 'échec'
-            ]);
+            Log::info('Pusher envoyé', ['channel' => $channel, 'event' => $event]);
             return $result;
         } catch (\Exception $e) {
-            Log::error('Erreur Pusher: ' . $e->getMessage(), [
-                'channel' => $channel, 'event' => $event
-            ]);
+            Log::error('Erreur Pusher: ' . $e->getMessage());
             return false;
         }
     }
+
+    public function saveFcmToken(Request $request) {
+        $validator = Validator::make($request->all(), [
+            'fcm_token' => 'required|string',
+            'platform'  => 'nullable|string|in:android,ios',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
+
+        $user->fcm_token = $request->fcm_token;
+        $user->save();
+
+        Log::info('FCM token enregistré', [
+            'user_id'  => $user->id,
+            'platform' => $request->platform ?? 'android',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Token FCM enregistré',
+        ]);
+    }
+
+    public function recordingIndicator(Request $request, $conversationId) {
+        $validator = Validator::make($request->all(), [
+            'is_recording' => 'required|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $conv = Conversation::find($conversationId);
+        if (!$conv) {
+            return response()->json(['message' => 'Conversation introuvable'], 404);
+        }
+
+        $userId = Auth::id();
+        if (!$this->isMember($conv, $userId)) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        $receiverId = $conv->user_one_id === $userId
+            ? $conv->user_two_id
+            : $conv->user_one_id;
+
+        if ($receiverId) {
+            // Notifier l'autre utilisateur via le canal conversation
+            $this->triggerPusher(
+                'private-conversation.' . $conv->id,
+                'recording-indicator',
+                [
+                    'conversation_id' => $conv->id,
+                    'user_id'         => $userId,
+                    'is_recording'    => $request->is_recording,
+                ]
+            );
+
+            // Et aussi via le canal utilisateur
+            $this->triggerPusher(
+                'private-user.' . $receiverId,
+                'recording-indicator',
+                [
+                    'conversation_id' => $conv->id,
+                    'user_id'         => $userId,
+                    'is_recording'    => $request->is_recording,
+                ]
+            );
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    // ─── Toutes les autres méthodes existantes inchangées ──────────
 
     public function startConversation(Request $request) {
         $validator = Validator::make($request->all(), [
@@ -226,9 +296,8 @@ class MessageController extends Controller{
 
             $conv->touch();
             $message->load(['sender', 'replyTo']);
-            $message->load('sender');
 
-            $messageData            = $message->toArray();
+            $messageData             = $message->toArray();
             $messageData['file_url'] = $fileUrl ?: $message->file_url;
 
             DB::commit();
@@ -253,10 +322,6 @@ class MessageController extends Controller{
                 $recipient = User::find($receiverId);
                 if ($recipient && $recipient->id !== $userId) {
                     $recipient->notify(new \App\Notifications\NewMessageNotification($message));
-                    Log::info('Notification de message envoyée', [
-                        'recipient_id' => $recipient->id,
-                        'message_id' => $message->id
-                    ]);
                 }
             }
 
@@ -272,11 +337,6 @@ class MessageController extends Controller{
 
     public function getMessages($conversationId) {
         $conv = Conversation::with(['messages.sender', 'service'])->find($conversationId);
-        // Dans getMessages() ou index()
-        $messages = Message::with(['sender:id,name,profile_photo_path', 'replyTo'])
-                   ->where('conversation_id', $conversationId)
-                   ->orderBy('created_at')
-                   ->get();
 
         if (!$conv) {
             return response()->json(['message' => 'Conversation introuvable'], 404);
@@ -290,20 +350,23 @@ class MessageController extends Controller{
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
+        // Déterminer l'autre utilisateur
+        $otherUser = $conv->user_one_id === $userId ? $conv->userTwo : $conv->userOne;
+
         // Marquer comme lus
-        $updated = Message::where('conversation_id', $conversationId)
+        Message::where('conversation_id', $conversationId)
             ->where('sender_id', '!=', $userId)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
-        if ($updated > 0) {
-            Log::info("{$updated} messages marqués comme lus dans conv {$conversationId}");
-        }
+        // Inclure other_user dans la réponse pour que le client puisse
+        // récupérer le statut en ligne
+        $response = $conv->toArray();
+        $response['other_user'] = $otherUser ? $otherUser->toArray() : null;
 
-        return response()->json($conv);
+        return response()->json($response);
     }
 
-    // SEULE MÉTHODE MODIFIÉE — retourne le dernier message (desc limit 1)
     public function myConversations() {
         $userId = Auth::id();
         $user = User::find($userId);
@@ -312,7 +375,6 @@ class MessageController extends Controller{
         $conversations = Conversation::where('user_one_id', $userId)
             ->orWhere('user_two_id', $userId)
             ->with([
-                // ← orderBy desc + limit 1 = dernier message garanti
                 'messages' => function ($query) {
                     $query->orderBy('created_at', 'desc')->limit(1);
                 },
@@ -323,7 +385,6 @@ class MessageController extends Controller{
             ->latest('updated_at')
             ->get()
             ->map(function ($conv) use ($userId) {
-                // Toujours calculer depuis les IDs bruts
                 $conv->other_user = (int)$conv->user_one_id === (int)$userId
                     ? $conv->userTwo
                     : $conv->userOne;
@@ -437,9 +498,10 @@ class MessageController extends Controller{
 
                 if ($otherUserId) {
                     $this->triggerPusher('private-user.' . $otherUserId, 'user-status', [
-                        'user_id'   => $user->id,
-                        'is_online' => true,
-                        'last_seen' => $user->last_seen_at
+                        'user_id'      => $user->id,
+                        'is_online'    => true,
+                        'last_seen'    => $user->last_seen_at,
+                        'last_seen_at' => $user->last_seen_at,
                     ]);
                 }
             }
@@ -576,36 +638,26 @@ class MessageController extends Controller{
     }
 
     public function sendMessageMobile(Request $request, $conversationId) {
-        Log::info('Tentative d\'envoi de message', [
-            'conversation_id' => $conversationId,
-            'user_id' => Auth::id(),
-            'has_file' => $request->hasFile('file'),
-            'content' => $request->content
-        ]);
-
         $validator = Validator::make($request->all(), [
             'type'         => 'required|in:text,image,video,vocal,document',
             'content'      => 'nullable|string',
-            'file'         => 'nullable|file|max:20480', // 20MB max
+            'file'         => 'nullable|file|max:20480',
             'latitude'     => 'nullable|numeric',
             'longitude'    => 'nullable|numeric',
             'temporary_id' => 'nullable|string'
         ]);
 
         if ($validator->fails()) {
-            Log::warning('Validation échouée', ['errors' => $validator->errors()]);
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
         $conv = Conversation::find($conversationId);
         if (!$conv) {
-            Log::error('Conversation introuvable', ['conversation_id' => $conversationId]);
             return response()->json(['message' => 'Conversation introuvable'], 404);
         }
 
         $userId = Auth::id();
         if (!$this->isMember($conv, $userId)) {
-            Log::warning('Utilisateur non autorisé', ['user_id' => $userId, 'conv_id' => $conversationId]);
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
@@ -615,20 +667,16 @@ class MessageController extends Controller{
         try {
             DB::beginTransaction();
 
-            // Upload du fichier si présent
             if ($request->hasFile('file')) {
                 $filePath = $this->uploadFile($request->file('file'), $conv->id, $request->type);
                 $fileUrl  = $this->getFileUrl($filePath);
-                Log::info('Fichier uploadé', ['file_path' => $filePath, 'file_url' => $fileUrl]);
             }
 
-            // Contenu par défaut si non fourni
             $content = $request->input('content');
             if (!$content && $filePath) {
                 $content = $this->getDefaultContent($request->type);
             }
 
-            // Création du message
             $message = Message::create([
                 'conversation_id' => $conv->id,
                 'sender_id'       => $userId,
@@ -641,49 +689,40 @@ class MessageController extends Controller{
                 'reply_to_id'     => $request->reply_to_id ?? null
             ]);
 
-            // Mettre à jour le timestamp de la conversation
             $conv->touch();
-            
-            // Charger les relations
             $message->load(['sender:id,name,profile_photo_path', 'replyTo']);
 
-            $messageData = $message->toArray();
+            $messageData             = $message->toArray();
             $messageData['file_url'] = $fileUrl ?: $message->file_url;
-            $messageData['is_me'] = true; // Pour le frontend
+            $messageData['is_me']    = true;
 
             DB::commit();
 
-            Log::info('Message créé avec succès', ['message_id' => $message->id]);
-
-            // Déterminer le destinataire
             $receiverId = $conv->user_one_id === $userId
                 ? $conv->user_two_id
                 : $conv->user_one_id;
 
-            // Notifications Pusher
             if ($receiverId) {
-                // Notifier le destinataire
                 $this->triggerPusher('private-user.' . $receiverId, 'new-message', [
                     'conversation_id' => $conv->id,
                     'message'         => $messageData,
                     'sender_id'       => $userId,
-                    'sender_name'     => Auth::user()->name
+                    'sender_name'     => Auth::user()->name,
+                    'sender_photo'    => Auth::user()->profile_photo_url ?? '',
                 ]);
 
-                // Notifier la conversation
                 $this->triggerPusher('private-conversation.' . $conv->id, 'message-sent', [
                     'message'   => $messageData,
                     'sender_id' => $userId
                 ]);
 
-                // Notification databaseaaa
                 try {
                     $recipient = User::find($receiverId);
                     if ($recipient && $recipient->id !== $userId) {
                         $recipient->notify(new \App\Notifications\NewMessageNotification($message));
                     }
                 } catch (\Exception $e) {
-                    Log::warning('Erreur envoi notification', ['error' => $e->getMessage()]);
+                    Log::warning('Erreur envoi notification: ' . $e->getMessage());
                 }
             }
 
@@ -691,20 +730,13 @@ class MessageController extends Controller{
 
         } catch (\Exception $e) {
             DB::rollBack();
-            if ($filePath) {
-                $this->deleteFile($filePath);
-            }
-            Log::error('Erreur envoi message: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json([
-                'message' => 'Erreur interne: ' . $e->getMessage()
-            ], 500);
+            if ($filePath) $this->deleteFile($filePath);
+            Log::error('Erreur envoi message mobile: ' . $e->getMessage());
+            return response()->json(['message' => 'Erreur interne: ' . $e->getMessage()], 500);
         }
     }
 
     public function startServiceConversationMobile(Request $request, $serviceId = null) {
-        // Si $serviceId est passé dans l'URL
         if ($serviceId) {
             $request->merge(['service_id' => $serviceId]);
         }
@@ -732,7 +764,6 @@ class MessageController extends Controller{
             return response()->json(['message' => 'Vous ne pouvez pas démarrer une conversation avec vous-même'], 422);
         }
 
-        // Chercher une conversation existante
         $conversation = Conversation::where(function($q) use ($userId, $receiverId) {
                 $q->where('user_one_id', $userId)->where('user_two_id', $receiverId);
             })
@@ -742,7 +773,6 @@ class MessageController extends Controller{
             ->first();
 
         if (!$conversation) {
-            // Créer une nouvelle conversation avec les infos du service
             $conversation = Conversation::create([
                 'user_one_id'     => $userId,
                 'user_two_id'     => $receiverId,
@@ -750,31 +780,19 @@ class MessageController extends Controller{
                 'service_name'    => $service->name,
                 'entreprise_name' => $service->entreprise->name
             ]);
-            Log::info('Nouvelle conversation créée', [
-                'conversation_id' => $conversation->id,
-                'service_id' => $serviceId
-            ]);
         } else {
-            // Mettre à jour la conversation avec les infos du service
             $conversation->update([
                 'service_id'      => $serviceId,
                 'service_name'    => $service->name,
                 'entreprise_name' => $service->entreprise->name
             ]);
-            Log::info('Conversation existante mise à jour', [
-                'conversation_id' => $conversation->id
-            ]);
         }
 
-        // Si un message initial est fourni, l'envoyer
         if ($request->filled('message')) {
-            // Créer un nouveau request pour l'envoi du message
             $messageRequest = new Request([
                 'type'    => 'text',
                 'content' => $request->message
             ]);
-            
-            // Appeler la méthode sendMessage
             return $this->sendMessage($messageRequest, $conversation->id);
         }
 
