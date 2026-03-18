@@ -22,9 +22,6 @@ class NewMessageNotification extends Notification
         $this->message = $message;
     }
 
-    /**
-     * Canaux utilisés
-     */
     public function via($notifiable): array
     {
         $channels = ['database', 'broadcast'];
@@ -36,54 +33,50 @@ class NewMessageNotification extends Notification
         return $channels;
     }
 
-    /**
-     * Nom de l'événement broadcast
-     */
     public function broadcastAs(): string
     {
         return 'new-message';
     }
 
-    /**
-     * Broadcast temps réel
-     */
     public function toBroadcast($notifiable): BroadcastMessage
     {
         return new BroadcastMessage([
             'type'            => 'message',
-            'title'           => 'Nouveau message',
-            'body'            => substr($this->message->content ?? '', 80),
+            'title'           => '💬 Message de ' . ($this->message->sender?->name ?? 'Quelqu\'un'),
+            // ✅ CORRECTION DU BUG : substr(str, 0, 80) — ton code avait substr(str, 80) = coupe les 80 premiers
+            'body'            => substr($this->message->content ?? '', 0, 80),
             'sender_id'       => $this->message->sender_id,
             'sender_name'     => $this->message->sender?->name ?? 'Quelqu\'un',
             'conversation_id' => $this->message->conversation_id,
             'message_id'      => $this->message->id,
-            'url'             => '/messages/' . $this->message->conversation_id,
+            // ✅ URL simple — le frontend utilise conversation_id pour ouvrir le modal
+            'url'             => '/messages',
         ]);
     }
 
-    /**
-     * Notification stockée en base
-     */
     public function toDatabase($notifiable): array
     {
+        $senderName = $this->message->sender?->name ?? 'Inconnu';
+        // ✅ CORRECTION DU BUG : substr(str, 0, 80) — ton code avait substr(str, 80)
+        $preview    = substr($this->message->content ?? '', 0, 80);
+
         return [
             'type'            => 'message',
-            'title'           => 'Nouveau message de ' . ($this->message->sender?->name ?? 'Inconnu'),
-            'body'            => substr($this->message->content ?? '', 80),
+            'title'           => "💬 Message de {$senderName}",
+            'body'            => $preview ?: 'Nouveau message',
             'sender_id'       => $this->message->sender_id,
+            'sender_name'     => $senderName,
+            // ✅ conversation_id bien présent séparément — le frontend l'utilise pour ouvrir le bon modal
             'conversation_id' => $this->message->conversation_id,
-            'url'             => '/messages/' . $this->message->conversation_id,
+            // ✅ URL simple sans l'ID pour éviter la page blanche
+            'url'             => '/messages',
         ];
     }
 
-    /**
-     * Notification Firebase Cloud Messaging
-     */
     public function toFcm($notifiable): FcmMessage
     {
         $senderName = $this->message->sender?->name ?? 'Nouveau message';
-
-        $body = substr($this->message->content ?? '', 100);
+        $body       = substr($this->message->content ?? '', 0, 100);
 
         if (empty($body)) {
             $body = match ($this->message->type) {
@@ -107,6 +100,7 @@ class NewMessageNotification extends Notification
             'conversation_id' => (string) $this->message->conversation_id,
             'sender_id'       => (string) $this->message->sender_id,
             'sender_name'     => $senderName,
+            'url'             => '/messages',
             'click_action'    => 'FLUTTER_NOTIFICATION_CLICK',
         ])
         ->android(
