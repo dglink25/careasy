@@ -22,7 +22,6 @@ use Kreait\Firebase\Messaging\Notification;
 use Kreait\Firebase\Messaging\Messaging;
 
 
-
 class MessageController extends Controller{
     private ?Pusher $pusher = null;
     private bool $pusherEnabled = false;
@@ -754,8 +753,6 @@ private function sendFCMNotification(User $recipient, array $payload): void
         };
     }
 
-
-
     private function initPusherto() {
         try {
             if (env('PUSHER_APP_ID') && env('PUSHER_APP_KEY') && env('PUSHER_APP_SECRET')) {
@@ -1295,6 +1292,64 @@ private function sendFCMNotification(User $recipient, array $payload): void
             default    => 'Message',
         };
     }
+
+
+    public function update(Request $request, int $id) {
+        $request->validate([
+            'content' => 'required|string|max:5000',
+        ]);
+
+        $message = Message::find($id);
+
+        if (!$message) {
+            return response()->json(['message' => 'Message introuvable'], 404);
+        }
+
+        // Seul l'expéditeur peut modifier
+        if ((int) $message->sender_id !== (int) Auth::id()) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        // Seulement les messages texte
+        if ($message->type !== 'text') {
+            return response()->json(['message' => 'Seuls les messages texte peuvent être modifiés'], 422);
+        }
+
+        // Fenêtre de 15 minutes
+        if (now()->diffInMinutes($message->created_at) > 15) {
+            return response()->json([
+                'message' => 'Délai de modification dépassé (15 minutes max)',
+            ], 422);
+        }
+
+        $message->content  = $request->content;
+        $message->edited   = true;
+        $message->save();
+
+        $message->load(['sender:id,name,profile_photo_path', 'replyTo']);
+
+        return response()->json([
+            'message' => 'Message modifié',
+            'data'    => $message,
+        ]);
+    }
+
+    public function destroy(int $id) {
+        $message = Message::find($id);
+
+        if (!$message) {
+            return response()->json(['message' => 'Message introuvable'], 404);
+        }
+
+        if ((int) $message->sender_id !== (int) Auth::id()) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        $message->delete();
+
+        return response()->json(['message' => 'Message supprimé']);
+    }
+
 
 
 }

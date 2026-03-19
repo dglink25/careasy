@@ -73,6 +73,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('conversation/{id}/mark-read',                          [MessageController::class, 'markAsRead']);
     Route::post('conversation/{id}/typing',                             [MessageController::class, 'typingIndicator']);
     Route::post('conversation/{id}/recording',                          [MessageController::class, 'recordingIndicator']);
+    Route::put('messages/{id}',    [MessageController::class, 'update']);
+    Route::delete('messages/{id}', [MessageController::class, 'destroy']);
 
     // ── Statut en ligne ───────────────────────────────────────────────────
     Route::post('user/update-online-status',   [MessageController::class, 'updateOnlineStatus']);

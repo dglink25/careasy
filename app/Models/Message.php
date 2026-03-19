@@ -17,6 +17,8 @@ class Message extends Model
         'file_path',
         'temporary_id',
         'reply_to_id',  
+        'edited',
+        
     ];
 
     protected $casts = [
