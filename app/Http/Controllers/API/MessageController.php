@@ -756,23 +756,6 @@ private function sendFCMNotification(User $recipient, array $payload): void
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     private function initPusherto() {
         try {
             if (env('PUSHER_APP_ID') && env('PUSHER_APP_KEY') && env('PUSHER_APP_SECRET')) {
