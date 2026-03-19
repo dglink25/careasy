@@ -36,7 +36,14 @@ class RendezVousController extends Controller
 
         if (empty($user->phone)) {
             $validator = Validator::make($request->all(), [
-                'phone' => 'required|regex:/^[0-9+\s\-]+$/'
+                'phone' => [
+                    'required',
+                    'regex:/^[0-9+\s\-]+$/',
+                    \Illuminate\Validation\Rule::unique('users', 'phone')
+                        ->ignore($user->id),  
+                ]
+            ], [
+                'phone.unique' => 'Ce numéro est déjà utilisé par un autre compte.',
             ]);
             if ($validator->fails()) {
                 return response()->json(['errors' => $validator->errors()], 422);
@@ -113,21 +120,25 @@ class RendezVousController extends Controller
     }
 
     public function index()
-    {
-        $user = Auth::user();
+{
+    $user = Auth::user();
 
-        $query = RendezVous::with(['service', 'entreprise', 'service.domaine', 'client', 'prestataire']);
+    $rendezVous = RendezVous::with([
+            'service', 'entreprise', 'service.domaine', 'client', 'prestataire'
+        ])
+        ->where(function ($query) use ($user) {
+            // Récupérer TOUS les RDV où l'utilisateur est impliqué,
+            // que ce soit comme prestataire OU comme client.
+            // Un prestataire peut aussi passer des commandes à d'autres prestataires.
+            $query->where('prestataire_id', $user->id)
+                  ->orWhere('client_id', $user->id);
+        })
+        ->orderBy('date', 'desc')
+        ->orderBy('start_time', 'desc')
+        ->get();
 
-        if ($user->isPrestataire()) {
-            $query->where('prestataire_id', $user->id);
-        } else {
-            $query->where('client_id', $user->id);
-        }
-
-        $rendezVous = $query->orderBy('date', 'desc')->orderBy('start_time', 'desc')->get();
-
-        return response()->json($rendezVous);
-    }
+    return response()->json($rendezVous);
+}
 
     public function show($id)
     {
