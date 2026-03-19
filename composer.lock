@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0d74242d4ba8d2fbd594ef1e8a74dace",
+    "content-hash": "0087b7934d45015787ca5a035173faf9",
     "packages": [
         {
             "name": "archtechx/enums",
@@ -3524,22 +3524,22 @@
         },
         {
             "name": "laravel-notification-channels/fcm",
-            "version": "6.0.1",
+            "version": "6.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel-notification-channels/fcm.git",
-                "reference": "040cee569807e2df0ca72285ef2cfc7d0c0a0bd7"
+                "reference": "c901ced4d47a511f874a695dd9fb95c4a3dd51a9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel-notification-channels/fcm/zipball/040cee569807e2df0ca72285ef2cfc7d0c0a0bd7",
-                "reference": "040cee569807e2df0ca72285ef2cfc7d0c0a0bd7",
+                "url": "https://api.github.com/repos/laravel-notification-channels/fcm/zipball/c901ced4d47a511f874a695dd9fb95c4a3dd51a9",
+                "reference": "c901ced4d47a511f874a695dd9fb95c4a3dd51a9",
                 "shasum": ""
             },
             "require": {
                 "guzzlehttp/guzzle": "^7.0",
-                "illuminate/notifications": "^12.0",
-                "illuminate/support": "^12.0",
+                "illuminate/notifications": "^12.0 || ^13.0",
+                "illuminate/support": "^12.0 || ^13.0",
                 "kreait/laravel-firebase": "^6.0 || ^7.0",
                 "php": "^8.3"
             },
@@ -3570,9 +3570,9 @@
             "homepage": "https://github.com/laravel-notification-channels/fcm",
             "support": {
                 "issues": "https://github.com/laravel-notification-channels/fcm/issues",
-                "source": "https://github.com/laravel-notification-channels/fcm/tree/6.0.1"
+                "source": "https://github.com/laravel-notification-channels/fcm/tree/6.1.0"
             },
-            "time": "2026-02-19T01:31:18+00:00"
+            "time": "2026-02-20T21:49:09+00:00"
         },
         {
             "name": "laravel-notification-channels/webpush",
