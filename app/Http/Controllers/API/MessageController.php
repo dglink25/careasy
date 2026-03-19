@@ -19,10 +19,6 @@ use Exception;
 use Kreait\Laravel\Firebase\Facades\Firebase;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification;
-
-
-
-
 use Kreait\Firebase\Messaging\Messaging;
 
 
@@ -662,9 +658,6 @@ private function sendFCMNotification(User $recipient, array $payload): void
         ]);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    //  HELPERS PRIVÉS
-    // ──────────────────────────────────────────────────────────────────────
     private function isMember(Conversation $conv, ?int $userId): bool
     {
         return $conv->user_one_id === $userId || $conv->user_two_id === $userId;
