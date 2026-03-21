@@ -139,12 +139,9 @@ class RendezVous extends Model{
                      ->where('date', $date)
                      ->whereIn('status', [self::STATUS_PENDING, self::STATUS_CONFIRMED])
                      ->where(function($q) use ($startTime, $endTime) {
-                         $q->whereBetween('start_time', [$startTime, $endTime])
-                           ->orWhereBetween('end_time', [$startTime, $endTime])
-                           ->orWhere(function($q2) use ($startTime, $endTime) {
-                               $q2->where('start_time', '<=', $startTime)
-                                  ->where('end_time', '>=', $endTime);
-                           });
+                         // Vérifier les chevauchements de créneaux
+                         $q->where('start_time', '<', $endTime)
+                           ->where('end_time', '>', $startTime);
                      });
 
         if ($excludeId) {
@@ -155,39 +152,114 @@ class RendezVous extends Model{
     }
 
     // Obtenir les créneaux disponibles pour un service
-    public static function getAvailableSlots($service, $date)  {
-        if (!$service->schedule || $service->is_always_open) {
+    public static function getAvailableSlots($service, $date) {
+        $interval = 60; // minutes
+        
+        // Vérifier si le service est ouvert 24h/24
+        if ($service->is_always_open || $service->is_open_24h) {
+            $start = Carbon::parse($date . ' 00:00');
+            $end = Carbon::parse($date . ' 23:59');
+            
+            $bookedSlots = self::where('service_id', $service->id)
+                               ->where('date', $date)
+                               ->whereIn('status', [self::STATUS_PENDING, self::STATUS_CONFIRMED])
+                               ->get();
+            
+            $availableSlots = [];
+            while ($start->lt($end)) {
+                $slotEnd = $start->copy()->addMinutes($interval);
+                if ($slotEnd->gt($end)) break;
+                
+                $isBooked = false;
+                foreach ($bookedSlots as $booking) {
+                    $bookingStart = Carbon::parse($booking->start_time);
+                    $bookingEnd = Carbon::parse($booking->end_time);
+                    
+                    // Vérifier le chevauchement
+                    if ($bookingStart->lt($slotEnd) && $bookingEnd->gt($start)) {
+                        $isBooked = true;
+                        break;
+                    }
+                }
+                
+                if (!$isBooked) {
+                    $availableSlots[] = [
+                        'start' => $start->format('H:i'),
+                        'end' => $slotEnd->format('H:i'),
+                        'display' => $start->format('H:i') . ' - ' . $slotEnd->format('H:i')
+                    ];
+                }
+                $start->addMinutes($interval);
+            }
+            return $availableSlots;
+        }
+        
+        // Récupérer et décoder le schedule
+        $schedule = $service->schedule;
+        
+        // Si schedule est une chaîne JSON, la décoder
+        if (is_string($schedule)) {
+            $schedule = json_decode($schedule, true);
+        }
+        
+        // Si pas de schedule ou schedule vide
+        if (empty($schedule) || !is_array($schedule)) {
             return [];
         }
-
+        
+        // Obtenir le jour de la semaine en anglais
         $dayOfWeek = strtolower(Carbon::parse($date)->locale('en')->dayName);
         
-        if (!isset($service->schedule[$dayOfWeek]) || !$service->schedule[$dayOfWeek]['is_open']) {
+        // Vérifier si le service est ouvert ce jour
+        if (!isset($schedule[$dayOfWeek]) || !$schedule[$dayOfWeek]['is_open']) {
             return [];
         }
-
-        $schedule = $service->schedule[$dayOfWeek];
-        $start = Carbon::parse($schedule['start']);
-        $end = Carbon::parse($schedule['end']);
         
+        // Récupérer les horaires du jour
+        $daySchedule = $schedule[$dayOfWeek];
+        
+        // Vérifier que start et end existent
+        if (!isset($daySchedule['start']) || !isset($daySchedule['end'])) {
+            return [];
+        }
+        
+        $startTime = $daySchedule['start'];
+        $endTime = $daySchedule['end'];
+        
+        // Convertir en Carbon
+        $start = Carbon::parse($date . ' ' . $startTime);
+        $end = Carbon::parse($date . ' ' . $endTime);
+        
+        // Récupérer les créneaux déjà réservés
         $bookedSlots = self::where('service_id', $service->id)
                            ->where('date', $date)
                            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_CONFIRMED])
                            ->get();
-
+        
         $availableSlots = [];
-        $interval = 30; // minutes
-
+        
+        // Générer tous les créneaux de 30 minutes
         while ($start->lt($end)) {
             $slotEnd = $start->copy()->addMinutes($interval);
             
-            $isBooked = $bookedSlots->contains(function($booking) use ($start, $slotEnd) {
+            // Vérifier si le créneau dépasse l'heure de fermeture
+            if ($slotEnd->gt($end)) {
+                break;
+            }
+            
+            // Vérifier si le créneau est déjà réservé
+            $isBooked = false;
+            foreach ($bookedSlots as $booking) {
                 $bookingStart = Carbon::parse($booking->start_time);
                 $bookingEnd = Carbon::parse($booking->end_time);
                 
-                return ($bookingStart->lt($slotEnd) && $bookingEnd->gt($start));
-            });
-
+                // Vérifier le chevauchement
+                if ($bookingStart->lt($slotEnd) && $bookingEnd->gt($start)) {
+                    $isBooked = true;
+                    break;
+                }
+            }
+            
             if (!$isBooked) {
                 $availableSlots[] = [
                     'start' => $start->format('H:i'),
@@ -195,10 +267,10 @@ class RendezVous extends Model{
                     'display' => $start->format('H:i') . ' - ' . $slotEnd->format('H:i')
                 ];
             }
-
+            
             $start->addMinutes($interval);
         }
-
+        
         return $availableSlots;
     }
 }

@@ -13,10 +13,8 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
-class RendezVousController extends Controller
-{
-    public function getAvailableSlots($serviceId, $date)
-    {
+class RendezVousController extends Controller{
+    public function getAvailableSlots($serviceId, $date) {
         try {
             $service = Service::with('entreprise')->findOrFail($serviceId);
             if (!$service->entreprise || $service->entreprise->status !== 'validated') {
@@ -30,8 +28,7 @@ class RendezVousController extends Controller
         }
     }
 
-    public function store(Request $request)
-    {
+    public function store(Request $request) {
         $user = Auth::user();
 
         if (empty($user->phone)) {

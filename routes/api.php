@@ -20,6 +20,7 @@ use App\Http\Controllers\API\PlanController;
 use App\Http\Controllers\BroadcastingController;
 use App\Http\Controllers\API\PushNotificationController;
 use App\Http\Controllers\API\NotificationController;
+use App\Http\Controllers\API\ReviewController;
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
@@ -122,6 +123,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Recherche ─────────────────────────────────────────────────────────
     Route::get('/search', [ServiceController::class, 'search']);
+
+    // ── Reviews ─────────────────────────────────────────────────────────
+    Route::post('reviews/{rendezVous}', [ReviewController::class, 'store']);
+    Route::post('reviews/{rendezVous}/report', [ReviewController::class, 'report']);
+
 });
 
 // ── PUBLIC — pas d'authentification ──────────────────────────────────────────
