@@ -38,6 +38,7 @@ class Service extends Model{
         'schedule' => 'array',
         'promo_start_date' => 'datetime',
         'promo_end_date' => 'datetime',
+        'is_visibility' => 'boolean',
     ];
 
     const DAYS = [
@@ -61,6 +62,9 @@ class Service extends Model{
         }
         
         return $this->price ? number_format($this->price, 0, ',', ' ') . ' FCFA' : 'Prix non défini';
+    }
+    public function scopeVisible($query) {
+        return $query->where('is_visibility', true);
     }
 
     public function getOriginalPriceAttribute()  {
