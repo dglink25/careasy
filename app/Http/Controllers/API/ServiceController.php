@@ -42,7 +42,7 @@ class ServiceController extends Controller{
     }
 
     public function index(){
-        $services = Service::with(['entreprise', 'domaine'])
+        $services = Service::with(['entreprise', 'domaine', 'reviews'])
             ->where('is_visibility', true) 
             ->whereHas('entreprise', fn($q) => 
                 $q->where('status', 'validated')
@@ -59,31 +59,44 @@ class ServiceController extends Controller{
     }
 
     private function formatServiceResponse($service) {
+        
+        $reviewStats = \App\Models\Review::whereHas('rendezVous', function ($q) use ($service) {
+                $q->where('service_id', $service->id);
+            })
+            ->selectRaw('COUNT(*) as total_reviews, SUM(rating) as total_stars, AVG(rating) as average_rating')
+            ->first();
+
         return [
-            'id' => $service->id,
-            'name' => $service->name,
-            'price' => $service->price,
-            'price_promo' => $service->price_promo,
+            'id'                  => $service->id,
+            'name'                => $service->name,
+            'price'               => $service->price,
+            'price_promo'         => $service->price_promo,
             'is_price_on_request' => $service->is_price_on_request,
-            'has_promo' => $service->has_promo,
-            'is_promo_active' => $service->isPromoActive(),
+            'has_promo'           => $service->has_promo,
+            'is_promo_active'     => $service->isPromoActive(),
             'discount_percentage' => $service->discount_percentage,
-            'descriptions' => $service->descriptions,
-            'medias' => $service->medias,
-            'is_always_open' => $service->is_always_open,
-            'start_time' => $service->start_time,
-            'end_time' => $service->end_time,
-            'schedule' => $service->schedule,
-            'is_visibility' => $service->is_visibility ?? true, // ⭐ AJOUTÉ
+            'descriptions'        => $service->descriptions,
+            'medias'              => $service->medias,
+            'is_always_open'      => $service->is_always_open,
+            'start_time'          => $service->start_time,
+            'end_time'            => $service->end_time,
+            'schedule'            => $service->schedule,
+            'is_visibility'       => $service->is_visibility ?? true,
+            // ⭐ NOUVEAU — données de rating
+            'total_reviews'       => (int) ($reviewStats->total_reviews ?? 0),
+            'total_stars'         => (int) ($reviewStats->total_stars ?? 0),
+            'average_rating'      => $reviewStats->total_reviews > 0
+                                        ? round($reviewStats->average_rating, 1)
+                                        : null,
             'entreprise' => [
-                'id' => $service->entreprise->id,
-                'name' => $service->entreprise->name,
-                'logo' => $service->entreprise->logo,
-                'call_phone' => $service->entreprise->call_phone,
+                'id'             => $service->entreprise->id,
+                'name'           => $service->entreprise->name,
+                'logo'           => $service->entreprise->logo,
+                'call_phone'     => $service->entreprise->call_phone,
                 'whatsapp_phone' => $service->entreprise->whatsapp_phone,
-                'email' => $service->entreprise->email,
-                'address' => $service->entreprise->address,
-                'status' => $service->entreprise->status,
+                'email'          => $service->entreprise->email,
+                'address'        => $service->entreprise->address,
+                'status'         => $service->entreprise->status,
             ],
             'domaine' => $service->domaine,
         ];

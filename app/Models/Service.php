@@ -63,6 +63,13 @@ class Service extends Model{
         
         return $this->price ? number_format($this->price, 0, ',', ' ') . ' FCFA' : 'Prix non défini';
     }
+
+    public function reviews() {
+        return $this->hasMany(\App\Models\Review::class, 'rendez_vous_id')
+                    ->join('rendez_vous', 'reviews.rendez_vous_id', '=', 'rendez_vous.id')
+                    ->where('rendez_vous.service_id', $this->id ?? 0);
+    }
+
     public function scopeVisible($query) {
         return $query->where('is_visibility', true);
     }
