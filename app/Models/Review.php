@@ -14,7 +14,17 @@ class Review extends Model{
         'prestataire_id',
         'rating',
         'comment',
-        'reported'
+        'reported',
+        'report_reason',
+        'reported_at'
+    ];
+
+    protected $casts = [
+        'rating' => 'integer',
+        'reported' => 'boolean',
+        'reported_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     // Relations

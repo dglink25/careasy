@@ -116,30 +116,28 @@ class RendezVousController extends Controller{
         }
     }
 
-    public function index()
-{
-    $user = Auth::user();
+    public function index() {
+        $user = Auth::user();
 
-    $rendezVous = RendezVous::with([
-            'service', 'entreprise', 'service.domaine', 'client', 'prestataire'
-        ])
-        ->where(function ($query) use ($user) {
-            // Récupérer TOUS les RDV où l'utilisateur est impliqué,
-            // que ce soit comme prestataire OU comme client.
-            // Un prestataire peut aussi passer des commandes à d'autres prestataires.
-            $query->where('prestataire_id', $user->id)
-                  ->orWhere('client_id', $user->id);
-        })
-        ->orderBy('date', 'desc')
-        ->orderBy('start_time', 'desc')
-        ->get();
+        $rendezVous = RendezVous::with([
+                'service', 'entreprise', 'service.domaine', 'client', 'prestataire'
+            ])
+            ->where(function ($query) use ($user) {
+                // Récupérer TOUS les RDV où l'utilisateur est impliqué,
+                // que ce soit comme prestataire OU comme client.
+                // Un prestataire peut aussi passer des commandes à d'autres prestataires.
+                $query->where('prestataire_id', $user->id)
+                    ->orWhere('client_id', $user->id);
+            })
+            ->orderBy('date', 'desc')
+            ->orderBy('start_time', 'desc')
+            ->get();
 
-    return response()->json($rendezVous);
-}
+        return response()->json($rendezVous);
+    }
 
-    public function show($id)
-    {
-        $rendezVous = RendezVous::with(['service', 'client', 'prestataire', 'entreprise', 'service.domaine'])->findOrFail($id);
+    public function show($id) {
+        $rendezVous = RendezVous::with(['service', 'client', 'prestataire', 'entreprise', 'service.domaine', 'review'])->findOrFail($id);
         return response()->json($rendezVous);
     }
 

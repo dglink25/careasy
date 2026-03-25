@@ -113,6 +113,10 @@ class RendezVous extends Model{
         return $this->status === self::STATUS_PENDING;
     }
 
+    public function review(){
+        return $this->hasOne(\App\Models\Review::class, 'rendez_vous_id');
+    }
+
     public function isConfirmed() {
         return $this->status === self::STATUS_CONFIRMED;
     }
