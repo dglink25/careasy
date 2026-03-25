@@ -70,6 +70,11 @@ class Entreprise extends Model{
         return $this->hasMany(Service::class);
     }
 
+    public function service() {
+        return $this->hasMany(Service::class)
+                    ->where('is_visibility', true);
+    }
+
     public function abonnements() {
         return $this->hasMany(Abonnement::class);
     }

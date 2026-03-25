@@ -29,33 +29,33 @@ class EntrepriseController extends Controller
     }
 
     public function index(){
-        return Entreprise::with('domaines', 'services')
+        return Entreprise::with('domaines', 'service')
             ->where('status', 'validated')
             ->get();
     }
 
     public function mine(){
-    $user = Auth::user();
-    
-    if (!$user) {
-        return response()->json(['message' => 'Non authentifié'], 401);
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
+
+        $entreprises = Entreprise::with('domaines', 'services')
+            ->where('prestataire_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $entreprises->each(function ($e) {
+            $e->append([
+                'is_in_trial_period',
+                'trial_days_remaining',
+                'trial_status',
+            ]);
+        });
+
+        return response()->json($entreprises);
     }
-
-    $entreprises = Entreprise::with('domaines', 'services')
-        ->where('prestataire_id', $user->id)
-        ->orderBy('created_at', 'desc')
-        ->get();
-
-    $entreprises->each(function ($e) {
-        $e->append([
-            'is_in_trial_period',
-            'trial_days_remaining',
-            'trial_status',
-        ]);
-    });
-
-    return response()->json($entreprises);
-}
    
 
     public function show($id){
@@ -96,44 +96,44 @@ class EntrepriseController extends Controller
 
          $user = Auth::user();
 
-    // ── Vérifications métier ───────────────────────────────────────────────
-    $existantes = Entreprise::where('prestataire_id', $user->id)->get();
+        // ── Vérifications métier ───────────────────────────────────────────────
+        $existantes = Entreprise::where('prestataire_id', $user->id)->get();
 
-    foreach ($existantes as $e) {
-        // 1. Demande en attente → bloquer
-        if ($e->status === 'pending') {
-            return response()->json([
-                'message'         => 'Une demande est déjà en cours de traitement. Veuillez patienter.',
-                'status'          => 'pending',
-                'entreprise_name' => $e->name,
-            ], 409);
-        }
-
-        // 2. Entreprise validée → essai ou expirée → abonnement payant requis
-        if ($e->status === 'validated') {
-            $abonnementPayant = \App\Models\Abonnement::where('user_id', $user->id)
-                ->where('type', '!=', 'trial')
-                ->where('statut', 'actif')
-                ->where('date_fin', '>', now())
-                ->first();
-
-            if (!$abonnementPayant) {
-                $isInTrial    = $e->isInTrialPeriod();
-                $joursRestants = $e->trial_days_remaining;
-
+        foreach ($existantes as $e) {
+            // 1. Demande en attente → bloquer
+            if ($e->status === 'pending') {
                 return response()->json([
-                    'message'         => $isInTrial
-                        ? "Votre entreprise \"{$e->name}\" est en période d'essai ({$joursRestants} jours restants). Souscrivez un abonnement payant pour créer une nouvelle entreprise."
-                        : "Votre période d'essai pour \"{$e->name}\" est terminée. Souscrivez un abonnement payant pour continuer.",
-                    'status'          => 'validated',
-                    'trial_status'    => $isInTrial ? 'in_trial' : 'expired',
-                    'days_remaining'  => $joursRestants,
+                    'message'         => 'Une demande est déjà en cours de traitement. Veuillez patienter.',
+                    'status'          => 'pending',
                     'entreprise_name' => $e->name,
-                ], 403);
+                ], 409);
             }
+
+            // 2. Entreprise validée → essai ou expirée → abonnement payant requis
+            if ($e->status === 'validated') {
+                $abonnementPayant = \App\Models\Abonnement::where('user_id', $user->id)
+                    ->where('type', '!=', 'trial')
+                    ->where('statut', 'actif')
+                    ->where('date_fin', '>', now())
+                    ->first();
+
+                if (!$abonnementPayant) {
+                    $isInTrial    = $e->isInTrialPeriod();
+                    $joursRestants = $e->trial_days_remaining;
+
+                    return response()->json([
+                        'message'         => $isInTrial
+                            ? "Votre entreprise \"{$e->name}\" est en période d'essai ({$joursRestants} jours restants). Souscrivez un abonnement payant pour créer une nouvelle entreprise."
+                            : "Votre période d'essai pour \"{$e->name}\" est terminée. Souscrivez un abonnement payant pour continuer.",
+                        'status'          => 'validated',
+                        'trial_status'    => $isInTrial ? 'in_trial' : 'expired',
+                        'days_remaining'  => $joursRestants,
+                        'entreprise_name' => $e->name,
+                    ], 403);
+                }
+            }
+            // 3. rejected → autorisé à resoumettre → on continue
         }
-        // 3. rejected → autorisé à resoumettre → on continue
-    }
         
         $validator = Validator::make($request->all(), [
             'name'               => 'required|string|max:255',

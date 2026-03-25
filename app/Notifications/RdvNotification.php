@@ -9,8 +9,7 @@ use NotificationChannels\Fcm\FcmChannel;
 use NotificationChannels\Fcm\FcmMessage;
 use NotificationChannels\Fcm\Resources\Notification as FcmNotification;
 
-class RdvNotification extends Notification
-{
+class RdvNotification extends Notification{
     protected $rdv;
     protected string $action;
     protected ?string $reason;

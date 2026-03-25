@@ -60,8 +60,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('services/mine',    [ServiceController::class, 'mine']);
     Route::post('services',        [ServiceController::class, 'store']);
     Route::put('services/{id}',    [ServiceController::class, 'update']);
+    Route::put('servicesMobile/{id}',    [ServiceController::class, 'updateMobile']);
     Route::delete('services/{id}', [ServiceController::class, 'destroy']);
     Route::get('services/{id}',    [ServiceController::class, 'show']);
+    Route::patch('services/{id}/toggle-visibility', [ServiceController::class, 'toggleVisibility']);
 
     // ── Messagerie ────────────────────────────────────────────────────────
     Route::get('conversations',                                         [MessageController::class, 'myConversations']);
