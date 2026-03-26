@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 
-class QrLoginToken extends Model{
+class QrLoginToken extends Model
+{
     protected $fillable = [
         'user_id',
         'token',
@@ -15,8 +15,8 @@ class QrLoginToken extends Model{
         'expires_at',
         'used_by_device',
         'used_by_ip',
+        'used_sanctum_token',
         'used_at',
-        'new_auth_token',
     ];
 
     protected $casts = [
@@ -31,54 +31,34 @@ class QrLoginToken extends Model{
         return $this->belongsTo(User::class);
     }
 
-    // ── Scopes ────────────────────────────────────────────────────────────
-
-    public function scopePending($query)
-    {
-        return $query->where('status', 'pending')
-                     ->where('expires_at', '>', Carbon::now());
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────
+    // ── Helpers ────────────────────────────────────────────────────────────
 
     /**
-     * Génère un nouveau token unique et non expiré.
+     * Générer un token unique de 64 caractères (hexadécimal).
      */
     public static function generateFor(User $user, int $ttlSeconds = 120): self
     {
-        // Invalider les anciens tokens pending de cet utilisateur
-        static::where('user_id', $user->id)
-              ->where('status', 'pending')
-              ->update(['status' => 'expired']);
+        // Invalider les anciens tokens pending du même utilisateur
+        self::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->update(['status' => 'expired']);
 
-        return static::create([
+        return self::create([
             'user_id'    => $user->id,
-            'token'      => Str::random(64),
+            'token'      => bin2hex(random_bytes(32)), // 64 hex chars
             'status'     => 'pending',
-            'expires_at' => Carbon::now()->addSeconds($ttlSeconds),
+            'expires_at' => now()->addSeconds($ttlSeconds),
         ]);
     }
 
-    /**
-     * Indique si le token est encore utilisable.
-     */
-    public function isValid(): bool
-    {
-        return $this->status === 'pending'
-            && $this->expires_at->isFuture();
-    }
-
-    /**
-     * Marque le token comme utilisé et enregistre les infos de l'appareil.
-     */
-    public function markUsed(string $deviceName, string $ip, string $newAuthToken): void
+    public function markUsed(string $deviceName, string $ip, string $sanctumToken): void
     {
         $this->update([
-            'status'         => 'used',
-            'used_by_device' => $deviceName,
-            'used_by_ip'     => $ip,
-            'used_at'        => Carbon::now(),
-            'new_auth_token' => $newAuthToken,
+            'status'             => 'used',
+            'used_by_device'     => $deviceName,
+            'used_by_ip'         => $ip,
+            'used_sanctum_token' => $sanctumToken,
+            'used_at'            => now(),
         ]);
     }
 }

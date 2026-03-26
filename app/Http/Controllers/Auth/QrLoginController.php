@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Auth\SessionController;
 use App\Models\QrLoginToken;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -11,36 +12,29 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
-/**
- * QrLoginController
- * ─────────────────
- * Gère le cycle de vie complet de la connexion rapide par QR code :
- *
- *  1. POST /user/sessions/share-token          → Génère un QR token (appareil source)
- *  2. GET  /user/sessions/share-token/{t}/status → Polling status (appareil source)
- *  3. POST /auth/qr-login                      → Échange le token contre une session (nouvel appareil)
- *
- * Flux :
- *  Appareil A (connecté) ──génère QR──▶ share_token (valide 2 min)
- *  Appareil B (non connecté) ──scanne──▶ POST /auth/qr-login { share_token }
- *                                       ◀── { token, user } (session Sanctum créée)
- *  Appareil A ──polling──▶ GET /status ◀── { status: "used", device_name: "..." }
- */
-class QrLoginController extends Controller
-{
-    // ══════════════════════════════════════════════════════════════════════
-    //  1. GÉNÉRER UN QR TOKEN
-    //  POST /user/sessions/share-token
-    //  Auth : Sanctum (appareil déjà connecté)
-    // ══════════════════════════════════════════════════════════════════════
+class QrLoginController extends Controller{
+    /** Nombre maximum de sessions simultanées par utilisateur */
+    private const MAX_SESSIONS = 5;
 
-    public function generate(Request $request): JsonResponse
-    {
+ 
+
+    public function generate(Request $request): JsonResponse{
         $user = Auth::user();
 
         $request->validate([
             'expires_in' => 'nullable|integer|min:30|max:300',
         ]);
+
+        // Vérifier la limite de sessions
+        $sessionCount = $user->tokens()->count();
+        if ($sessionCount >= self::MAX_SESSIONS) {
+            return response()->json([
+                'message' => 'Limite de 5 appareils atteinte. Révoquez un appareil pour en ajouter un nouveau.',
+                'code'    => 'MAX_SESSIONS_REACHED',
+                'current' => $sessionCount,
+                'max'     => self::MAX_SESSIONS,
+            ], 422);
+        }
 
         $ttl = (int) ($request->input('expires_in', 120));
 
@@ -68,10 +62,11 @@ class QrLoginController extends Controller
     // ══════════════════════════════════════════════════════════════════════
     //  2. VÉRIFIER LE STATUT D'UN TOKEN (polling)
     //  GET /user/sessions/share-token/{token}/status
-    //  Auth : Sanctum (même appareil qui a généré)
+    //  Auth : Sanctum
     // ══════════════════════════════════════════════════════════════════════
 
-    public function status(Request $request, string $token): JsonResponse {
+    public function status(Request $request, string $token): JsonResponse
+    {
         $user = Auth::user();
 
         $qrToken = QrLoginToken::where('token', $token)
@@ -88,9 +83,9 @@ class QrLoginController extends Controller
         }
 
         $payload = [
-            'status'     => $qrToken->status,            // pending | used | expired
-            'used'       => $qrToken->status === 'used',
-            'expires_at' => $qrToken->expires_at->toIso8601String(),
+            'status'       => $qrToken->status,
+            'used'         => $qrToken->status === 'used',
+            'expires_at'   => $qrToken->expires_at->toIso8601String(),
             'seconds_left' => max(0, (int) Carbon::now()->diffInSeconds($qrToken->expires_at, false)),
         ];
 
@@ -105,7 +100,7 @@ class QrLoginController extends Controller
     // ══════════════════════════════════════════════════════════════════════
     //  3. ÉCHANGER LE TOKEN CONTRE UNE SESSION (scan du QR)
     //  POST /auth/qr-login
-    //  Auth : aucune (nouvel appareil non connecté)
+    //  Auth : aucune
     // ══════════════════════════════════════════════════════════════════════
 
     public function login(Request $request): JsonResponse
@@ -116,12 +111,10 @@ class QrLoginController extends Controller
 
         $shareToken = $request->input('share_token');
 
-        // Chercher le token valide
         $qrToken = QrLoginToken::where('token', $shareToken)
                                ->where('status', 'pending')
                                ->first();
 
-        // Token inexistant
         if (!$qrToken) {
             Log::warning('[QrLogin] Token introuvable ou déjà utilisé', [
                 'token_prefix' => substr($shareToken, 0, 8) . '…',
@@ -133,7 +126,6 @@ class QrLoginController extends Controller
             ], 422);
         }
 
-        // Token expiré
         if ($qrToken->expires_at->isPast()) {
             $qrToken->update(['status' => 'expired']);
             return response()->json([
@@ -145,29 +137,38 @@ class QrLoginController extends Controller
         $user = $qrToken->user;
 
         if (!$user) {
-            Log::error('[QrLogin] Utilisateur introuvable pour le token', ['id' => $qrToken->user_id]);
             return response()->json(['message' => 'Utilisateur introuvable'], 404);
         }
 
+        // Vérifier la limite de sessions
+        $sessionCount = $user->tokens()->count();
+        if ($sessionCount >= self::MAX_SESSIONS) {
+            return response()->json([
+                'message' => 'Limite de 5 appareils atteinte. L\'utilisateur doit révoquer un appareil.',
+                'code'    => 'MAX_SESSIONS_REACHED',
+            ], 422);
+        }
+
         try {
-            // Détecter le nom de l'appareil depuis le User-Agent
             $deviceName = $this->resolveDeviceName($request);
 
-            // Créer un token Sanctum pour le nouvel appareil
             $newSanctumToken = $user->createToken(
-                'qr_login_' . now()->timestamp
+                'qr_login_' . now()->timestamp,
+                ['*'],
+                now()->addDays(90)
             )->plainTextToken;
 
-            // Marquer le QR token comme utilisé
             $qrToken->markUsed($deviceName, $request->ip(), $newSanctumToken);
 
-            // Mettre à jour last_seen_at
             $user->update(['last_seen_at' => now()]);
 
+            // Enregistrer dans l'historique des connexions
+            SessionController::recordLogin($user, $request, true, 'qr');
+
             Log::info('[QrLogin] Connexion réussie', [
-                'user_id'     => $user->id,
-                'device'      => $deviceName,
-                'ip'          => $request->ip(),
+                'user_id' => $user->id,
+                'device'  => $deviceName,
+                'ip'      => $request->ip(),
             ]);
 
             return response()->json([
@@ -175,11 +176,11 @@ class QrLoginController extends Controller
                 'message' => 'Connexion réussie',
                 'token'   => $newSanctumToken,
                 'user'    => [
-                    'id'    => $user->id,
-                    'name'  => $user->name,
-                    'email' => $user->email,
-                    'phone' => $user->phone,
-                    'role'  => $user->role,
+                    'id'                => $user->id,
+                    'name'              => $user->name,
+                    'email'             => $user->email,
+                    'phone'             => $user->phone,
+                    'role'              => $user->role,
                     'profile_photo_url' => $user->profile_photo_url ?? null,
                 ],
             ]);
@@ -194,12 +195,11 @@ class QrLoginController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  4. NETTOYAGE — purge les tokens expirés (commande artisan ou scheduler)
-    //  Appelable aussi via POST /admin/qr-tokens/purge (optionnel)
+    //  4. NETTOYAGE
+    //  POST /admin/qr-tokens/purge
     // ══════════════════════════════════════════════════════════════════════
 
-    public function purgeExpired(): JsonResponse
-    {
+    public function purgeExpired(): JsonResponse {
         $count = QrLoginToken::where('status', 'pending')
                              ->where('expires_at', '<', Carbon::now())
                              ->update(['status' => 'expired']);
@@ -216,37 +216,22 @@ class QrLoginController extends Controller
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    /**
-     * Tente de lire un nom d'appareil depuis les headers ou le User-Agent.
-     * Ordre de priorité :
-     *   1. Header X-Device-Name (envoyé volontairement par l'app Flutter)
-     *   2. User-Agent simplifié
-     */
     private function resolveDeviceName(Request $request): string
     {
-        // Header personnalisé envoyé par l'app mobile
         if ($request->hasHeader('X-Device-Name')) {
             $name = trim($request->header('X-Device-Name'));
-            if (!empty($name)) {
-                return mb_substr($name, 0, 255);
-            }
+            if (!empty($name)) return mb_substr($name, 0, 255);
         }
 
-        // Fallback : analyse du User-Agent
         $ua = $request->userAgent() ?? 'Appareil inconnu';
 
         if (str_contains($ua, 'Android')) {
-            // Extraire le modèle Android ex: "SM-G996B Build/SP1A…"
             if (preg_match('/\(Linux; Android[\d. ]*;([^;)]+)/i', $ua, $m)) {
                 return 'Android • ' . trim($m[1]);
             }
             return 'Android';
         }
-
-        if (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) {
-            return 'iPhone / iPad';
-        }
-
+        if (str_contains($ua, 'iPhone') || str_contains($ua, 'iPad')) return 'iPhone / iPad';
         if (str_contains($ua, 'Windows')) return 'Windows';
         if (str_contains($ua, 'Mac'))     return 'Mac';
         if (str_contains($ua, 'Linux'))   return 'Linux';

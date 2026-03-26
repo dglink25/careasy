@@ -21,18 +21,14 @@ use App\Http\Controllers\BroadcastingController;
 use App\Http\Controllers\API\PushNotificationController;
 use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\ReviewController;
-use App\Http\Controllers\Auth\QrLoginController; // ← NOUVEAU
+use App\Http\Controllers\Auth\QrLoginController;
+use App\Http\Controllers\Auth\SessionController; 
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
 require __DIR__.'/auth.php';
 
-// ════════════════════════════════════════════════════════════════════════════
-//  QR LOGIN — PUBLIC (le nouvel appareil n'est pas encore authentifié)
-// ════════════════════════════════════════════════════════════════════════════
-//
-//  Throttle strict : 10 tentatives / minute par IP pour éviter le brute-force
-//
+
 Route::middleware('throttle:10,1')->group(function () {
     Route::post('/auth/qr-login', [QrLoginController::class, 'login']);
 });
@@ -40,12 +36,8 @@ Route::middleware('throttle:10,1')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
 
     // ── Pusher broadcasting auth ──────────────────────────────────────────
-    Route::post('/broadcasting/auth', function (Illuminate\Http\Request $request) {
-        return Broadcast::auth($request);
-    });
-    Route::post('/pusher/auth', function (Illuminate\Http\Request $request) {
-        return Broadcast::auth($request);
-    });
+    Route::post('/broadcasting/auth', fn(\Illuminate\Http\Request $r) => Broadcast::auth($r));
+    Route::post('/pusher/auth',       fn(\Illuminate\Http\Request $r) => Broadcast::auth($r));
 
     // ── Notifications ─────────────────────────────────────────────────────
     Route::get('/notifications',                [NotificationController::class, 'index']);
@@ -70,7 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('services/mine',    [ServiceController::class, 'mine']);
     Route::post('services',        [ServiceController::class, 'store']);
     Route::put('services/{id}',    [ServiceController::class, 'update']);
-    Route::put('servicesMobile/{id}',    [ServiceController::class, 'updateMobile']);
+    Route::put('servicesMobile/{id}', [ServiceController::class, 'updateMobile']);
     Route::delete('services/{id}', [ServiceController::class, 'destroy']);
     Route::get('services/{id}',    [ServiceController::class, 'show']);
     Route::patch('services/{id}/toggle-visibility', [ServiceController::class, 'toggleVisibility']);
@@ -93,7 +85,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('user/update-online-status',   [MessageController::class, 'updateOnlineStatus']);
     Route::post('/user/online-status',         [MessageController::class, 'updateOnlineStatus']);
     Route::get('user/{userId}/online-status',  [MessageController::class, 'checkOnlineStatus']);
-
     Route::post('/user/fcm-token',             [MessageController::class, 'saveFcmToken']);
 
     // ── Profil utilisateur ────────────────────────────────────────────────
@@ -112,12 +103,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/check-email-availability',         [UserSettingsController::class, 'checkEmailAvailability']);
     Route::post('/check-phone-availability',         [UserSettingsController::class, 'checkPhoneAvailability']);
 
-    // ── QR LOGIN — routes protégées (appareil déjà connecté) ─────────────
+    // ════════════════════════════════════════════════════════════════════
+    //  GESTION DES SESSIONS & SÉCURITÉ
+    // ════════════════════════════════════════════════════════════════════
+
+    // Sessions actives
+    Route::get('/user/sessions',                [SessionController::class, 'index']);
+    Route::delete('/user/sessions/{id}',        [SessionController::class, 'revoke']);
+    Route::post('/user/logout-all',             [SessionController::class, 'logoutAll']);
+
+    // Historique des connexions (30 derniers jours)
+    Route::get('/user/login-history',           [SessionController::class, 'loginHistory']);
+
+    // ── QR LOGIN — routes protégées ───────────────────────────────────────
     Route::post('/user/sessions/share-token',
         [QrLoginController::class, 'generate']);
     Route::get('/user/sessions/share-token/{token}/status',
         [QrLoginController::class, 'status'])
-        ->where('token', '[A-Za-z0-9]{64}'); // Contrainte : exactement 64 chars alphanum
+        ->where('token', '[A-Za-z0-9]{64}');
 
     // ── Rendez-vous ───────────────────────────────────────────────────────
     Route::get('/rendez-vous',                       [RendezVousController::class, 'index']);
@@ -139,19 +142,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/abonnements/actif',               [AbonnementController::class, 'actif']);
     Route::get('/abonnements/{id}',                [AbonnementController::class, 'show']);
 
-    // ── Domaines ──────────────────────────────────────────────────────────
+    // ── Domaines & Recherche ──────────────────────────────────────────────
     Route::get('/domaines', [ServiceController::class, 'domaines']);
+    Route::get('/search',   [ServiceController::class, 'search']);
 
-    // ── Recherche ─────────────────────────────────────────────────────────
-    Route::get('/search', [ServiceController::class, 'search']);
-
-    // ── Reviews ──────────────────────────────────────────────────────────
+    // ── Reviews ───────────────────────────────────────────────────────────
     Route::post('reviews/{rendezVous}',        [ReviewController::class, 'store']);
     Route::post('reviews/{rendezVous}/report', [ReviewController::class, 'report']);
-
 });
 
-// ── PUBLIC — pas d'authentification ──────────────────────────────────────────
+// ── PUBLIC ────────────────────────────────────────────────────────────────────
 Route::get('entreprises',               [EntrepriseController::class, 'index']);
 Route::get('entreprises/domaine/{id}',  [EntrepriseController::class, 'indexByDomaine']);
 Route::get('entreprises/form/data',     [EntrepriseController::class, 'getFormData']);
@@ -174,9 +174,7 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('/plans/update-order',         [AdminPlanController::class, 'updateOrder']);
     Route::patch('/plans/{id}/toggle-status',  [AdminPlanController::class, 'toggleStatus']);
     Route::post('entreprises/{id}/extend-trial', [EntrepriseAdminController::class, 'extendTrial']);
-
-    // ── Nettoyage QR tokens expirés ───────────────────────────────────────
-    Route::post('/qr-tokens/purge', [QrLoginController::class, 'purgeExpired']);
+    Route::post('/qr-tokens/purge',            [QrLoginController::class, 'purgeExpired']);
 });
 
 // ── IA ────────────────────────────────────────────────────────────────────────
