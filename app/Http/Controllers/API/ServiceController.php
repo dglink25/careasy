@@ -367,7 +367,7 @@ class ServiceController extends Controller{
             'promo_end_date'   => 'nullable|date|after:promo_start_date',
             'descriptions'  => 'nullable|string',
             'is_always_open' => 'nullable|boolean',
-            'is_always_open'  => true,
+            'is_visibility'  => 'nullable|boolean',
             'schedule'      => 'nullable|array',
             'schedule.*.is_open' => 'boolean',
             'schedule.*.start' => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i',
@@ -501,7 +501,7 @@ class ServiceController extends Controller{
             return response()->json(['message' => 'Service introuvable ou non autorisé'], 404);
         }
 
-        // Décoder manuellement le JSON si nécessaire (Content-Type: application/json)
+        // Supporte multipart/form-data (avec _method=PUT) ET application/json
         $input = $request->all();
 
         $validator = Validator::make($input, [
@@ -509,13 +509,15 @@ class ServiceController extends Controller{
             'domaine_id'          => 'sometimes|exists:domaines,id',
             'price'               => 'nullable|numeric',
             'price_promo'         => 'nullable|numeric',
-            'is_price_on_request' => 'sometimes|boolean',
-            'has_promo'           => 'sometimes|boolean',
+            'is_price_on_request' => 'sometimes',
+            'has_promo'           => 'sometimes',
             'descriptions'        => 'nullable|string',
-            'is_always_open'      => 'sometimes|boolean',
+            'is_always_open'      => 'sometimes',
             'schedule'            => 'nullable|array',
             'deleted_medias'      => 'nullable|array',
             'deleted_medias.*'    => 'nullable|string',
+            'medias'              => 'nullable|array',
+            'medias.*'            => 'nullable|file|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         if ($validator->fails()) {
@@ -523,41 +525,48 @@ class ServiceController extends Controller{
         }
 
         try {
-            // Gestion des médias supprimés
-            $medias = $service->medias ?? [];
+            // ── Médias : partir des médias existants ──────────────────────────
+            $medias = is_array($service->medias) ? $service->medias : [];
 
-            if (isset($input['deleted_medias']) && is_array($input['deleted_medias'])) {
+            // Supprimer les médias marqués pour suppression
+            if (!empty($input['deleted_medias']) && is_array($input['deleted_medias'])) {
                 foreach ($input['deleted_medias'] as $mediaUrl) {
-                    $this->deleteImageFromCloudinary($mediaUrl);
-                    $medias = array_values(array_filter($medias, fn($m) => $m !== $mediaUrl));
+                    if (!empty($mediaUrl)) {
+                        $this->deleteImageFromCloudinary($mediaUrl);
+                        $medias = array_values(array_filter($medias, fn($m) => $m !== $mediaUrl));
+                    }
                 }
             }
 
-            // Nouveaux médias uploadés (multipart)
+            // Uploader les nouveaux fichiers
             if ($request->hasFile('medias')) {
                 foreach ($request->file('medias') as $file) {
-                    $medias[] = $this->uploadToCloudinary($file, 'services', $user->id);
+                    if ($file && $file->isValid()) {
+                        $medias[] = $this->uploadToCloudinary($file, 'services', $user->id);
+                    }
                 }
             }
 
             $data = [];
 
-            // Champs texte / numériques
+            // ── Champs texte ──────────────────────────────────────────────────
             if (isset($input['name']))         $data['name']         = $input['name'];
             if (isset($input['descriptions'])) $data['descriptions'] = $input['descriptions'];
             if (isset($input['domaine_id']))   $data['domaine_id']   = (int) $input['domaine_id'];
 
-            // Booléens — lire correctement depuis JSON
+            // ── Booléens (compatibles multipart '1'/'0' ET JSON true/false) ──
+            $toBool = fn($val) => filter_var($val, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
             $isPriceOnRequest = isset($input['is_price_on_request'])
-                ? filter_var($input['is_price_on_request'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $service->is_price_on_request
+                ? $toBool($input['is_price_on_request'])
                 : $service->is_price_on_request;
 
             $hasPromo = isset($input['has_promo'])
-                ? filter_var($input['has_promo'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $service->has_promo
+                ? $toBool($input['has_promo'])
                 : $service->has_promo;
 
             $isAlwaysOpen = isset($input['is_always_open'])
-                ? filter_var($input['is_always_open'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $service->is_always_open
+                ? $toBool($input['is_always_open'])
                 : $service->is_always_open;
 
             $data['is_price_on_request'] = $isPriceOnRequest;
@@ -567,11 +576,13 @@ class ServiceController extends Controller{
                 $data['price_promo'] = null;
                 $data['has_promo']   = false;
             } else {
-                if (array_key_exists('price', $input))       $data['price']       = $input['price'];
-                if (array_key_exists('price_promo', $input)) $data['price_promo'] = $input['price_promo'];
+                if (array_key_exists('price', $input))
+                    $data['price'] = $input['price'] !== '' ? (float) $input['price'] : null;
+                if (array_key_exists('price_promo', $input))
+                    $data['price_promo'] = $input['price_promo'] !== '' ? (float) $input['price_promo'] : null;
                 $data['has_promo'] = $hasPromo;
 
-                // Valider cohérence prix promo
+                // Cohérence prix promo
                 $finalPrice      = $data['price']       ?? $service->price;
                 $finalPromoPrice = $data['price_promo'] ?? $service->price_promo;
                 if ($hasPromo && $finalPromoPrice !== null && $finalPrice !== null
@@ -582,9 +593,10 @@ class ServiceController extends Controller{
                 }
             }
 
+            // ── Médias mis à jour ─────────────────────────────────────────────
             $data['medias'] = $medias;
 
-            // Gestion des horaires
+            // ── Horaires ──────────────────────────────────────────────────────
             $data['is_always_open'] = $isAlwaysOpen;
 
             if ($isAlwaysOpen) {
@@ -593,12 +605,19 @@ class ServiceController extends Controller{
                 $data['start_time']  = null;
                 $data['end_time']    = null;
             } elseif (isset($input['schedule']) && is_array($input['schedule'])) {
-                $data['schedule']    = $input['schedule'];
+                // Normaliser les valeurs is_open (multipart envoie '1'/'0')
+                $schedule = [];
+                foreach ($input['schedule'] as $day => $dayData) {
+                    $schedule[$day] = [
+                        'is_open' => filter_var($dayData['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                        'start'   => $dayData['start'] ?? null,
+                        'end'     => $dayData['end']   ?? null,
+                    ];
+                }
+                $data['schedule'] = $schedule;
                 $data['is_open_24h'] = false;
 
-                $firstOpenDay = collect($input['schedule'])->first(function ($day) {
-                    return filter_var($day['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN);
-                });
+                $firstOpenDay = collect($schedule)->first(fn($d) => $d['is_open'] === true);
                 if ($firstOpenDay) {
                     $data['start_time'] = $firstOpenDay['start'] ?? null;
                     $data['end_time']   = $firstOpenDay['end']   ?? null;
@@ -615,7 +634,7 @@ class ServiceController extends Controller{
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Erreur update service:', [
+            Log::error('Erreur updateMobile service:', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
