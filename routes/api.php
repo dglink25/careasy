@@ -21,10 +21,21 @@ use App\Http\Controllers\BroadcastingController;
 use App\Http\Controllers\API\PushNotificationController;
 use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\ReviewController;
+use App\Http\Controllers\Auth\QrLoginController; // ← NOUVEAU
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
 require __DIR__.'/auth.php';
+
+// ════════════════════════════════════════════════════════════════════════════
+//  QR LOGIN — PUBLIC (le nouvel appareil n'est pas encore authentifié)
+// ════════════════════════════════════════════════════════════════════════════
+//
+//  Throttle strict : 10 tentatives / minute par IP pour éviter le brute-force
+//
+Route::middleware('throttle:10,1')->group(function () {
+    Route::post('/auth/qr-login', [QrLoginController::class, 'login']);
+});
 
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -32,7 +43,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/broadcasting/auth', function (Illuminate\Http\Request $request) {
         return Broadcast::auth($request);
     });
-    // Alias pour compatibilité Pusher
     Route::post('/pusher/auth', function (Illuminate\Http\Request $request) {
         return Broadcast::auth($request);
     });
@@ -102,6 +112,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/check-email-availability',         [UserSettingsController::class, 'checkEmailAvailability']);
     Route::post('/check-phone-availability',         [UserSettingsController::class, 'checkPhoneAvailability']);
 
+    // ── QR LOGIN — routes protégées (appareil déjà connecté) ─────────────
+    Route::post('/user/sessions/share-token',
+        [QrLoginController::class, 'generate']);
+    Route::get('/user/sessions/share-token/{token}/status',
+        [QrLoginController::class, 'status'])
+        ->where('token', '[A-Za-z0-9]{64}'); // Contrainte : exactement 64 chars alphanum
+
+    // ── Rendez-vous ───────────────────────────────────────────────────────
     Route::get('/rendez-vous',                       [RendezVousController::class, 'index']);
     Route::get('/rendez-vous/calendar',              [RendezVousController::class, 'calendar']);
     Route::post('/rendez-vous',                      [RendezVousController::class, 'store']);
@@ -111,6 +129,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/rendez-vous/{id}/complete',        [RendezVousController::class, 'complete']);
     Route::get('/services/{serviceId}/slots/{date}', [RendezVousController::class, 'getAvailableSlots']);
 
+    // ── Plans & Paiements ─────────────────────────────────────────────────
     Route::get('/plans',                           [PlanController::class, 'index']);
     Route::get('/plans/compare/all',               [PlanController::class, 'compare']);
     Route::get('/plans/{id}',                      [PlanController::class, 'show']);
@@ -126,8 +145,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // ── Recherche ─────────────────────────────────────────────────────────
     Route::get('/search', [ServiceController::class, 'search']);
 
-    // ── Reviews ─────────────────────────────────────────────────────────
-    Route::post('reviews/{rendezVous}', [ReviewController::class, 'store']);
+    // ── Reviews ──────────────────────────────────────────────────────────
+    Route::post('reviews/{rendezVous}',        [ReviewController::class, 'store']);
     Route::post('reviews/{rendezVous}/report', [ReviewController::class, 'report']);
 
 });
@@ -155,6 +174,9 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::post('/plans/update-order',         [AdminPlanController::class, 'updateOrder']);
     Route::patch('/plans/{id}/toggle-status',  [AdminPlanController::class, 'toggleStatus']);
     Route::post('entreprises/{id}/extend-trial', [EntrepriseAdminController::class, 'extendTrial']);
+
+    // ── Nettoyage QR tokens expirés ───────────────────────────────────────
+    Route::post('/qr-tokens/purge', [QrLoginController::class, 'purgeExpired']);
 });
 
 // ── IA ────────────────────────────────────────────────────────────────────────
