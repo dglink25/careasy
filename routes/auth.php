@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\OtpPasswordResetController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
@@ -36,8 +37,25 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->middleware('auth:sanctum')
     ->name('logout');
 
-Route::post('/check-email', [AuthenticatedSessionController::class, 'checkEmail']);
-Route::post('/check-phone', [AuthenticatedSessionController::class, 'checkPhone']);
-
 Route::post('/check-email', [RegisteredUserController::class, 'checkEmail']);
 Route::post('/check-phone', [RegisteredUserController::class, 'checkPhone']);
+
+
+Route::prefix('forgot-password')->middleware(['guest', 'throttle:5,1'])->group(function () {
+
+    // Étape 1 : Envoyer le code OTP (email ou SMS selon identifiant)
+    Route::post('/otp',        [OtpPasswordResetController::class, 'sendOtp'])
+         ->name('otp.send');
+
+    // Étape 1b : Renvoyer le code
+    Route::post('/otp/resend', [OtpPasswordResetController::class, 'resendOtp'])
+         ->name('otp.resend');
+
+    // Étape 2 : Vérifier le code OTP
+    Route::post('/otp/verify', [OtpPasswordResetController::class, 'verifyOtp'])
+         ->name('otp.verify');
+
+    // Étape 3 : Réinitialiser le mot de passe
+    Route::post('/otp/reset',  [OtpPasswordResetController::class, 'resetPassword'])
+         ->name('otp.reset');
+});
