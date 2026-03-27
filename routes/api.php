@@ -24,6 +24,8 @@ use App\Http\Controllers\API\ReviewController;
 use App\Http\Controllers\Auth\QrLoginController;
 use App\Http\Controllers\Auth\SessionController; 
 
+use App\Http\Controllers\API\CarAIController;
+
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
 require __DIR__.'/auth.php';
@@ -207,4 +209,28 @@ Route::post('/google/callback/mobile', [GoogleAuthController::class, 'handleGoog
 Route::prefix('auth')->group(function () {
     Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])
         ->name('api.google.redirect');
+});
+
+
+Route::prefix('carai')->middleware('auth:sanctum')->group(function () {
+
+    // Démarrer ou retrouver la conv CarAI de l'utilisateur
+    Route::post('/conversations/start', [CarAIController::class, 'startConversation']);
+
+    // Envoyer un message à CarAI
+    Route::post('/chat', [CarAIController::class, 'chat']);
+
+    // Historique d'une conversation
+    Route::get('/conversations/{id}/messages', [CarAIController::class, 'history']);
+
+    // Effacer l'historique (RGPD)
+    Route::delete('/conversations/{id}', [CarAIController::class, 'clearHistory']);
+
+});
+
+// ── Public (pas besoin de token pour la recherche rapide) ─────────────────────
+
+Route::prefix('carai')->group(function () {
+    // Recherche de services proches (utilisée par l'écran d'accueil)
+    Route::get('/nearby', [CarAIController::class, 'nearby']);
 });
