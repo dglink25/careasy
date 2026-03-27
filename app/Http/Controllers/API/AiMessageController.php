@@ -1,12 +1,12 @@
 <?php
+
 namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class AiMessageController extends Controller
-{
+class AiMessageController extends Controller{
     public function store(Request $request)
     {
         $validated = $request->validate([
