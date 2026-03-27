@@ -234,3 +234,4 @@ Route::prefix('carai')->group(function () {
     // Recherche de services proches (utilisée par l'écran d'accueil)
     Route::get('/nearby', [CarAIController::class, 'nearby']);
 });
+
