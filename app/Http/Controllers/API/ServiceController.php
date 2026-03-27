@@ -195,7 +195,7 @@ class ServiceController extends Controller{
             'is_always_open' => 'nullable|boolean',
             'schedule'      => 'nullable|array',
             'schedule.*.is_open' => 'boolean',
-            'is_always_open'  => true,
+            'is_always_open' => 'nullable|boolean',
             'schedule.*.start' => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i',
             'schedule.*.end'   => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i|after:schedule.*.start',
             'medias.*'      => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
