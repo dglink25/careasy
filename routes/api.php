@@ -200,5 +200,11 @@ Route::get('/paiements/success', [PaiementController::class, 'success'])->name('
 Route::get('/paiements/cancel',  [PaiementController::class, 'cancel'])->name('paiements.cancel');
 
 // ── Google Auth ───────────────────────────────────────────────────────────────
-Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirect');
+Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirectMobile');
 Route::post('/google/callback/mobile', [GoogleAuthController::class, 'handleGoogleCallbackMobile']);
+
+
+Route::prefix('auth')->group(function () {
+    Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])
+        ->name('api.google.redirect');
+});
