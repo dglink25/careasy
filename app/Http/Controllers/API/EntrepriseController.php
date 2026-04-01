@@ -240,13 +240,21 @@ class EntrepriseController extends Controller
         DB::beginTransaction();
 
         // 1. Création entreprise
-        try {
+       try {
+            Log::info('DATA AVANT INSERT', $data);
+
             $entreprise = Entreprise::create($data);
-        } catch (\Throwable $e) {
-            Log::error('Erreur create entreprise', [
-                'error' => $e->getMessage(),
-                'data' => $data
+
+            Log::info('ENTREPRISE CRÉÉE', ['id' => $entreprise->id]);
+
+        } 
+        catch (\Throwable $e) {
+            Log::error('ERREUR INSERT ENTREPRISE', [
+                'message' => $e->getMessage(),
+                'data' => $data,
+                'trace' => $e->getTraceAsString()
             ]);
+
             throw $e;
         }
 
