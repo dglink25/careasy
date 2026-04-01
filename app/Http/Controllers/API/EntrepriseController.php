@@ -159,7 +159,7 @@ class EntrepriseController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Validation échouée',
+                'message' => 'Validation échouée'.$validator->errors(),
                 'errors' => $validator->errors()
             ], 422);
         }
