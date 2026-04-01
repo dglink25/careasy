@@ -148,9 +148,9 @@ class EntrepriseController extends Controller
         return response()->json($entreprises);
     }
 
- public function store(Request $request)
+public function store(Request $request)
 {
-    Log::info('Données reçues:', $request->all());
+    Log::info('Données reçues', $request->all());
 
     $user = Auth::user();
 
@@ -181,7 +181,7 @@ class EntrepriseController extends Controller
         ], 422);
     }
 
-    // ───────────────── UPLOAD (hors transaction) ─────────────────
+    // ───────────────── UPLOAD CLOUDINARY ─────────────────
     $uploadedFiles = [];
 
     try {
@@ -191,38 +191,44 @@ class EntrepriseController extends Controller
             'certificate_file' => ['documents', 'certificates'],
         ] as $field => $path) {
 
-            if ($request->hasFile($field)) {
-                $uploadedFiles[$field] = $this->uploadToCloudinary(
-                    $request->file($field),
-                    $path[0],
-                    $path[1]
-                );
-            } else {
-                throw new \Exception("Fichier obligatoire manquant: {$field}");
+            if (!$request->hasFile($field)) {
+                throw new \Exception("Fichier manquant: {$field}");
             }
+
+            $uploadedFiles[$field] = $this->uploadToCloudinary(
+                $request->file($field),
+                $path[0],
+                $path[1]
+            );
         }
 
     } catch (\Throwable $e) {
-        Log::error('Erreur upload fichiers', ['error' => $e->getMessage()]);
-        return response()->json([
-            'message' => 'Erreur upload fichiers',
+        Log::error('Erreur upload Cloudinary', [
             'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'message' => 'Erreur lors de l’upload des fichiers',
+            'error'   => $e->getMessage()
         ], 500);
     }
 
     // ───────────────── PRÉPARATION DATA ─────────────────
     $data = $request->except(['domaine_ids']);
+
     $data['prestataire_id'] = $user->id;
     $data['status'] = 'pending';
+    $data['latitude'] = (float) $request->latitude;
+    $data['longitude'] = (float) $request->longitude;
 
     foreach ($uploadedFiles as $key => $url) {
         $data[$key] = $url;
     }
 
-    // Google Maps (hors transaction)
+    // Google Maps (non bloquant)
     try {
         $geo = Http::timeout(5)->get("https://maps.googleapis.com/maps/api/geocode/json", [
-            'latlng' => "{$request->latitude},{$request->longitude}",
+            'latlng' => "{$data['latitude']},{$data['longitude']}",
             'key' => env('GOOGLE_MAPS_KEY')
         ]);
 
@@ -231,76 +237,85 @@ class EntrepriseController extends Controller
         }
 
     } catch (\Throwable $e) {
-        Log::warning('Erreur Google Maps', ['error' => $e->getMessage()]);
+        Log::warning('Erreur Google Maps', [
+            'error' => $e->getMessage()
+        ]);
     }
 
-    // ───────────────── TRANSACTION COURTE ─────────────────
+    // ───────────────── 1. INSERT ENTREPRISE (SANS TRANSACTION) ─────────────────
     try {
 
-        DB::beginTransaction();
+        Log::info('Insertion entreprise', $data);
 
-        // 1. Création entreprise
-       try {
-            Log::info('DATA AVANT INSERT', $data);
+        $entreprise = Entreprise::create($data);
 
-            $entreprise = Entreprise::create($data);
-
-            Log::info('ENTREPRISE CRÉÉE', ['id' => $entreprise->id]);
-
-        } 
-        catch (\Throwable $e) {
-            Log::error('ERREUR INSERT ENTREPRISE', [
-                'message' => $e->getMessage(),
-                'data' => $data,
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            throw $e;
-        }
-
-        // 2. Sync domaines (SAFE)
-        try {
-            $ids = array_filter($request->domaine_ids);
-
-            if (!empty($ids)) {
-                $entreprise->domaines()->sync($ids);
-            }
-
-        } catch (\Throwable $e) {
-            Log::error('Erreur sync domaines', [
-                'ids' => $request->domaine_ids,
-                'error' => $e->getMessage()
-            ]);
-            throw $e;
-        }
-
-        DB::commit();
+        Log::info('Entreprise créée', [
+            'id' => $entreprise->id
+        ]);
 
     } catch (\Throwable $e) {
-        DB::rollBack();
 
-        Log::error('Transaction échouée', [
-            'error' => $e->getMessage()
+        Log::error('Erreur création entreprise', [
+            'error' => $e->getMessage(),
+            'data'  => $data
         ]);
 
         return response()->json([
-            'message' => 'Erreur base de données',
-            'error' => $e->getMessage()
+            'message' => 'Erreur lors de la création de l’entreprise',
+            'error'   => $e->getMessage()
         ], 500);
     }
 
-    // ───────────────── POST-TRAITEMENT ─────────────────
+    // ───────────────── 2. SYNC DOMAINES (SÉCURISÉ) ─────────────────
     try {
-        $admins = User::where('role', 'admin')->get();
 
-        foreach ($admins as $admin) {
-            $admin->notify(new NewEntrepriseCreatedNotification($entreprise, $user));
+        $ids = array_map('intval', $request->domaine_ids);
+
+        // Double sécurité (évite FK crash)
+        $validIds = \App\Models\Domaine::whereIn('id', $ids)
+                        ->pluck('id')
+                        ->toArray();
+
+        if (!empty($validIds)) {
+            $entreprise->domaines()->sync($validIds);
         }
 
     } catch (\Throwable $e) {
-        Log::warning('Erreur notifications', ['error' => $e->getMessage()]);
+
+        Log::error('Erreur liaison domaines', [
+            'entreprise_id' => $entreprise->id,
+            'ids' => $request->domaine_ids,
+            'error' => $e->getMessage()
+        ]);
+
+        // ⚠️ ON NE CASSE PAS LA CRÉATION
     }
 
+    // ───────────────── 3. NOTIFICATIONS (ASYNC SAFE) ─────────────────
+    try {
+
+        $admins = User::where('role', 'admin')->get();
+
+        foreach ($admins as $admin) {
+            try {
+                $admin->notify(
+                    new NewEntrepriseCreatedNotification($entreprise, $user)
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Erreur notification admin', [
+                    'admin_id' => $admin->id,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+    } catch (\Throwable $e) {
+        Log::warning('Erreur notifications globales', [
+            'error' => $e->getMessage()
+        ]);
+    }
+
+    // ───────────────── RESPONSE ─────────────────
     return response()->json([
         'message' => 'Entreprise créée avec succès',
         'entreprise' => $entreprise->load('domaines')
