@@ -672,41 +672,17 @@ class ServiceController extends Controller{
         }
     }
 
-    private function uploadToCloudinary($file, $folder, $subfolder = null){
+    private function uploadToCloudinary($file, $folder, $subfolder = null) {
+        if (!$file || !$file->isValid()) {
+            throw new \Exception('Fichier invalide pour upload');
+        }
+
+        $folderPath = $subfolder
+            ? "{$folder}/{$subfolder}"
+            : $folder;
+
         try {
-           
-            if (!$file || !$file->isValid()) {
-                throw new \Exception('Fichier invalide ou absent');
-            }
-
-
-            if (
-                !config('cloudinary.cloud_name') ||
-                !config('cloudinary.api_key') ||
-                !config('cloudinary.api_secret')
-            ) {
-                throw new \Exception('Configuration Cloudinary manquante');
-            }
-
-            $config = new Configuration([
-                'cloud' => [
-                    'cloud_name' => config('cloudinary.cloud_name'),
-                    'api_key'    => config('cloudinary.api_key'),
-                    'api_secret' => config('cloudinary.api_secret'),
-                ],
-                'url' => [
-                    'secure' => true,
-                ],
-            ]);
-
-            $uploadApi = new UploadApi($config);
-
-            $folderPath = $subfolder
-                ? "entreprises/{$folder}/{$subfolder}"
-                : "entreprises/{$folder}";
-
-
-            $result = $uploadApi->upload(
+            $result = (new UploadApi())->upload(
                 $file->getRealPath(),
                 [
                     'folder' => $folderPath,
@@ -714,27 +690,11 @@ class ServiceController extends Controller{
                 ]
             );
 
-
-            if (!isset($result['secure_url'])) {
-                throw new \Exception('Upload réussi mais URL manquante');
-            }
-
-            return $result['secure_url'];
-
+            return $result['secure_url'] ?? null;
         } 
-        catch (\Cloudinary\Api\Exception\ApiError $e) {
-            Log::error('Cloudinary API Error', [
-                'message' => $e->getMessage(),
-            ]);
-
-            throw new \Exception('Erreur lors de l’upload de l’image (Cloudinary)');
-
-        } catch (\Exception $e) {
-            Log::error('Upload Error', [
-                'message' => $e->getMessage(),
-            ]);
-
-            throw new \Exception($e->getMessage());
+        catch (\Exception $e) {
+            Log::error('Erreur upload Cloudinary:', ['error' => $e->getMessage()]);
+            throw new \Exception('Impossible d\'uploader le fichier sur Cloudinary');
         }
     }
 

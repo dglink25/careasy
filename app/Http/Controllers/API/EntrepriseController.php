@@ -253,31 +253,30 @@ class EntrepriseController extends Controller
         }
     }
 
-    private function uploadToCloudinary($file, $folder, $subfolder = null){
-        \Cloudinary\Configuration\Configuration::instance([
-            'cloud' => [
-                'cloud_name' => config('cloudinary.cloud_name'),
-                'api_key'    => config('cloudinary.api_key'),
-                'api_secret' => config('cloudinary.api_secret'),
-            ],
-            'url' => [
-                'secure' => true
-            ]
-        ]);
+    private function uploadToCloudinary($file, $folder, $subfolder = null) {
+        if (!$file || !$file->isValid()) {
+            throw new \Exception('Fichier invalide pour upload');
+        }
 
         $folderPath = $subfolder
-            ? "entreprises/{$folder}/{$subfolder}"
-            : "entreprises/{$folder}";
+            ? "{$folder}/{$subfolder}"
+            : $folder;
 
-        $result = (new \Cloudinary\Api\Upload\UploadApi())->upload(
-            $file->getRealPath(),
-            [
-                'folder' => $folderPath,
-                'resource_type' => 'auto',
-            ]
-        );
+        try {
+            $result = (new UploadApi())->upload(
+                $file->getRealPath(),
+                [
+                    'folder' => $folderPath,
+                    'resource_type' => 'auto',
+                ]
+            );
 
-        return $result['secure_url'];
+            return $result['secure_url'] ?? null;
+        } 
+        catch (\Exception $e) {
+            Log::error('Erreur upload Cloudinary:', ['error' => $e->getMessage()]);
+            throw new \Exception('Impossible d\'uploader le fichier sur Cloudinary');
+        }
     }
 
     public function completeProfile(Request $request, $id){
