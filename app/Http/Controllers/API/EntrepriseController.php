@@ -189,7 +189,6 @@ class EntrepriseController extends Controller
                     ], 403);
                 }
             }
-            // 3. rejected → autorisé à resoumettre → on continue
         }
         
         $validator = Validator::make($request->all(), [
@@ -221,15 +220,88 @@ class EntrepriseController extends Controller
             ], 422);
         }
 
-        DB::beginTransaction();
+        // D'abord, faire les uploads Cloudinary en dehors de la transaction
+        $uploadedFiles = [];
+        $uploadErrors = [];
+        
+        try {
+            // Upload des fichiers (en dehors de la transaction)
+            if ($request->hasFile('logo')) {
+                try {
+                    $uploadedFiles['logo'] = $this->uploadToCloudinary($request->file('logo'), 'logos');
+                } catch (\Exception $e) {
+                    $uploadErrors['logo'] = $e->getMessage();
+                    Log::error('Erreur upload logo:', ['error' => $e->getMessage()]);
+                }
+            }
 
+            if ($request->hasFile('image_boutique')) {
+                try {
+                    $uploadedFiles['image_boutique'] = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
+                } catch (\Exception $e) {
+                    $uploadErrors['image_boutique'] = $e->getMessage();
+                    Log::error('Erreur upload image boutique:', ['error' => $e->getMessage()]);
+                }
+            }
+
+            if ($request->hasFile('ifu_file')) {
+                try {
+                    $uploadedFiles['ifu_file'] = $this->uploadToCloudinary($request->file('ifu_file'), 'documents', 'ifu');
+                } catch (\Exception $e) {
+                    $uploadErrors['ifu_file'] = $e->getMessage();
+                    Log::error('Erreur upload IFU:', ['error' => $e->getMessage()]);
+                }
+            }
+
+            if ($request->hasFile('rccm_file')) {
+                try {
+                    $uploadedFiles['rccm_file'] = $this->uploadToCloudinary($request->file('rccm_file'), 'documents', 'rccm');
+                } catch (\Exception $e) {
+                    $uploadErrors['rccm_file'] = $e->getMessage();
+                    Log::error('Erreur upload RCCM:', ['error' => $e->getMessage()]);
+                }
+            }
+
+            if ($request->hasFile('certificate_file')) {
+                try {
+                    $uploadedFiles['certificate_file'] = $this->uploadToCloudinary($request->file('certificate_file'), 'documents', 'certificates');
+                } catch (\Exception $e) {
+                    $uploadErrors['certificate_file'] = $e->getMessage();
+                    Log::error('Erreur upload certificat:', ['error' => $e->getMessage()]);
+                }
+            }
+
+            // Vérifier les fichiers obligatoires
+            $requiredFiles = ['ifu_file', 'rccm_file', 'certificate_file'];
+            foreach ($requiredFiles as $requiredFile) {
+                if ($request->hasFile($requiredFile) && !isset($uploadedFiles[$requiredFile])) {
+                    throw new \Exception("Échec de l'upload du fichier obligatoire: {$requiredFile}");
+                }
+            }
+
+        } catch (\Exception $e) {
+            // Si un fichier obligatoire échoue, on ne continue pas
+            return response()->json([
+                'message' => 'Échec de l\'upload des fichiers obligatoires',
+                'error' => $e->getMessage(),
+                'details' => $uploadErrors
+            ], 500);
+        }
+
+        // Maintenant, on fait la création en base de données dans une transaction
+        DB::beginTransaction();
+        
         try {
             $data = $request->except(['domaine_ids']);
             $data['prestataire_id'] = Auth::id();
             $data['status'] = 'pending';
-
-            $data['latitude']  = $request->latitude;
+            $data['latitude'] = $request->latitude;
             $data['longitude'] = $request->longitude;
+            
+            // Ajouter les URLs des fichiers uploadés
+            foreach ($uploadedFiles as $key => $url) {
+                $data[$key] = $url;
+            }
 
             // Conversion Google Maps en adresse exacte
             try {
@@ -243,80 +315,19 @@ class EntrepriseController extends Controller
                 }
             } catch (\Exception $e) {
                 Log::warning('Erreur géocodage Google Maps:', ['error' => $e->getMessage()]);
-                // On continue sans l'adresse formatée
             }
 
-            // Upload des fichiers avec gestion d'erreur individuelle
-            $uploadErrors = [];
-            
-            if ($request->hasFile('logo')) {
-                try {
-                    $data['logo'] = $this->uploadToCloudinary($request->file('logo'), 'logos');
-                } catch (\Exception $e) {
-                    $uploadErrors['logo'] = $e->getMessage();
-                    Log::error('Erreur upload logo:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            if ($request->hasFile('image_boutique')) {
-                try {
-                    $data['image_boutique'] = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
-                } catch (\Exception $e) {
-                    $uploadErrors['image_boutique'] = $e->getMessage();
-                    Log::error('Erreur upload image boutique:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            if ($request->hasFile('ifu_file')) {
-                try {
-                    $data['ifu_file'] = $this->uploadToCloudinary($request->file('ifu_file'), 'documents', 'ifu');
-                } catch (\Exception $e) {
-                    $uploadErrors['ifu_file'] = $e->getMessage();
-                    Log::error('Erreur upload IFU:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            if ($request->hasFile('rccm_file')) {
-                try {
-                    $data['rccm_file'] = $this->uploadToCloudinary($request->file('rccm_file'), 'documents', 'rccm');
-                } catch (\Exception $e) {
-                    $uploadErrors['rccm_file'] = $e->getMessage();
-                    Log::error('Erreur upload RCCM:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            if ($request->hasFile('certificate_file')) {
-                try {
-                    $data['certificate_file'] = $this->uploadToCloudinary($request->file('certificate_file'), 'documents', 'certificates');
-                } catch (\Exception $e) {
-                    $uploadErrors['certificate_file'] = $e->getMessage();
-                    Log::error('Erreur upload certificat:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            // Vérifier si des fichiers obligatoires ont échoué
-            $requiredFiles = ['ifu_file', 'rccm_file', 'certificate_file'];
-            $missingRequired = [];
-            
-            foreach ($requiredFiles as $requiredFile) {
-                if ($request->hasFile($requiredFile) && !isset($data[$requiredFile])) {
-                    $missingRequired[] = $requiredFile;
-                }
-            }
-            
-            if (!empty($missingRequired)) {
-                DB::rollBack();
-                return response()->json([
-                    'message' => 'Échec de l\'upload des fichiers obligatoires',
-                    'errors' => $uploadErrors,
-                    'missing_files' => $missingRequired
-                ], 500);
-            }
-
+            // Créer l'entreprise
             $entreprise = Entreprise::create($data);
-            $entreprise->domaines()->sync($request->domaine_ids);
+            
+            // Synchroniser les domaines (c'est ici que l'erreur se produisait)
+            if (!empty($request->domaine_ids)) {
+                $entreprise->domaines()->sync($request->domaine_ids);
+            }
 
-            // Envoi des notifications aux admins
+            DB::commit();
+
+            // Envoi des notifications aux admins (en dehors de la transaction)
             try {
                 $admins = User::where('role', 'admin')->get();
                 
@@ -342,12 +353,9 @@ class EntrepriseController extends Controller
                     'error' => $e->getMessage(),
                     'entreprise_id' => $entreprise->id
                 ]);
-                // On continue car l'entreprise est déjà créée
             }
-           
+        
             $entreprise->load('domaines', 'prestataire');
-
-            DB::commit();
 
             $responseMessage = 'Entreprise créée et envoyée en validation';
             if (!empty($uploadErrors)) {
@@ -360,16 +368,15 @@ class EntrepriseController extends Controller
                 'upload_warnings' => !empty($uploadErrors) ? $uploadErrors : null
             ], 201);
 
-        } 
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erreur création entreprise:', [
+            Log::error('Erreur création entreprise (base de données):', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
             return response()->json([
-                'message' => 'Erreur lors de la création de l\'entreprise: ' . $e->getMessage(),
+                'message' => 'Erreur lors de la création de l\'entreprise dans la base de données: ' . $e->getMessage(),
                 'error' => $e->getMessage(),
                 'details' => config('app.debug') ? $e->getTraceAsString() : null
             ], 500);
