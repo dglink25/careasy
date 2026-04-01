@@ -369,7 +369,7 @@ class EntrepriseController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Erreur lors de la création de l\'entreprise',
+                'message' => 'Erreur lors de la création de l\'entreprise: ' . $e->getMessage(),
                 'error' => $e->getMessage(),
                 'details' => config('app.debug') ? $e->getTraceAsString() : null
             ], 500);
