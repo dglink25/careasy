@@ -119,126 +119,113 @@ class EntrepriseController extends Controller{
         return response()->json($entreprises);
     }
 
-  public function store(Request $request)
+public function store(Request $request)
 {
     Log::info('START STORE');
 
     $user = Auth::user();
 
+    // -----------------------------
+    // VALIDATION
+    // -----------------------------
+    $validator = Validator::make($request->all(), [
+        'name' => 'required|string|max:255',
+        'domaine_ids' => 'required|array|min:1',
+        'domaine_ids.*' => 'integer|exists:domaines,id',
+
+        'ifu_number' => 'required|string',
+        'rccm_number' => 'required|string',
+        'certificate_number' => 'required|string',
+
+        'pdg_full_name' => 'required|string',
+        'pdg_full_profession' => 'required|string',
+        'role_user' => 'required|string',
+
+        'whatsapp_phone' => 'required|string',
+        'call_phone' => 'required|string',
+
+        'latitude' => 'required|numeric|between:-90,90',
+        'longitude' => 'required|numeric|between:-180,180',
+
+        'ifu_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        'rccm_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        'certificate_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+
+        'logo' => 'nullable|image|max:2048',
+        'image_boutique' => 'nullable|image|max:2048',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['error' => $validator->errors()], 422);
+    }
+
+    // -----------------------------
+    // UPLOAD FILES TO CLOUDINARY
+    // -----------------------------
+    $uploadedFiles = [];
+    $filesToUpload = [
+        'ifu_file' => ['folder' => 'documents', 'subfolder' => 'ifu'],
+        'rccm_file' => ['folder' => 'documents', 'subfolder' => 'rccm'],
+        'certificate_file' => ['folder' => 'documents', 'subfolder' => 'certificates'],
+        'logo' => ['folder' => 'logos', 'subfolder' => null],
+        'image_boutique' => ['folder' => 'boutiques', 'subfolder' => null],
+    ];
+
+    foreach ($filesToUpload as $key => $config) {
+        if ($request->hasFile($key)) {
+            try {
+                $uploadedFiles[$key] = $this->uploadToCloudinary(
+                    $request->file($key),
+                    $config['folder'],
+                    $config['subfolder']
+                );
+            } catch (\Throwable $e) {
+                Log::error("UPLOAD ERROR: {$key}", ['error' => $e->getMessage()]);
+                return response()->json(['error' => "Upload failed for {$key}"], 500);
+            }
+        }
+    }
+
+    // -----------------------------
+    // PREPARE DATA FOR INSERT
+    // -----------------------------
+    $data = $request->except(['domaine_ids', 'logo', 'image_boutique', 'ifu_file', 'rccm_file', 'certificate_file']);
+    $data['prestataire_id'] = $user->id;
+    $data['status'] = 'pending';
+
+    foreach ($uploadedFiles as $key => $url) {
+        $data[$key] = $url;
+    }
+
+    // -----------------------------
+    // BEGIN TRANSACTION
+    // -----------------------------
+    DB::beginTransaction();
+
     try {
-        // -----------------------------
-        // VALIDATION
-        // -----------------------------
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'domaine_ids' => 'required|array|min:1',
-            'domaine_ids.*' => 'integer|exists:domaines,id',
+        Log::info('INSERT ENTREPRISE', $data);
+        $entreprise = Entreprise::create($data);
 
-            'ifu_number' => 'required|string',
-            'rccm_number' => 'required|string',
-            'certificate_number' => 'required|string',
-
-            'pdg_full_name' => 'required|string',
-            'pdg_full_profession' => 'required|string',
-            'role_user' => 'required|string',
-
-            'whatsapp_phone' => 'required|string',
-            'call_phone' => 'required|string',
-
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
-
-            'ifu_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'rccm_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'certificate_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-
-            'logo' => 'nullable|image|max:2048',
-            'image_boutique' => 'nullable|image|max:2048',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 422);
+        if (!$entreprise) {
+            throw new \Exception('Failed to insert entreprise');
         }
 
-        // -----------------------------
-        // UPLOAD FILES TO CLOUDINARY
-        // -----------------------------
-        $uploadedFiles = [];
-
-        $filesToUpload = [
-            'ifu_file' => ['folder' => 'documents', 'subfolder' => 'ifu'],
-            'rccm_file' => ['folder' => 'documents', 'subfolder' => 'rccm'],
-            'certificate_file' => ['folder' => 'documents', 'subfolder' => 'certificates'],
-            'logo' => ['folder' => 'logos', 'subfolder' => null],
-            'image_boutique' => ['folder' => 'boutiques', 'subfolder' => null],
-        ];
-
-        foreach ($filesToUpload as $key => $config) {
-            if ($request->hasFile($key)) {
-                try {
-                    $uploadedFiles[$key] = $this->uploadToCloudinary(
-                        $request->file($key),
-                        $config['folder'],
-                        $config['subfolder']
-                    );
-                } catch (\Throwable $e) {
-                    Log::error("UPLOAD ERROR: {$key}", ['error' => $e->getMessage()]);
-                    return response()->json(['error' => "Upload failed for {$key}"], 500);
-                }
-            }
-        }
-
-        // -----------------------------
-        // PREPARE DATA FOR INSERT
-        // -----------------------------
-        $data = $request->except(['domaine_ids', 'logo', 'image_boutique', 'ifu_file', 'rccm_file', 'certificate_file']);
-        $data['prestataire_id'] = $user->id;
-        $data['status'] = 'pending';
-
-        // Replace file fields with uploaded URLs
-        foreach ($uploadedFiles as $key => $url) {
-            $data[$key] = $url;
-        }
-
-        // -----------------------------
-        // BEGIN TRANSACTION
-        // -----------------------------
-        DB::beginTransaction();
-
-        try {
-            Log::info('INSERT ENTREPRISE', $data);
-            $entreprise = Entreprise::create($data);
-
-            if (!$entreprise) {
-                throw new \Exception('Failed to insert entreprise');
-            }
-
-            // Insert pivot domaines
-            $pivotData = [];
-            foreach ($request->domaine_ids as $domaineId) {
-                $pivotData[] = [
+        // Insert pivot domaines safely
+        foreach ($request->domaine_ids as $domaineId) {
+            $exists = DB::table('domaines')->where('id', $domaineId)->exists();
+            if ($exists) {
+                DB::table('entreprise_domaine')->insert([
                     'entreprise_id' => $entreprise->id,
                     'domaine_id' => $domaineId,
                     'created_at' => now(),
                     'updated_at' => now(),
-                ];
+                ]);
+            } else {
+                Log::warning("Domaine ID {$domaineId} does not exist, skipping.");
             }
-
-            if (!empty($pivotData)) {
-                DB::table('entreprise_domaine')->insert($pivotData);
-            }
-
-            DB::commit();
-
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            Log::error('DB TRANSACTION ERROR', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json(['error' => 'Database transaction failed'], 500);
         }
+
+        DB::commit();
 
         return response()->json([
             'success' => true,
@@ -246,11 +233,13 @@ class EntrepriseController extends Controller{
         ], 201);
 
     } catch (\Throwable $e) {
-        Log::critical('FATAL ERROR STORE ENTREPRISE', [
-            'error' => $e->getMessage()
+        DB::rollBack();
+        Log::error('DB TRANSACTION ERROR', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
         ]);
 
-        return response()->json(['error' => 'Internal server error'], 500);
+        return response()->json(['error' => 'Database transaction failed'], 500);
     }
 }
 
