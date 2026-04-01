@@ -18,8 +18,65 @@ use Cloudinary\Api\Upload\UploadApi;
 
 class EntrepriseController extends Controller
 {
+    // Valeurs par défaut de Cloudinary (en cas d'échec de lecture des variables d'environnement)
+    private $cloudinaryConfig = [
+        'cloud_name' => 'dsumeoiga',
+        'api_key' => '571431578845174',
+        'api_secret' => 'JUkkERciRqqYAset1e3XBuCuzuE',
+        'url' => 'cloudinary://571431578845174:JUkkERciRqqYAset1e3XBuCuzuE@dsumeoiga'
+    ];
+    
     public function __construct() {
-       
+        // Vérifier et initialiser Cloudinary au démarrage
+        $this->initializeCloudinary();
+    }
+    
+    /**
+     * Initialise Cloudinary avec les variables d'environnement ou valeurs par défaut
+     */
+    private function initializeCloudinary() {
+        try {
+            // Essayer de récupérer depuis .env
+            $cloudName = env('CLOUDINARY_CLOUD_NAME');
+            $apiKey = env('CLOUDINARY_API_KEY');
+            $apiSecret = env('CLOUDINARY_API_SECRET');
+            $cloudinaryUrl = env('CLOUDINARY_URL');
+            
+            // Si les variables sont null, utiliser les valeurs par défaut
+            if (is_null($cloudName) || is_null($apiKey) || is_null($apiSecret)) {
+                Log::warning('Variables Cloudinary non trouvées dans .env, utilisation des valeurs par défaut', [
+                    'cloud_name_from_env' => $cloudName,
+                    'api_key_from_env' => $apiKey,
+                    'using_defaults' => true
+                ]);
+                
+                $cloudName = $this->cloudinaryConfig['cloud_name'];
+                $apiKey = $this->cloudinaryConfig['api_key'];
+                $apiSecret = $this->cloudinaryConfig['api_secret'];
+                $cloudinaryUrl = $this->cloudinaryConfig['url'];
+            }
+            
+            // Configuration de Cloudinary
+            Configuration::instance([
+                'cloud' => [
+                    'cloud_name' => $cloudName,
+                    'api_key' => $apiKey,
+                    'api_secret' => $apiSecret,
+                ]
+            ]);
+            
+            Log::info('Cloudinary configuré avec succès', [
+                'cloud_name' => $cloudName,
+                'using_defaults' => is_null(env('CLOUDINARY_CLOUD_NAME'))
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de l\'initialisation de Cloudinary', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw new \Exception('Impossible de configurer Cloudinary: ' . $e->getMessage());
+        }
     }
     
     public function getFormData(){
@@ -94,7 +151,7 @@ class EntrepriseController extends Controller
     public function store(Request $request){
         Log::info('Données reçues:', $request->all());
 
-         $user = Auth::user();
+        $user = Auth::user();
 
         // ── Vérifications métier ───────────────────────────────────────────────
         $existantes = Entreprise::where('prestataire_id', $user->id)->get();
@@ -159,7 +216,7 @@ class EntrepriseController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Validation échouée'.$validator->errors(),
+                'message' => 'Validation échouée: ' . $validator->errors()->first(),
                 'errors' => $validator->errors()
             ], 422);
         }
@@ -175,51 +232,107 @@ class EntrepriseController extends Controller
             $data['longitude'] = $request->longitude;
 
             // Conversion Google Maps en adresse exacte
-            $geo = Http::get("https://maps.googleapis.com/maps/api/geocode/json", [
-                'latlng' => "{$request->latitude},{$request->longitude}",
-                'key' => env('GOOGLE_MAPS_KEY')
-            ]);
+            try {
+                $geo = Http::timeout(10)->get("https://maps.googleapis.com/maps/api/geocode/json", [
+                    'latlng' => "{$request->latitude},{$request->longitude}",
+                    'key' => env('GOOGLE_MAPS_KEY')
+                ]);
 
-            if ($geo->successful() && isset($geo['results'][0])) {
-                $data['google_formatted_address'] = $geo['results'][0]['formatted_address'];
+                if ($geo->successful() && isset($geo['results'][0])) {
+                    $data['google_formatted_address'] = $geo['results'][0]['formatted_address'];
+                }
+            } catch (\Exception $e) {
+                Log::warning('Erreur géocodage Google Maps:', ['error' => $e->getMessage()]);
+                // On continue sans l'adresse formatée
             }
 
-            // Upload des fichiers
+            // Upload des fichiers avec gestion d'erreur individuelle
+            $uploadErrors = [];
+            
             if ($request->hasFile('logo')) {
-                $data['logo'] = $this->uploadToCloudinary($request->file('logo'), 'logos');
+                try {
+                    $data['logo'] = $this->uploadToCloudinary($request->file('logo'), 'logos');
+                } catch (\Exception $e) {
+                    $uploadErrors['logo'] = $e->getMessage();
+                    Log::error('Erreur upload logo:', ['error' => $e->getMessage()]);
+                }
             }
 
             if ($request->hasFile('image_boutique')) {
-                $data['image_boutique'] = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
+                try {
+                    $data['image_boutique'] = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
+                } catch (\Exception $e) {
+                    $uploadErrors['image_boutique'] = $e->getMessage();
+                    Log::error('Erreur upload image boutique:', ['error' => $e->getMessage()]);
+                }
             }
 
             if ($request->hasFile('ifu_file')) {
-                $data['ifu_file'] = $this->uploadToCloudinary($request->file('ifu_file'), 'documents', 'ifu');
+                try {
+                    $data['ifu_file'] = $this->uploadToCloudinary($request->file('ifu_file'), 'documents', 'ifu');
+                } catch (\Exception $e) {
+                    $uploadErrors['ifu_file'] = $e->getMessage();
+                    Log::error('Erreur upload IFU:', ['error' => $e->getMessage()]);
+                }
             }
 
             if ($request->hasFile('rccm_file')) {
-                $data['rccm_file'] = $this->uploadToCloudinary($request->file('rccm_file'), 'documents', 'rccm');
+                try {
+                    $data['rccm_file'] = $this->uploadToCloudinary($request->file('rccm_file'), 'documents', 'rccm');
+                } catch (\Exception $e) {
+                    $uploadErrors['rccm_file'] = $e->getMessage();
+                    Log::error('Erreur upload RCCM:', ['error' => $e->getMessage()]);
+                }
             }
 
             if ($request->hasFile('certificate_file')) {
-                $data['certificate_file'] = $this->uploadToCloudinary($request->file('certificate_file'), 'documents', 'certificates');
+                try {
+                    $data['certificate_file'] = $this->uploadToCloudinary($request->file('certificate_file'), 'documents', 'certificates');
+                } catch (\Exception $e) {
+                    $uploadErrors['certificate_file'] = $e->getMessage();
+                    Log::error('Erreur upload certificat:', ['error' => $e->getMessage()]);
+                }
+            }
+
+            // Vérifier si des fichiers obligatoires ont échoué
+            $requiredFiles = ['ifu_file', 'rccm_file', 'certificate_file'];
+            $missingRequired = [];
+            
+            foreach ($requiredFiles as $requiredFile) {
+                if ($request->hasFile($requiredFile) && !isset($data[$requiredFile])) {
+                    $missingRequired[] = $requiredFile;
+                }
+            }
+            
+            if (!empty($missingRequired)) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Échec de l\'upload des fichiers obligatoires',
+                    'errors' => $uploadErrors,
+                    'missing_files' => $missingRequired
+                ], 500);
             }
 
             $entreprise = Entreprise::create($data);
             $entreprise->domaines()->sync($request->domaine_ids);
 
+            // Envoi des notifications aux admins
             try {
                 $admins = User::where('role', 'admin')->get();
                 
                 foreach ($admins as $admin) {
-                    $admin->notify(new NewEntrepriseCreatedNotification($entreprise, $request->user()));
+                    try {
+                        $admin->notify(new NewEntrepriseCreatedNotification($entreprise, $request->user()));
+                        event(new \App\Events\EntreprisePendingEvent($entreprise, $admin->id));
+                    } catch (\Exception $e) {
+                        Log::error('Erreur notification admin individuelle:', [
+                            'admin_id' => $admin->id,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
                 }
 
-                foreach ($admins as $admin) {
-                    event(new \App\Events\EntreprisePendingEvent($entreprise, $admin->id));
-                }
-
-                Log::info('Notifications envoyées aux admins pour la nouvelle entreprise', [
+                Log::info('Notifications envoyées aux admins', [
                     'entreprise_id' => $entreprise->id,
                     'admins_notified' => $admins->count()
                 ]);
@@ -229,31 +342,45 @@ class EntrepriseController extends Controller
                     'error' => $e->getMessage(),
                     'entreprise_id' => $entreprise->id
                 ]);
+                // On continue car l'entreprise est déjà créée
             }
            
-
             $entreprise->load('domaines', 'prestataire');
 
             DB::commit();
 
+            $responseMessage = 'Entreprise créée et envoyée en validation';
+            if (!empty($uploadErrors)) {
+                $responseMessage .= ' (Attention: certains fichiers optionnels n\'ont pas pu être uploadés)';
+            }
+
             return response()->json([
-                'message' => 'Entreprise créée et envoyée en validation',
-                'entreprise' => $entreprise
+                'message' => $responseMessage,
+                'entreprise' => $entreprise,
+                'upload_warnings' => !empty($uploadErrors) ? $uploadErrors : null
             ], 201);
 
         } 
         catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Erreur création entreprise:', ['error' => $e->getMessage()]);
+            Log::error('Erreur création entreprise:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
 
             return response()->json([
-                'message' => 'Erreur interne: '.$e->getMessage(),
-                'error' => $e->getMessage()
+                'message' => 'Erreur lors de la création de l\'entreprise',
+                'error' => $e->getMessage(),
+                'details' => config('app.debug') ? $e->getTraceAsString() : null
             ], 500);
         }
     }
 
+    /**
+     * Upload un fichier vers Cloudinary avec gestion d'erreur robuste
+     */
     private function uploadToCloudinary($file, $folder, $subfolder = null) {
+        // Validation du fichier
         if (!$file || !$file->isValid()) {
             throw new \Exception('Fichier invalide pour upload');
         }
@@ -263,10 +390,40 @@ class EntrepriseController extends Controller
             : $folder;
 
         try {
-            // Initialiser Cloudinary avec l'URL du .env
-            \Cloudinary\Configuration\Configuration::instance(env('CLOUDINARY_URL'));
+            // Récupérer la configuration Cloudinary
+            $cloudName = env('CLOUDINARY_CLOUD_NAME');
+            $apiKey = env('CLOUDINARY_API_KEY');
+            $apiSecret = env('CLOUDINARY_API_SECRET');
             
-            $result = (new \Cloudinary\Api\Upload\UploadApi())->upload(
+            // Si variables null, utiliser valeurs par défaut
+            if (is_null($cloudName) || is_null($apiKey) || is_null($apiSecret)) {
+                Log::warning('Utilisation des valeurs par défaut pour Cloudinary dans upload');
+                $cloudName = $this->cloudinaryConfig['cloud_name'];
+                $apiKey = $this->cloudinaryConfig['api_key'];
+                $apiSecret = $this->cloudinaryConfig['api_secret'];
+            }
+            
+            // Reconfigurer Cloudinary pour être sûr
+            Configuration::instance([
+                'cloud' => [
+                    'cloud_name' => $cloudName,
+                    'api_key' => $apiKey,
+                    'api_secret' => $apiSecret,
+                ]
+            ]);
+            
+            // Vérifier que la configuration est valide
+            if (empty($cloudName) || empty($apiKey) || empty($apiSecret)) {
+                throw new \Exception('Configuration Cloudinary incomplète');
+            }
+            
+            Log::info('Tentative d\'upload vers Cloudinary', [
+                'folder' => $folderPath,
+                'file_name' => $file->getClientOriginalName(),
+                'cloud_name' => $cloudName
+            ]);
+            
+            $result = (new UploadApi())->upload(
                 $file->getRealPath(),
                 [
                     'folder' => $folderPath,
@@ -274,11 +431,32 @@ class EntrepriseController extends Controller
                 ]
             );
 
-            return $result['secure_url'] ?? null;
+            if (!isset($result['secure_url'])) {
+                throw new \Exception('Cloudinary n\'a pas retourné d\'URL sécurisée');
+            }
+
+            Log::info('Upload Cloudinary réussi', [
+                'url' => $result['secure_url'],
+                'folder' => $folderPath
+            ]);
+
+            return $result['secure_url'];
         } 
+        catch (\Cloudinary\Api\Exception\ApiError $e) {
+            Log::error('Erreur API Cloudinary:', [
+                'error' => $e->getMessage(),
+                'folder' => $folderPath,
+                'code' => $e->getCode()
+            ]);
+            throw new \Exception('Erreur Cloudinary: ' . $e->getMessage());
+        }
         catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Erreur upload Cloudinary:', ['error' => $e->getMessage()]);
-            throw new \Exception('Impossible d\'uploader le fichier sur Cloudinary');
+            Log::error('Erreur upload Cloudinary:', [
+                'error' => $e->getMessage(),
+                'folder' => $folderPath,
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw new \Exception('Impossible d\'uploader le fichier: ' . $e->getMessage());
         }
     }
 
@@ -326,7 +504,10 @@ class EntrepriseController extends Controller
         } 
         catch (\Exception $e) {
             Log::error('Erreur completeProfile:', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Erreur interne'], 500);
+            return response()->json([
+                'message' => 'Erreur lors de la mise à jour',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -499,13 +680,15 @@ class EntrepriseController extends Controller
             Log::error('Erreur lors de la mise à jour entreprise', [
                 'error' => $e->getMessage(),
                 'entreprise_id' => $id,
-                'user_id' => $user->id
+                'user_id' => $user->id,
+                'trace' => $e->getTraceAsString()
             ]);
 
             return response()->json([
                 'message' => 'Erreur lors de la mise à jour',
                 'status' => 'error',
-                'error' => env('APP_DEBUG') ? $e->getMessage() : 'Une erreur est survenue'
+                'error' => $e->getMessage(),
+                'details' => config('app.debug') ? $e->getTraceAsString() : null
             ], 500);
         }
     }
