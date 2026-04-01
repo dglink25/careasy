@@ -247,7 +247,7 @@ class EntrepriseController extends Controller
             Log::error('Erreur création entreprise:', ['error' => $e->getMessage()]);
 
             return response()->json([
-                'message' => 'Erreur interne',
+                'message' => 'Erreur interne: '.$e->getMessage(),
                 'error' => $e->getMessage()
             ], 500);
         }
