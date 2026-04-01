@@ -148,244 +148,159 @@ class EntrepriseController extends Controller
         return response()->json($entreprises);
     }
 
-    public function store(Request $request){
-        Log::info('Données reçues:', $request->all());
+ public function store(Request $request)
+{
+    Log::info('Données reçues:', $request->all());
 
-        $user = Auth::user();
+    $user = Auth::user();
 
-        // ── Vérifications métier ───────────────────────────────────────────────
-        $existantes = Entreprise::where('prestataire_id', $user->id)->get();
+    // ───────────────── VALIDATION ─────────────────
+    $validator = Validator::make($request->all(), [
+        'name'               => 'required|string|max:255',
+        'domaine_ids'        => 'required|array',
+        'domaine_ids.*'      => 'exists:domaines,id',
+        'ifu_number'         => 'required|string',
+        'ifu_file'           => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        'rccm_number'        => 'required|string',
+        'rccm_file'          => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        'pdg_full_name'      => 'required|string',
+        'pdg_full_profession'=> 'required|string',
+        'role_user'          => 'required|string',
+        'certificate_number' => 'required|string',
+        'whatsapp_phone'     => 'required|string',
+        'call_phone'         => 'required|string',
+        'certificate_file'   => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        'latitude'           => 'required|numeric|between:-90,90',
+        'longitude'          => 'required|numeric|between:-180,180',
+    ]);
 
-        foreach ($existantes as $e) {
-            // 1. Demande en attente → bloquer
-            if ($e->status === 'pending') {
-                return response()->json([
-                    'message'         => 'Une demande est déjà en cours de traitement. Veuillez patienter.',
-                    'status'          => 'pending',
-                    'entreprise_name' => $e->name,
-                ], 409);
-            }
-
-            // 2. Entreprise validée → essai ou expirée → abonnement payant requis
-            if ($e->status === 'validated') {
-                $abonnementPayant = \App\Models\Abonnement::where('user_id', $user->id)
-                    ->where('type', '!=', 'trial')
-                    ->where('statut', 'actif')
-                    ->where('date_fin', '>', now())
-                    ->first();
-
-                if (!$abonnementPayant) {
-                    $isInTrial    = $e->isInTrialPeriod();
-                    $joursRestants = $e->trial_days_remaining;
-
-                    return response()->json([
-                        'message'         => $isInTrial
-                            ? "Votre entreprise \"{$e->name}\" est en période d'essai ({$joursRestants} jours restants). Souscrivez un abonnement payant pour créer une nouvelle entreprise."
-                            : "Votre période d'essai pour \"{$e->name}\" est terminée. Souscrivez un abonnement payant pour continuer.",
-                        'status'          => 'validated',
-                        'trial_status'    => $isInTrial ? 'in_trial' : 'expired',
-                        'days_remaining'  => $joursRestants,
-                        'entreprise_name' => $e->name,
-                    ], 403);
-                }
-            }
-        }
-        
-        $validator = Validator::make($request->all(), [
-            'name'               => 'required|string|max:255',
-            'domaine_ids'        => 'required|array',
-            'domaine_ids.*'      => 'exists:domaines,id',
-            'ifu_number'         => 'required|string',
-            'ifu_file'           => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'rccm_number'        => 'required|string',
-            'rccm_file'          => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'pdg_full_name'      => 'required|string',
-            'pdg_full_profession'=> 'required|string',
-            'role_user'          => 'required|string',
-            'certificate_number' => 'required|string',
-            'whatsapp_phone'    => 'required|string',
-            'call_phone'        => 'required|string',
-            'certificate_file'   => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'siege'              => 'nullable|string',
-            'logo'               => 'nullable|image|max:2048',
-            'image_boutique'     => 'nullable|image|max:2048',
-            'latitude'  => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation échouée: ' . $validator->errors()->first(),
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        // D'abord, faire les uploads Cloudinary en dehors de la transaction
-        $uploadedFiles = [];
-        $uploadErrors = [];
-        
-        try {
-            // Upload des fichiers (en dehors de la transaction)
-            if ($request->hasFile('logo')) {
-                try {
-                    $uploadedFiles['logo'] = $this->uploadToCloudinary($request->file('logo'), 'logos');
-                } catch (\Exception $e) {
-                    $uploadErrors['logo'] = $e->getMessage();
-                    Log::error('Erreur upload logo:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            if ($request->hasFile('image_boutique')) {
-                try {
-                    $uploadedFiles['image_boutique'] = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
-                } catch (\Exception $e) {
-                    $uploadErrors['image_boutique'] = $e->getMessage();
-                    Log::error('Erreur upload image boutique:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            if ($request->hasFile('ifu_file')) {
-                try {
-                    $uploadedFiles['ifu_file'] = $this->uploadToCloudinary($request->file('ifu_file'), 'documents', 'ifu');
-                } catch (\Exception $e) {
-                    $uploadErrors['ifu_file'] = $e->getMessage();
-                    Log::error('Erreur upload IFU:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            if ($request->hasFile('rccm_file')) {
-                try {
-                    $uploadedFiles['rccm_file'] = $this->uploadToCloudinary($request->file('rccm_file'), 'documents', 'rccm');
-                } catch (\Exception $e) {
-                    $uploadErrors['rccm_file'] = $e->getMessage();
-                    Log::error('Erreur upload RCCM:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            if ($request->hasFile('certificate_file')) {
-                try {
-                    $uploadedFiles['certificate_file'] = $this->uploadToCloudinary($request->file('certificate_file'), 'documents', 'certificates');
-                } catch (\Exception $e) {
-                    $uploadErrors['certificate_file'] = $e->getMessage();
-                    Log::error('Erreur upload certificat:', ['error' => $e->getMessage()]);
-                }
-            }
-
-            // Vérifier les fichiers obligatoires
-            $requiredFiles = ['ifu_file', 'rccm_file', 'certificate_file'];
-            foreach ($requiredFiles as $requiredFile) {
-                if ($request->hasFile($requiredFile) && !isset($uploadedFiles[$requiredFile])) {
-                    throw new \Exception("Échec de l'upload du fichier obligatoire: {$requiredFile}");
-                }
-            }
-
-        } catch (\Exception $e) {
-            // Si un fichier obligatoire échoue, on ne continue pas
-            return response()->json([
-                'message' => 'Échec de l\'upload des fichiers obligatoires',
-                'error' => $e->getMessage(),
-                'details' => $uploadErrors
-            ], 500);
-        }
-
-        // Maintenant, on fait la création en base de données dans une transaction
-        DB::beginTransaction();
-        
-        try {
-            $data = $request->except(['domaine_ids']);
-            $data['prestataire_id'] = Auth::id();
-            $data['status'] = 'pending';
-            $data['latitude'] = $request->latitude;
-            $data['longitude'] = $request->longitude;
-            
-            // Ajouter les URLs des fichiers uploadés
-            foreach ($uploadedFiles as $key => $url) {
-                $data[$key] = $url;
-            }
-
-            // Conversion Google Maps en adresse exacte
-            try {
-                $geo = Http::timeout(10)->get("https://maps.googleapis.com/maps/api/geocode/json", [
-                    'latlng' => "{$request->latitude},{$request->longitude}",
-                    'key' => env('GOOGLE_MAPS_KEY')
-                ]);
-
-                if ($geo->successful() && isset($geo['results'][0])) {
-                    $data['google_formatted_address'] = $geo['results'][0]['formatted_address'];
-                }
-            } catch (\Exception $e) {
-                Log::warning('Erreur géocodage Google Maps:', ['error' => $e->getMessage()]);
-            }
-
-            // Créer l'entreprise
-            $entreprise = Entreprise::create($data);
-            
-            // Synchroniser les domaines (c'est ici que l'erreur se produisait)
-            if (!empty($request->domaine_ids)) {
-                $entreprise->domaines()->sync($request->domaine_ids);
-            }
-
-            DB::commit();
-
-            // Envoi des notifications aux admins (en dehors de la transaction)
-            try {
-                $admins = User::where('role', 'admin')->get();
-                
-                foreach ($admins as $admin) {
-                    try {
-                        $admin->notify(new NewEntrepriseCreatedNotification($entreprise, $request->user()));
-                        event(new \App\Events\EntreprisePendingEvent($entreprise, $admin->id));
-                    } catch (\Exception $e) {
-                        Log::error('Erreur notification admin individuelle:', [
-                            'admin_id' => $admin->id,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
-                }
-
-                Log::info('Notifications envoyées aux admins', [
-                    'entreprise_id' => $entreprise->id,
-                    'admins_notified' => $admins->count()
-                ]);
-
-            } catch (\Exception $e) {
-                Log::error('Erreur lors de l\'envoi des notifications aux admins', [
-                    'error' => $e->getMessage(),
-                    'entreprise_id' => $entreprise->id
-                ]);
-            }
-        
-            $entreprise->load('domaines', 'prestataire');
-
-            $responseMessage = 'Entreprise créée et envoyée en validation';
-            if (!empty($uploadErrors)) {
-                $responseMessage .= ' (Attention: certains fichiers optionnels n\'ont pas pu être uploadés)';
-            }
-
-            return response()->json([
-                'message' => $responseMessage,
-                'entreprise' => $entreprise,
-                'upload_warnings' => !empty($uploadErrors) ? $uploadErrors : null
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Erreur création entreprise (base de données):', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'message' => 'Erreur lors de la création de l\'entreprise dans la base de données: ' . $e->getMessage(),
-                'error' => $e->getMessage(),
-                'details' => config('app.debug') ? $e->getTraceAsString() : null
-            ], 500);
-        }
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => $validator->errors()->first(),
+            'errors'  => $validator->errors()
+        ], 422);
     }
 
-    /**
-     * Upload un fichier vers Cloudinary avec gestion d'erreur robuste
-     */
+    // ───────────────── UPLOAD (hors transaction) ─────────────────
+    $uploadedFiles = [];
+
+    try {
+        foreach ([
+            'ifu_file' => ['documents', 'ifu'],
+            'rccm_file' => ['documents', 'rccm'],
+            'certificate_file' => ['documents', 'certificates'],
+        ] as $field => $path) {
+
+            if ($request->hasFile($field)) {
+                $uploadedFiles[$field] = $this->uploadToCloudinary(
+                    $request->file($field),
+                    $path[0],
+                    $path[1]
+                );
+            } else {
+                throw new \Exception("Fichier obligatoire manquant: {$field}");
+            }
+        }
+
+    } catch (\Throwable $e) {
+        Log::error('Erreur upload fichiers', ['error' => $e->getMessage()]);
+        return response()->json([
+            'message' => 'Erreur upload fichiers',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+
+    // ───────────────── PRÉPARATION DATA ─────────────────
+    $data = $request->except(['domaine_ids']);
+    $data['prestataire_id'] = $user->id;
+    $data['status'] = 'pending';
+
+    foreach ($uploadedFiles as $key => $url) {
+        $data[$key] = $url;
+    }
+
+    // Google Maps (hors transaction)
+    try {
+        $geo = Http::timeout(5)->get("https://maps.googleapis.com/maps/api/geocode/json", [
+            'latlng' => "{$request->latitude},{$request->longitude}",
+            'key' => env('GOOGLE_MAPS_KEY')
+        ]);
+
+        if ($geo->successful() && isset($geo['results'][0])) {
+            $data['google_formatted_address'] = $geo['results'][0]['formatted_address'];
+        }
+
+    } catch (\Throwable $e) {
+        Log::warning('Erreur Google Maps', ['error' => $e->getMessage()]);
+    }
+
+    // ───────────────── TRANSACTION COURTE ─────────────────
+    try {
+
+        DB::beginTransaction();
+
+        // 1. Création entreprise
+        try {
+            $entreprise = Entreprise::create($data);
+        } catch (\Throwable $e) {
+            Log::error('Erreur create entreprise', [
+                'error' => $e->getMessage(),
+                'data' => $data
+            ]);
+            throw $e;
+        }
+
+        // 2. Sync domaines (SAFE)
+        try {
+            $ids = array_filter($request->domaine_ids);
+
+            if (!empty($ids)) {
+                $entreprise->domaines()->sync($ids);
+            }
+
+        } catch (\Throwable $e) {
+            Log::error('Erreur sync domaines', [
+                'ids' => $request->domaine_ids,
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+
+        DB::commit();
+
+    } catch (\Throwable $e) {
+        DB::rollBack();
+
+        Log::error('Transaction échouée', [
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'message' => 'Erreur base de données',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+
+    // ───────────────── POST-TRAITEMENT ─────────────────
+    try {
+        $admins = User::where('role', 'admin')->get();
+
+        foreach ($admins as $admin) {
+            $admin->notify(new NewEntrepriseCreatedNotification($entreprise, $user));
+        }
+
+    } catch (\Throwable $e) {
+        Log::warning('Erreur notifications', ['error' => $e->getMessage()]);
+    }
+
+    return response()->json([
+        'message' => 'Entreprise créée avec succès',
+        'entreprise' => $entreprise->load('domaines')
+    ], 201);
+}
+
+  
+
     private function uploadToCloudinary($file, $folder, $subfolder = null) {
         // Validation du fichier
         if (!$file || !$file->isValid()) {
