@@ -263,7 +263,10 @@ class EntrepriseController extends Controller
             : $folder;
 
         try {
-            $result = (new UploadApi())->upload(
+            // Initialiser Cloudinary avec l'URL du .env
+            \Cloudinary\Configuration\Configuration::instance(env('CLOUDINARY_URL'));
+            
+            $result = (new \Cloudinary\Api\Upload\UploadApi())->upload(
                 $file->getRealPath(),
                 [
                     'folder' => $folderPath,
@@ -274,7 +277,7 @@ class EntrepriseController extends Controller
             return $result['secure_url'] ?? null;
         } 
         catch (\Exception $e) {
-            Log::error('Erreur upload Cloudinary:', ['error' => $e->getMessage()]);
+            \Illuminate\Support\Facades\Log::error('Erreur upload Cloudinary:', ['error' => $e->getMessage()]);
             throw new \Exception('Impossible d\'uploader le fichier sur Cloudinary');
         }
     }
