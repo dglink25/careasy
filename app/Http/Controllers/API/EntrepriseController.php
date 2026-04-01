@@ -254,11 +254,11 @@ class EntrepriseController extends Controller
     }
 
     private function uploadToCloudinary($file, $folder, $subfolder = null){
-        Configuration::instance([
+        \Cloudinary\Configuration\Configuration::instance([
             'cloud' => [
-                'cloud_name' => env('CLOUDINARY_CLOUD_NAME', 'dsumeoiga'),
-                'api_key'    => env('CLOUDINARY_API_KEY'),
-                'api_secret' => env('CLOUDINARY_API_SECRET'),
+                'cloud_name' => config('cloudinary.cloud_name'),
+                'api_key'    => config('cloudinary.api_key'),
+                'api_secret' => config('cloudinary.api_secret'),
             ],
             'url' => [
                 'secure' => true
@@ -269,7 +269,7 @@ class EntrepriseController extends Controller
             ? "entreprises/{$folder}/{$subfolder}"
             : "entreprises/{$folder}";
 
-        $result = (new UploadApi())->upload(
+        $result = (new \Cloudinary\Api\Upload\UploadApi())->upload(
             $file->getRealPath(),
             [
                 'folder' => $folderPath,
