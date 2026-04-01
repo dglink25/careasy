@@ -119,140 +119,140 @@ class EntrepriseController extends Controller{
         return response()->json($entreprises);
     }
 
-    public function store(Request $request) {
-        Log::info('START STORE');
+  public function store(Request $request)
+{
+    Log::info('START STORE');
 
-        $user = Auth::user();
+    $user = Auth::user();
+
+    try {
+        // -----------------------------
+        // VALIDATION
+        // -----------------------------
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'domaine_ids' => 'required|array|min:1',
+            'domaine_ids.*' => 'integer|exists:domaines,id',
+
+            'ifu_number' => 'required|string',
+            'rccm_number' => 'required|string',
+            'certificate_number' => 'required|string',
+
+            'pdg_full_name' => 'required|string',
+            'pdg_full_profession' => 'required|string',
+            'role_user' => 'required|string',
+
+            'whatsapp_phone' => 'required|string',
+            'call_phone' => 'required|string',
+
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+
+            'ifu_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'rccm_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'certificate_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+
+            'logo' => 'nullable|image|max:2048',
+            'image_boutique' => 'nullable|image|max:2048',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
+        // -----------------------------
+        // UPLOAD FILES TO CLOUDINARY
+        // -----------------------------
+        $uploadedFiles = [];
+
+        $filesToUpload = [
+            'ifu_file' => ['folder' => 'documents', 'subfolder' => 'ifu'],
+            'rccm_file' => ['folder' => 'documents', 'subfolder' => 'rccm'],
+            'certificate_file' => ['folder' => 'documents', 'subfolder' => 'certificates'],
+            'logo' => ['folder' => 'logos', 'subfolder' => null],
+            'image_boutique' => ['folder' => 'boutiques', 'subfolder' => null],
+        ];
+
+        foreach ($filesToUpload as $key => $config) {
+            if ($request->hasFile($key)) {
+                try {
+                    $uploadedFiles[$key] = $this->uploadToCloudinary(
+                        $request->file($key),
+                        $config['folder'],
+                        $config['subfolder']
+                    );
+                } catch (\Throwable $e) {
+                    Log::error("UPLOAD ERROR: {$key}", ['error' => $e->getMessage()]);
+                    return response()->json(['error' => "Upload failed for {$key}"], 500);
+                }
+            }
+        }
+
+        // -----------------------------
+        // PREPARE DATA FOR INSERT
+        // -----------------------------
+        $data = $request->except(['domaine_ids', 'logo', 'image_boutique', 'ifu_file', 'rccm_file', 'certificate_file']);
+        $data['prestataire_id'] = $user->id;
+        $data['status'] = 'pending';
+
+        // Replace file fields with uploaded URLs
+        foreach ($uploadedFiles as $key => $url) {
+            $data[$key] = $url;
+        }
+
+        // -----------------------------
+        // BEGIN TRANSACTION
+        // -----------------------------
+        DB::beginTransaction();
 
         try {
+            Log::info('INSERT ENTREPRISE', $data);
+            $entreprise = Entreprise::create($data);
 
-            /*
-            |-----------------------------
-            | VALIDATION
-            |-----------------------------
-            */
-            $validator = Validator::make($request->all(), [
-                'name' => 'required|string|max:255',
-                'domaine_ids' => 'required|array|min:1',
-                'domaine_ids.*' => 'integer',
-
-                'ifu_number' => 'required|string',
-                'rccm_number' => 'required|string',
-                'certificate_number' => 'required|string',
-
-                'pdg_full_name' => 'required|string',
-                'pdg_full_profession' => 'required|string',
-                'role_user' => 'required|string',
-
-                'whatsapp_phone' => 'required|string',
-                'call_phone' => 'required|string',
-
-                'latitude' => 'required|numeric',
-                'longitude' => 'required|numeric',
-
-                'ifu_file' => 'required|file',
-                'rccm_file' => 'required|file',
-                'certificate_file' => 'required|file',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'error' => $validator->errors()
-                ], 422);
+            if (!$entreprise) {
+                throw new \Exception('Failed to insert entreprise');
             }
 
-            /*
-            |-----------------------------
-            | UPLOAD
-            |-----------------------------
-            */
-            $uploadedFiles = [];
-
-            try {
-                $uploadedFiles['ifu_file'] = $this->uploadToCloudinary($request->file('ifu_file'), 'documents', 'ifu');
-                $uploadedFiles['rccm_file'] = $this->uploadToCloudinary($request->file('rccm_file'), 'documents', 'rccm');
-                $uploadedFiles['certificate_file'] = $this->uploadToCloudinary($request->file('certificate_file'), 'documents', 'certificates');
-
-            } catch (\Throwable $e) {
-                Log::error('UPLOAD ERROR', ['error' => $e->getMessage()]);
-                return response()->json(['error' => $e->getMessage()], 500);
+            // Insert pivot domaines
+            $pivotData = [];
+            foreach ($request->domaine_ids as $domaineId) {
+                $pivotData[] = [
+                    'entreprise_id' => $entreprise->id,
+                    'domaine_id' => $domaineId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
             }
 
-            /*
-            |-----------------------------
-            | DATA
-            |-----------------------------
-            */
-            $data = $request->except(['domaine_ids']);
-            $data['prestataire_id'] = $user->id;
-            $data['status'] = 'pending';
-
-            foreach ($uploadedFiles as $key => $url) {
-                $data[$key] = $url;
+            if (!empty($pivotData)) {
+                DB::table('entreprise_domaine')->insert($pivotData);
             }
 
-            /*
-            |-----------------------------
-            | TRANSACTION
-            |-----------------------------
-            */
-            DB::beginTransaction();
-
-            try {
-
-                Log::info('INSERT ENTREPRISE', $data);
-
-                $entreprise = Entreprise::create($data);
-
-                if (!$entreprise) {
-                    throw new \Exception('INSERT FAILED ENTREPRISE');
-                }
-
-                /*
-                | INSERT PIVOT
-                */
-                foreach ($request->domaine_ids as $id) {
-
-                    DB::table('entreprise_domaine')->insert([
-                        'entreprise_id' => $entreprise->id,
-                        'domaine_id' => $id,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-
-                DB::commit();
-
-            } catch (\Throwable $e) {
-
-                DB::rollBack();
-
-                Log::error('DB ERROR', [
-                    'message' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-
-                return response()->json([
-                    'error' => $e->getMessage()
-                ], 500);
-            }
-
-            return response()->json([
-                'success' => true,
-                'id' => $entreprise->id
-            ], 201);
+            DB::commit();
 
         } catch (\Throwable $e) {
-
-            Log::critical('FATAL ERROR', [
-                'error' => $e->getMessage()
+            DB::rollBack();
+            Log::error('DB TRANSACTION ERROR', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Database transaction failed'], 500);
         }
+
+        return response()->json([
+            'success' => true,
+            'entreprise_id' => $entreprise->id
+        ], 201);
+
+    } catch (\Throwable $e) {
+        Log::critical('FATAL ERROR STORE ENTREPRISE', [
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json(['error' => 'Internal server error'], 500);
     }
+}
 
     private function uploadToCloudinary($file, $folder, $subfolder = null) {
         if (!$file || !$file->isValid()) {
