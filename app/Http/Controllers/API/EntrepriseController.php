@@ -117,8 +117,7 @@ class EntrepriseController extends Controller{
         return response()->json($entreprises);
     }
 
-    public function store(Request $request)
-    {
+    public function store(Request $request) {
         Log::info('Donnees recues:', $request->all());
 
         $user = Auth::user();
@@ -251,35 +250,39 @@ class EntrepriseController extends Controller{
             ], 500);
         }
 
+        $data = $request->except(['domaine_ids']);
+        $data['prestataire_id'] = Auth::id();
+        $data['status'] = 'pending';
+        $data['latitude'] = $request->latitude;
+        $data['longitude'] = $request->longitude;
+        
+        foreach ($uploadedFiles as $key => $url) {
+            $data[$key] = $url;
+        }
+
+        try {
+            $geo = Http::timeout(10)->get("https://maps.googleapis.com/maps/api/geocode/json", [
+                'latlng' => "{$request->latitude},{$request->longitude}",
+                'key' => env('GOOGLE_MAPS_KEY')
+            ]);
+
+            if ($geo->successful() && isset($geo['results'][0])) {
+                $data['google_formatted_address'] = $geo['results'][0]['formatted_address'];
+            }
+        } catch (\Exception $e) {
+            Log::warning('Geocoding failed', ['error' => $e->getMessage()]);
+        }
+
         DB::beginTransaction();
         
         try {
-            $data = $request->except(['domaine_ids']);
-            $data['prestataire_id'] = Auth::id();
-            $data['status'] = 'pending';
-            $data['latitude'] = $request->latitude;
-            $data['longitude'] = $request->longitude;
-            
-            foreach ($uploadedFiles as $key => $url) {
-                $data[$key] = $url;
-            }
-
-            try {
-                $geo = Http::timeout(10)->get("https://maps.googleapis.com/maps/api/geocode/json", [
-                    'latlng' => "{$request->latitude},{$request->longitude}",
-                    'key' => env('GOOGLE_MAPS_KEY')
-                ]);
-
-                if ($geo->successful() && isset($geo['results'][0])) {
-                    $data['google_formatted_address'] = $geo['results'][0]['formatted_address'];
-                }
-            } catch (\Exception $e) {
-                Log::warning('Geocoding failed', ['error' => $e->getMessage()]);
-            }
-
+            Log::info('Creating entreprise', ['data' => array_keys($data)]);
             $entreprise = Entreprise::create($data);
+            Log::info('Entreprise created', ['id' => $entreprise->id]);
             
             if (!empty($request->domaine_ids)) {
+                Log::info('Inserting domains', ['domaine_ids' => $request->domaine_ids, 'entreprise_id' => $entreprise->id]);
+                
                 $pivotData = [];
                 foreach ($request->domaine_ids as $domaineId) {
                     $pivotData[] = [
@@ -289,64 +292,66 @@ class EntrepriseController extends Controller{
                         'updated_at' => now()
                     ];
                 }
+                
                 DB::table('entreprise_domaine')->insert($pivotData);
+                Log::info('Domains inserted successfully');
             }
 
             DB::commit();
-
-            try {
-                $admins = User::where('role', 'admin')->get();
-                
-                foreach ($admins as $admin) {
-                    try {
-                        $admin->notify(new NewEntrepriseCreatedNotification($entreprise, $request->user()));
-                        event(new \App\Events\EntreprisePendingEvent($entreprise, $admin->id));
-                    } catch (\Exception $e) {
-                        Log::error('Admin notification failed', [
-                            'admin_id' => $admin->id,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
-                }
-
-                Log::info('Notifications sent to admins', [
-                    'entreprise_id' => $entreprise->id,
-                    'admins_notified' => $admins->count()
-                ]);
-
-            } catch (\Exception $e) {
-                Log::error('Error sending notifications', [
-                    'error' => $e->getMessage(),
-                    'entreprise_id' => $entreprise->id
-                ]);
-            }
-           
-            $entreprise->load('domaines', 'prestataire');
-
-            $responseMessage = 'Entreprise creee et envoyee en validation';
-            if (!empty($uploadErrors)) {
-                $responseMessage .= ' (Attention: certains fichiers optionnels nont pas pu etre uploades)';
-            }
-
-            return response()->json([
-                'message' => $responseMessage,
-                'entreprise' => $entreprise,
-                'upload_warnings' => !empty($uploadErrors) ? $uploadErrors : null
-            ], 201);
+            Log::info('Transaction committed successfully');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Database error creating entreprise', [
+            Log::error('Database error in transaction', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-
+            
             return response()->json([
-                'message' => 'Erreur lors de la creation de lentreprise',
-                'error' => $e->getMessage(),
-                'details' => config('app.debug') ? $e->getTraceAsString() : null
+                'message' => 'Erreur lors de la creation de lentreprise dans la base de donnees',
+                'error' => $e->getMessage()
             ], 500);
         }
+
+        try {
+            $admins = User::where('role', 'admin')->get();
+            
+            foreach ($admins as $admin) {
+                try {
+                    $admin->notify(new NewEntrepriseCreatedNotification($entreprise, $request->user()));
+                    event(new \App\Events\EntreprisePendingEvent($entreprise, $admin->id));
+                } catch (\Exception $e) {
+                    Log::error('Admin notification failed', [
+                        'admin_id' => $admin->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            Log::info('Notifications sent to admins', [
+                'entreprise_id' => $entreprise->id,
+                'admins_notified' => $admins->count()
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error sending notifications', [
+                'error' => $e->getMessage(),
+                'entreprise_id' => $entreprise->id
+            ]);
+        }
+    
+        $entreprise->load('domaines', 'prestataire');
+
+        $responseMessage = 'Entreprise creee et envoyee en validation';
+        if (!empty($uploadErrors)) {
+            $responseMessage .= ' (Attention: certains fichiers optionnels nont pas pu etre uploades)';
+        }
+
+        return response()->json([
+            'message' => $responseMessage,
+            'entreprise' => $entreprise,
+            'upload_warnings' => !empty($uploadErrors) ? $uploadErrors : null
+        ], 201);
     }
 
     private function uploadToCloudinary($file, $folder, $subfolder = null)
