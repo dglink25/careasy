@@ -148,7 +148,7 @@ class EntrepriseController extends Controller
     // =========================================================================
     // STORE
     // Pas de DB::beginTransaction() — incompatible avec Neon pgBouncer
-    // en mode "transaction pooling". Chaque statement() est auto-commite.
+    // en mode "transaction pooling".
     // =========================================================================
 
     public function store(Request $request)
@@ -183,10 +183,9 @@ class EntrepriseController extends Controller
             return response()->json(['error' => $validator->errors()], 422);
         }
 
-        // ── 2. VÉRIFIER LES DOMAINES (hors transaction, requête simple) ───
+        // ── 2. VÉRIFIER LES DOMAINES (requete simple hors transaction) ─────
         $requestedIds = array_map('intval', $request->domaine_ids);
 
-        // Utiliser whereIn classique — Neon supporte ça sans problème
         $foundIds = DB::table('domaines')
             ->whereIn('id', $requestedIds)
             ->pluck('id')
@@ -223,11 +222,7 @@ class EntrepriseController extends Controller
             }
         }
 
-        // ── 4. INSÉRER L'ENTREPRISE via DB::table()->insert() ─────────────
-        // On n'utilise PAS Eloquent::create() pour eviter les observers/events
-        // qui peuvent declencher des sous-requetes et corrompre la connexion
-        // PostgreSQL via pgBouncer.
-
+        // ── 4. INSÉRER L'ENTREPRISE ────────────────────────────────────────
         $now = now();
 
         $insertData = [
@@ -258,7 +253,6 @@ class EntrepriseController extends Controller
         Log::info('INSERT ENTREPRISE', $insertData);
 
         try {
-            // insertGetId() retourne l'ID sans transaction implicite inutile
             $entrepriseId = DB::table('entreprises')->insertGetId($insertData);
         } catch (\Throwable $e) {
             Log::error('INSERT ENTREPRISE FAILED', ['error' => $e->getMessage()]);
@@ -270,16 +264,14 @@ class EntrepriseController extends Controller
         Log::info('Entreprise created', ['id' => $entrepriseId]);
 
         // ── 5. INSÉRER LES PIVOTS DOMAINES ────────────────────────────────
-        // Chaque insert est independant. Si un echoue, on log et on continue.
-        // L'entreprise est deja creee — on ne rollback pas.
+        // La table entreprise_domaine n'a PAS de colonnes created_at/updated_at
+        // => on insere uniquement entreprise_id et domaine_id
 
         foreach ($foundIds as $domaineId) {
             try {
                 DB::table('entreprise_domaine')->insert([
                     'entreprise_id' => $entrepriseId,
                     'domaine_id'    => $domaineId,
-                    'created_at'    => $now,
-                    'updated_at'    => $now,
                 ]);
             } catch (\Throwable $e) {
                 Log::warning("Pivot domaine {$domaineId} echoue", [
@@ -404,7 +396,7 @@ class EntrepriseController extends Controller
             ], 422);
         }
 
-        // Vérifier les domaines avant toute modification
+        // Verifier les domaines avant toute modification
         $newDomaineIds = null;
         if ($request->has('domaine_ids') && is_array($request->domaine_ids)) {
             $raw = array_map('intval', $request->domaine_ids);
@@ -444,7 +436,9 @@ class EntrepriseController extends Controller
                     if (env('GOOGLE_MAPS_KEY')) {
                         try {
                             $geo = Http::timeout(10)->get('https://maps.googleapis.com/maps/api/geocode/json', [
-                                'latlng' => "{$lat},{$lng}", 'key' => env('GOOGLE_MAPS_KEY'), 'language' => 'fr',
+                                'latlng' => "{$lat},{$lng}",
+                                'key'    => env('GOOGLE_MAPS_KEY'),
+                                'language' => 'fr',
                             ]);
                             if ($geo->successful() && isset($geo['results'][0])) {
                                 $entreprise->google_formatted_address = $geo['results'][0]['formatted_address'];
@@ -466,19 +460,17 @@ class EntrepriseController extends Controller
 
             $entreprise->save();
 
+            // Mise a jour des domaines sans created_at/updated_at
             if ($newDomaineIds !== null) {
                 DB::table('entreprise_domaine')
                     ->where('entreprise_id', $entreprise->id)
                     ->delete();
 
-                $now = now();
                 foreach ($newDomaineIds as $domaineId) {
                     try {
                         DB::table('entreprise_domaine')->insert([
                             'entreprise_id' => $entreprise->id,
                             'domaine_id'    => $domaineId,
-                            'created_at'    => $now,
-                            'updated_at'    => $now,
                         ]);
                     } catch (\Throwable $e) {
                         Log::warning("Pivot update domaine {$domaineId} echoue", ['error' => $e->getMessage()]);
