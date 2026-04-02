@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Entreprise;
 use App\Models\Domaine;
 use App\Models\User;
-use App\Notifications\NewEntrepriseCreatedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -15,14 +14,14 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Cloudinary\Configuration\Configuration;
 use Cloudinary\Api\Upload\UploadApi;
-use App\Events\EntreprisePendingEvent;
-use App\Models\Abonnement;
 
-class EntrepriseController extends Controller{
-    public function __construct()  {
+class EntrepriseController extends Controller
+{
+    public function __construct()
+    {
         $this->initializeCloudinary();
     }
-    
+
     private function initializeCloudinary()
     {
         try {
@@ -33,23 +32,22 @@ class EntrepriseController extends Controller{
                     'api_secret' => config('cloudinary.cloud.api_secret'),
                 ],
                 'url' => [
-                    'secure' => config('cloudinary.url.secure', true)
-                ]
+                    'secure' => config('cloudinary.url.secure', true),
+                ],
             ]);
-            
+
             Log::info('Cloudinary initialise avec succes', [
-                'cloud_name' => config('cloudinary.cloud.cloud_name')
+                'cloud_name' => config('cloudinary.cloud.cloud_name'),
             ]);
         } catch (\Exception $e) {
-            Log::error('Erreur initialisation Cloudinary', [
-                'error' => $e->getMessage()
-            ]);
+            Log::error('Erreur initialisation Cloudinary', ['error' => $e->getMessage()]);
         }
     }
-    
-    public function getFormData()  {
+
+    public function getFormData()
+    {
         return response()->json([
-            'domaines' => Domaine::orderBy('name')->get()
+            'domaines' => Domaine::orderBy('name')->get(),
         ]);
     }
 
@@ -63,7 +61,7 @@ class EntrepriseController extends Controller{
     public function mine()
     {
         $user = Auth::user();
-        
+
         if (!$user) {
             return response()->json(['message' => 'Non authentifie'], 401);
         }
@@ -83,7 +81,7 @@ class EntrepriseController extends Controller{
 
         return response()->json($entreprises);
     }
-   
+
     public function show($id)
     {
         $entreprise = Entreprise::with('domaines', 'services', 'prestataire')->find($id);
@@ -119,131 +117,156 @@ class EntrepriseController extends Controller{
         return response()->json($entreprises);
     }
 
-public function store(Request $request)
-{
-    Log::info('START STORE');
+    public function store(Request $request)
+    {
+        Log::info('START STORE');
 
-    $user = Auth::user();
+        $user = Auth::user();
 
-    // -----------------------------
-    // VALIDATION
-    // -----------------------------
-    $validator = Validator::make($request->all(), [
-        'name' => 'required|string|max:255',
-        'domaine_ids' => 'required|array|min:1',
-        'domaine_ids.*' => 'integer|exists:domaines,id',
-
-        'ifu_number' => 'required|string',
-        'rccm_number' => 'required|string',
-        'certificate_number' => 'required|string',
-
-        'pdg_full_name' => 'required|string',
-        'pdg_full_profession' => 'required|string',
-        'role_user' => 'required|string',
-
-        'whatsapp_phone' => 'required|string',
-        'call_phone' => 'required|string',
-
-        'latitude' => 'required|numeric|between:-90,90',
-        'longitude' => 'required|numeric|between:-180,180',
-
-        'ifu_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-        'rccm_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-        'certificate_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-
-        'logo' => 'nullable|image|max:2048',
-        'image_boutique' => 'nullable|image|max:2048',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json(['error' => $validator->errors()], 422);
-    }
-
-    // -----------------------------
-    // UPLOAD FILES TO CLOUDINARY
-    // -----------------------------
-    $uploadedFiles = [];
-    $filesToUpload = [
-        'ifu_file' => ['folder' => 'documents', 'subfolder' => 'ifu'],
-        'rccm_file' => ['folder' => 'documents', 'subfolder' => 'rccm'],
-        'certificate_file' => ['folder' => 'documents', 'subfolder' => 'certificates'],
-        'logo' => ['folder' => 'logos', 'subfolder' => null],
-        'image_boutique' => ['folder' => 'boutiques', 'subfolder' => null],
-    ];
-
-    foreach ($filesToUpload as $key => $config) {
-        if ($request->hasFile($key)) {
-            try {
-                $uploadedFiles[$key] = $this->uploadToCloudinary(
-                    $request->file($key),
-                    $config['folder'],
-                    $config['subfolder']
-                );
-            } catch (\Throwable $e) {
-                Log::error("UPLOAD ERROR: {$key}", ['error' => $e->getMessage()]);
-                return response()->json(['error' => "Upload failed for {$key}"], 500);
-            }
-        }
-    }
-
-    // -----------------------------
-    // PREPARE DATA FOR INSERT
-    // -----------------------------
-    $data = $request->except(['domaine_ids', 'logo', 'image_boutique', 'ifu_file', 'rccm_file', 'certificate_file']);
-    $data['prestataire_id'] = $user->id;
-    $data['status'] = 'pending';
-
-    foreach ($uploadedFiles as $key => $url) {
-        $data[$key] = $url;
-    }
-
-    // -----------------------------
-    // BEGIN TRANSACTION
-    // -----------------------------
-    DB::beginTransaction();
-
-    try {
-        Log::info('INSERT ENTREPRISE', $data);
-        $entreprise = Entreprise::create($data);
-
-        if (!$entreprise) {
-            throw new \Exception('Failed to insert entreprise');
-        }
-
-        // Insert pivot domaines safely
-        foreach ($request->domaine_ids as $domaineId) {
-            $exists = DB::table('domaines')->where('id', $domaineId)->exists();
-            if ($exists) {
-                DB::table('entreprise_domaine')->insert([
-                    'entreprise_id' => $entreprise->id,
-                    'domaine_id' => $domaineId,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            } else {
-                Log::warning("Domaine ID {$domaineId} does not exist, skipping.");
-            }
-        }
-
-        DB::commit();
-
-        return response()->json([
-            'success' => true,
-            'entreprise_id' => $entreprise->id
-        ], 201);
-
-    } catch (\Throwable $e) {
-        DB::rollBack();
-        Log::error('DB TRANSACTION ERROR', [
-            'message' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
+        // ── 1. VALIDATION ────────────────────────────────────────────────────
+        $validator = Validator::make($request->all(), [
+            'name'               => 'required|string|max:255',
+            'domaine_ids'        => 'required|array|min:1',
+            'domaine_ids.*'      => 'integer|exists:domaines,id',
+            'ifu_number'         => 'required|string',
+            'rccm_number'        => 'required|string',
+            'certificate_number' => 'required|string',
+            'pdg_full_name'      => 'required|string',
+            'pdg_full_profession'=> 'required|string',
+            'role_user'          => 'required|string',
+            'whatsapp_phone'     => 'required|string',
+            'call_phone'         => 'required|string',
+            'latitude'           => 'required|numeric|between:-90,90',
+            'longitude'          => 'required|numeric|between:-180,180',
+            'ifu_file'           => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'rccm_file'          => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'certificate_file'   => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'logo'               => 'nullable|image|max:2048',
+            'image_boutique'     => 'nullable|image|max:2048',
         ]);
 
-        return response()->json(['error' => 'Database transaction failed'], 500);
-    }
-}
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
 
-    private function uploadToCloudinary($file, $folder, $subfolder = null) {
+        // ── 2. VALIDER LES DOMAINE IDS AVANT TOUTE TRANSACTION ──────────────
+        // On vérifie que tous les domaines existent AVANT d'ouvrir une transaction
+        // Cela évite le SQLSTATE[25P02] causé par une requête qui échoue en transaction
+        $domaineIds = $request->domaine_ids;
+        $existingDomaineIds = DB::table('domaines')
+            ->whereIn('id', $domaineIds)
+            ->pluck('id')
+            ->toArray();
+
+        $invalidIds = array_diff($domaineIds, $existingDomaineIds);
+        if (!empty($invalidIds)) {
+            return response()->json([
+                'error' => 'Domaines invalides : ' . implode(', ', $invalidIds),
+            ], 422);
+        }
+
+        // ── 3. UPLOAD CLOUDINARY (hors transaction) ──────────────────────────
+        $uploadedFiles = [];
+        $filesToUpload = [
+            'ifu_file'         => ['folder' => 'documents', 'subfolder' => 'ifu'],
+            'rccm_file'        => ['folder' => 'documents', 'subfolder' => 'rccm'],
+            'certificate_file' => ['folder' => 'documents', 'subfolder' => 'certificates'],
+            'logo'             => ['folder' => 'logos',     'subfolder' => null],
+            'image_boutique'   => ['folder' => 'boutiques', 'subfolder' => null],
+        ];
+
+        foreach ($filesToUpload as $key => $config) {
+            if ($request->hasFile($key)) {
+                try {
+                    $uploadedFiles[$key] = $this->uploadToCloudinary(
+                        $request->file($key),
+                        $config['folder'],
+                        $config['subfolder']
+                    );
+                } catch (\Throwable $e) {
+                    Log::error("UPLOAD ERROR: {$key}", ['error' => $e->getMessage()]);
+                    return response()->json(['error' => "Upload failed for {$key}: " . $e->getMessage()], 500);
+                }
+            }
+        }
+
+        // ── 4. PRÉPARER LES DONNÉES ──────────────────────────────────────────
+        $data = $request->except([
+            'domaine_ids', 'logo', 'image_boutique',
+            'ifu_file', 'rccm_file', 'certificate_file',
+        ]);
+        $data['prestataire_id'] = $user->id;
+        $data['status']         = 'pending';
+
+        foreach ($uploadedFiles as $key => $url) {
+            $data[$key] = $url;
+        }
+
+        // ── 5. TRANSACTION DB ────────────────────────────────────────────────
+        // IMPORTANT : avec Neon + pgBouncer en mode "transaction pooling",
+        // on doit s'assurer que la connexion est propre avant de démarrer.
+        // On utilise un try/catch strict et on ne fait AUCUNE requête DB
+        // avant DB::beginTransaction().
+
+        try {
+            DB::beginTransaction();
+
+            Log::info('INSERT ENTREPRISE', $data);
+            $entreprise = Entreprise::create($data);
+
+            if (!$entreprise || !$entreprise->id) {
+                throw new \Exception('Failed to insert entreprise — no ID returned');
+            }
+
+            Log::info('Entreprise created', ['id' => $entreprise->id]);
+
+            // Insérer les pivots domaines (les IDs sont déjà validés ci-dessus)
+            $pivotRows = [];
+            $now       = now();
+
+            foreach ($existingDomaineIds as $domaineId) {
+                $pivotRows[] = [
+                    'entreprise_id' => $entreprise->id,
+                    'domaine_id'    => (int) $domaineId,
+                    'created_at'    => $now,
+                    'updated_at'    => $now,
+                ];
+            }
+
+            if (!empty($pivotRows)) {
+                DB::table('entreprise_domaine')->insert($pivotRows);
+            }
+
+            DB::commit();
+
+            Log::info('Transaction committed', ['entreprise_id' => $entreprise->id]);
+
+            return response()->json([
+                'success'       => true,
+                'entreprise_id' => $entreprise->id,
+            ], 201);
+
+        } catch (\Throwable $e) {
+            // Toujours tenter le rollback, même si la connexion est dans un état bizarre
+            try {
+                DB::rollBack();
+            } catch (\Throwable $rollbackException) {
+                Log::warning('Rollback failed', ['error' => $rollbackException->getMessage()]);
+            }
+
+            Log::error('DB TRANSACTION ERROR', [
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            return response()->json(['error' => 'Database transaction failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    // ── UPLOAD CLOUDINARY ────────────────────────────────────────────────────
+
+    private function uploadToCloudinary($file, string $folder, ?string $subfolder = null): string
+    {
         if (!$file || !$file->isValid()) {
             throw new \Exception('Fichier invalide');
         }
@@ -254,16 +277,16 @@ public function store(Request $request)
             ? "entreprises/{$folder}/{$subfolder}"
             : "entreprises/{$folder}";
 
-        try {
-            Log::info('Uploading to Cloudinary', [
-                'folder' => $folderPath,
-                'file_name' => $file->getClientOriginalName()
-            ]);
+        Log::info('Uploading to Cloudinary', [
+            'folder'    => $folderPath,
+            'file_name' => $file->getClientOriginalName(),
+        ]);
 
+        try {
             $result = (new UploadApi())->upload(
                 $file->getRealPath(),
                 [
-                    'folder' => $folderPath,
+                    'folder'        => $folderPath,
                     'resource_type' => 'auto',
                 ]
             );
@@ -273,26 +296,22 @@ public function store(Request $request)
             }
 
             Log::info('Upload successful', [
-                'url' => $result['secure_url'],
-                'folder' => $folderPath
+                'url'    => $result['secure_url'],
+                'folder' => $folderPath,
             ]);
 
             return $result['secure_url'];
 
         } catch (\Cloudinary\Api\Exception\ApiError $e) {
-            Log::error('Cloudinary API error', [
-                'error' => $e->getMessage(),
-                'folder' => $folderPath
-            ]);
+            Log::error('Cloudinary API error', ['error' => $e->getMessage(), 'folder' => $folderPath]);
             throw new \Exception('Cloudinary error: ' . $e->getMessage());
         } catch (\Exception $e) {
-            Log::error('Upload error', [
-                'error' => $e->getMessage(),
-                'folder' => $folderPath
-            ]);
+            Log::error('Upload error', ['error' => $e->getMessage(), 'folder' => $folderPath]);
             throw new \Exception('Upload failed: ' . $e->getMessage());
         }
     }
+
+    // ── COMPLETE PROFILE ─────────────────────────────────────────────────────
 
     public function completeProfile(Request $request, $id)
     {
@@ -329,31 +348,29 @@ public function store(Request $request)
 
             $entreprise->fill($request->only(['siege', 'whatsapp_phone', 'call_phone', 'status_online']));
             $entreprise->save();
-
             $entreprise->load('domaines', 'services');
 
             return response()->json([
-                'message' => 'Profil entreprise mis a jour',
-                'entreprise' => $entreprise
+                'message'    => 'Profil entreprise mis a jour',
+                'entreprise' => $entreprise,
             ]);
         } catch (\Exception $e) {
             Log::error('CompleteProfile error', ['error' => $e->getMessage()]);
             return response()->json([
                 'message' => 'Erreur lors de la mise a jour',
-                'error' => $e->getMessage()
+                'error'   => $e->getMessage(),
             ], 500);
         }
     }
 
+    // ── UPDATE ───────────────────────────────────────────────────────────────
+
     public function update(Request $request, $id)
     {
         $user = Auth::user();
-        
+
         if (!$user) {
-            return response()->json([
-                'message' => 'Non authentifie',
-                'status' => 'error'
-            ], 401);
+            return response()->json(['message' => 'Non authentifie', 'status' => 'error'], 401);
         }
 
         $entreprise = Entreprise::where('id', $id)
@@ -362,75 +379,80 @@ public function store(Request $request)
 
         if (!$entreprise) {
             return response()->json([
-                'message' => 'Entreprise non trouvee ou vous navez pas les permissions necessaires',
-                'status' => 'error'
+                'message' => 'Entreprise non trouvee ou permissions insuffisantes',
+                'status'  => 'error',
             ], 404);
         }
 
         if ($entreprise->status !== 'validated') {
             return response()->json([
-                'message' => 'Seules les entreprises validees peuvent etre modifiees',
-                'status' => 'error',
-                'current_status' => $entreprise->status
+                'message'        => 'Seules les entreprises validees peuvent etre modifiees',
+                'status'         => 'error',
+                'current_status' => $entreprise->status,
             ], 403);
         }
 
         $validator = Validator::make($request->all(), [
-            'name' => 'nullable|string|max:255',
-            'domaine_ids' => 'nullable|array',
-            'domaine_ids.*' => 'exists:domaines,id',
-            'siege' => 'nullable|string|max:500',
-            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
-            'image_boutique' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
-            'description' => 'nullable|string|max:2000',
-            'whatsapp_phone' => 'nullable|string|max:20',
-            'call_phone' => 'nullable|string|max:20',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
-        ], [
-            'logo.max' => 'Le logo ne doit pas depasser 2 Mo',
-            'image_boutique.max' => 'Limage de la boutique ne doit pas depasser 2 Mo',
-            'domaine_ids.*.exists' => 'Un ou plusieurs domaines selectionnes sont invalides',
+            'name'            => 'nullable|string|max:255',
+            'domaine_ids'     => 'nullable|array',
+            'domaine_ids.*'   => 'exists:domaines,id',
+            'siege'           => 'nullable|string|max:500',
+            'logo'            => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'image_boutique'  => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'description'     => 'nullable|string|max:2000',
+            'whatsapp_phone'  => 'nullable|string|max:20',
+            'call_phone'      => 'nullable|string|max:20',
+            'latitude'        => 'nullable|numeric|between:-90,90',
+            'longitude'       => 'nullable|numeric|between:-180,180',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'message' => 'Erreur de validation',
-                'status' => 'error',
-                'errors' => $validator->errors()
+                'status'  => 'error',
+                'errors'  => $validator->errors(),
             ], 422);
         }
 
-        DB::beginTransaction();
+        // Valider les domaines AVANT la transaction
+        $newDomaineIds = null;
+        if ($request->has('domaine_ids') && is_array($request->domaine_ids)) {
+            $newDomaineIds = array_map('intval', $request->domaine_ids);
+            $existingIds   = DB::table('domaines')->whereIn('id', $newDomaineIds)->pluck('id')->toArray();
+            $invalidIds    = array_diff($newDomaineIds, $existingIds);
+            if (!empty($invalidIds)) {
+                return response()->json([
+                    'message' => 'Domaines invalides : ' . implode(', ', $invalidIds),
+                    'status'  => 'error',
+                ], 422);
+            }
+        }
 
         try {
-            $modifiableFields = [
-                'name', 'siege', 'description', 'whatsapp_phone', 
-                'call_phone', 'latitude', 'longitude'
-            ];
+            DB::beginTransaction();
 
-            foreach ($modifiableFields as $field) {
-                if ($request->has($field) && !is_null($request->input($field))) {
+            $modifiable = ['name', 'siege', 'description', 'whatsapp_phone', 'call_phone', 'latitude', 'longitude'];
+            foreach ($modifiable as $field) {
+                if ($request->filled($field)) {
                     $entreprise->$field = $request->input($field);
                 }
             }
 
-            if ($request->has('latitude') && $request->has('longitude')) {
-                $latitude = $request->latitude;
-                $longitude = $request->longitude;
-                
-                if ($entreprise->latitude != $latitude || $entreprise->longitude != $longitude) {
-                    $entreprise->latitude = $latitude;
-                    $entreprise->longitude = $longitude;
-                    
+            // Géocoder si coordonnées changées
+            if ($request->filled('latitude') && $request->filled('longitude')) {
+                $lat = $request->latitude;
+                $lng = $request->longitude;
+                if ($entreprise->latitude != $lat || $entreprise->longitude != $lng) {
+                    $entreprise->latitude  = $lat;
+                    $entreprise->longitude = $lng;
+
                     if (env('GOOGLE_MAPS_KEY')) {
                         try {
-                            $geo = Http::timeout(10)->get("https://maps.googleapis.com/maps/api/geocode/json", [
-                                'latlng' => "{$latitude},{$longitude}",
-                                'key' => env('GOOGLE_MAPS_KEY'),
-                                'language' => 'fr'
+                            $geo = Http::timeout(10)->get('https://maps.googleapis.com/maps/api/geocode/json', [
+                                'latlng'   => "{$lat},{$lng}",
+                                'key'      => env('GOOGLE_MAPS_KEY'),
+                                'language' => 'fr',
                             ]);
-
                             if ($geo->successful() && isset($geo['results'][0])) {
                                 $entreprise->google_formatted_address = $geo['results'][0]['formatted_address'];
                             }
@@ -442,79 +464,63 @@ public function store(Request $request)
             }
 
             if ($request->hasFile('logo')) {
-                try {
-                    $entreprise->logo = $this->uploadToCloudinary($request->file('logo'), 'logos');
-                } catch (\Exception $e) {
-                    throw new \Exception("Logo upload failed: " . $e->getMessage());
-                }
+                $entreprise->logo = $this->uploadToCloudinary($request->file('logo'), 'logos');
             }
 
             if ($request->hasFile('image_boutique')) {
-                try {
-                    $entreprise->image_boutique = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
-                } catch (\Exception $e) {
-                    throw new \Exception("Boutique image upload failed: " . $e->getMessage());
-                }
+                $entreprise->image_boutique = $this->uploadToCloudinary($request->file('image_boutique'), 'boutiques');
             }
 
             $entreprise->save();
 
-            if ($request->has('domaine_ids')) {
-                DB::table('entreprise_domaine')->where('entreprise_id', $entreprise->id)->delete();
-                
-                $pivotData = [];
-                foreach ($request->domaine_ids as $domaineId) {
-                    $pivotData[] = [
-                        'entreprise_id' => $entreprise->id,
-                        'domaine_id' => $domaineId,
-                        'created_at' => now(),
-                        'updated_at' => now()
-                    ];
+            // Mise à jour des domaines
+            if ($newDomaineIds !== null) {
+                DB::table('entreprise_domaine')
+                    ->where('entreprise_id', $entreprise->id)
+                    ->delete();
+
+                if (!empty($newDomaineIds)) {
+                    $now      = now();
+                    $pivotRows = [];
+                    foreach ($newDomaineIds as $domaineId) {
+                        $pivotRows[] = [
+                            'entreprise_id' => $entreprise->id,
+                            'domaine_id'    => $domaineId,
+                            'created_at'    => $now,
+                            'updated_at'    => $now,
+                        ];
+                    }
+                    DB::table('entreprise_domaine')->insert($pivotRows);
                 }
-                DB::table('entreprise_domaine')->insert($pivotData);
             }
 
             $entreprise->load('domaines', 'services', 'prestataire');
 
             DB::commit();
 
-            Log::info('Entreprise updated', [
-                'entreprise_id' => $entreprise->id,
-                'prestataire_id' => $user->id
+            return response()->json([
+                'message'    => 'Informations mises a jour avec succes',
+                'status'     => 'success',
+                'entreprise' => $entreprise,
             ]);
 
-            return response()->json([
-                'message' => 'Informations de lentreprise mises a jour avec succes',
-                'status' => 'success',
-                'entreprise' => $entreprise
-            ], 200);
+        } catch (\Throwable $e) {
+            try {
+                DB::rollBack();
+            } catch (\Throwable $rb) {
+                Log::warning('Rollback failed (update)', ['error' => $rb->getMessage()]);
+            }
 
-        } catch (\Illuminate\Database\QueryException $e) {
-            DB::rollBack();
-            Log::error('Database error updating entreprise', [
-                'error' => $e->getMessage(),
-                'entreprise_id' => $id,
-                'user_id' => $user->id
-            ]);
-
-            return response()->json([
-                'message' => 'Erreur de base de donnees',
-                'status' => 'error',
-                'error' => config('app.debug') ? $e->getMessage() : 'Une erreur est survenue'
-            ], 500);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
             Log::error('Error updating entreprise', [
-                'error' => $e->getMessage(),
-                'entreprise_id' => $id,
-                'user_id' => $user->id
+                'error'          => $e->getMessage(),
+                'entreprise_id'  => $id,
+                'user_id'        => $user->id,
             ]);
 
             return response()->json([
                 'message' => 'Erreur lors de la mise a jour',
-                'status' => 'error',
-                'error' => $e->getMessage()
+                'status'  => 'error',
+                'error'   => $e->getMessage(),
             ], 500);
         }
     }
