@@ -215,8 +215,6 @@ private function sendFCMNotification(User $recipient, array $payload): void
         return response()->json(['success' => true]);
     }
 
-
-
     public function sendMessageMobile(Request $request, int $conversationId): \Illuminate\Http\JsonResponse {
         $validator = Validator::make($request->all(), [
             'type'         => 'required|in:text,image,video,vocal,document',
