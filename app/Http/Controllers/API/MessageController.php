@@ -216,8 +216,8 @@ private function sendFCMNotification(User $recipient, array $payload): void
     }
 
 
-    public function sendMessageMobile(Request $request, int $conversationId): \Illuminate\Http\JsonResponse
-    {
+
+    public function sendMessageMobile(Request $request, int $conversationId): \Illuminate\Http\JsonResponse {
         $validator = Validator::make($request->all(), [
             'type'         => 'required|in:text,image,video,vocal,document',
             'content'      => 'nullable|string',
@@ -249,8 +249,7 @@ private function sendFCMNotification(User $recipient, array $payload): void
         $fileUrl  = null;
 
         try {
-            DB::beginTransaction();
-
+            // Upload d'abord (hors transaction)
             if ($request->hasFile('file')) {
                 $filePath = $this->uploadFile(
                     $request->file('file'),
@@ -265,6 +264,7 @@ private function sendFCMNotification(User $recipient, array $payload): void
                 $content = $this->getDefaultContent($request->type);
             }
 
+            // Insertion directe (pas de BEGIN/COMMIT explicite)
             $message = Message::create([
                 'conversation_id' => $conv->id,
                 'sender_id'       => $userId,
@@ -277,14 +277,13 @@ private function sendFCMNotification(User $recipient, array $payload): void
                 'reply_to_id'     => $request->reply_to_id ?? null,
             ]);
 
+            // touch() fait un UPDATE simple — pas de transaction
             $conv->touch();
             $message->load(['sender:id,name,profile_photo_path', 'replyTo']);
 
             $messageData             = $message->toArray();
             $messageData['file_url'] = $fileUrl ?: $message->file_url;
             $messageData['is_me']    = true;
-
-            DB::commit();
 
             // ─── Destinataire ─────────────────────────────────────────
             $receiverId = $conv->user_one_id === $userId
@@ -294,7 +293,6 @@ private function sendFCMNotification(User $recipient, array $payload): void
             if ($receiverId) {
                 $recipient = User::find($receiverId);
 
-                // 1. Pusher: mise à jour temps réel (si app ouverte)
                 $pusherPayload = [
                     'conversation_id' => $conv->id,
                     'message'         => $messageData,
@@ -303,21 +301,10 @@ private function sendFCMNotification(User $recipient, array $payload): void
                     'sender_photo'    => $user->profile_photo_url ?? '',
                 ];
 
-                // Canal utilisateur → MessagesScreen (liste des convs)
-                $this->triggerPusher(
-                    'private-user.' . $receiverId,
-                    'new-message',
-                    $pusherPayload
-                );
+                $this->triggerPusher('private-user.' . $receiverId, 'new-message', $pusherPayload);
+                $this->triggerPusher('private-conversation.' . $conv->id, 'message-sent',
+                    ['message' => $messageData, 'sender_id' => $userId]);
 
-                // Canal conversation → ChatScreen ouvert
-                $this->triggerPusher(
-                    'private-conversation.' . $conv->id,
-                    'message-sent',
-                    ['message' => $messageData, 'sender_id' => $userId]
-                );
-
-                // 2. FCM: notification push (si app fermée/background/verrouillé)
                 if ($recipient && !empty($recipient->fcm_token)) {
                     $this->sendFCMNotification($recipient, [
                         'title' => $user->name,
@@ -337,8 +324,10 @@ private function sendFCMNotification(User $recipient, array $payload): void
             return response()->json($messageData, 201);
 
         } catch (\Exception $e) {
-            DB::rollBack();
-            if ($filePath) $this->deleteFile($filePath);
+            // Nettoyage du fichier si le message n'a pas été sauvegardé
+            if ($filePath && !isset($message)) {
+                $this->deleteFile($filePath);
+            }
             Log::error('Erreur envoi message mobile: ' . $e->getMessage());
             return response()->json([
                 'message' => 'Erreur interne: ' . $e->getMessage(),
