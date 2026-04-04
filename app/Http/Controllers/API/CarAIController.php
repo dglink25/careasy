@@ -25,7 +25,7 @@ class CarAIController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  POST /api/ai/chat
+    //  POST /api/carai/chat
     //  Endpoint principal — envoie un message à CarAI
     // ══════════════════════════════════════════════════════════════════════
 
@@ -67,7 +67,8 @@ class CarAIController extends Controller
                 'language'        => $validated['language'] ?? null,
             ];
 
-            $response = Http::timeout(20)
+            // BUG FIX #8 : timeout augmenté à 30s (AlwaysData peut être lent)
+            $response = Http::timeout(30)
                 ->withHeaders(['Content-Type' => 'application/json'])
                 ->post("{$this->caraiUrl}/chat", $payload);
 
@@ -81,6 +82,12 @@ class CarAIController extends Controller
             }
 
             $aiData = $response->json();
+
+            // BUG FIX #9 : vérifier que la réponse contient bien les champs attendus
+            if (empty($aiData['reply'])) {
+                Log::error('CarAI response missing reply field', ['response' => $aiData]);
+                return $this->fallbackResponse($conv, $userMessage);
+            }
 
         } catch (\Exception $e) {
             Log::error('CarAI service unreachable', ['error' => $e->getMessage()]);
@@ -122,7 +129,7 @@ class CarAIController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  GET /api/ai/conversations/{id}/messages
+    //  GET /api/carai/conversations/{id}/messages
     //  Historique d'une conversation CarAI
     // ══════════════════════════════════════════════════════════════════════
 
@@ -160,7 +167,7 @@ class CarAIController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  POST /api/ai/conversations/start
+    //  POST /api/carai/conversations/start
     //  Démarre ou retrouve la conversation CarAI d'un utilisateur
     // ══════════════════════════════════════════════════════════════════════
 
@@ -168,9 +175,6 @@ class CarAIController extends Controller
     {
         $user = Auth::user();
 
-        // L'utilisateur "CarAI" a user_id null dans messages, mais
-        // la conversation est créée entre user et un bot ID spécial = 0
-        // On stocke dans une conversation mono-user (user_two_id = null)
         $conv = Conversation::firstOrCreate(
             [
                 'user_one_id' => $user->id,
@@ -189,7 +193,7 @@ class CarAIController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  DELETE /api/ai/conversations/{id}
+    //  DELETE /api/carai/conversations/{id}
     //  Efface l'historique (RGPD)
     // ══════════════════════════════════════════════════════════════════════
 
@@ -205,10 +209,8 @@ class CarAIController extends Controller
             return response()->json(['message' => 'Conversation introuvable'], 404);
         }
 
-        // Supprimer les messages de la DB
         Message::where('conversation_id', $conversationId)->delete();
 
-        // Supprimer l'historique dans Redis via le service Python
         try {
             Http::timeout(5)->delete("{$this->caraiUrl}/conversation/carai-{$conversationId}");
         } catch (\Exception $e) {
@@ -219,8 +221,12 @@ class CarAIController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  GET /api/ai/nearby
+    //  GET /api/carai/nearby
     //  Recherche rapide de services proches (sans passer par le LLM)
+    //
+    //  BUG FIX #8 : L'ancienne version utilisait une URL incorrecte
+    //  "{$this->caraiUrl}/../api/ai/services/nearby" qui ne fonctionne
+    //  pas. On appelle maintenant directement l'endpoint Laravel correct.
     // ══════════════════════════════════════════════════════════════════════
 
     public function nearby(Request $request)
@@ -248,8 +254,27 @@ class CarAIController extends Controller
             if (!empty($validated['domaine'])) {
                 $params['domaine'] = $validated['domaine'];
             }
-            $resp = Http::timeout(10)->get("{$this->caraiUrl}/../api/ai/services/nearby", $params);
-            return $resp->successful() ? $resp->json() : ['data' => []];
+
+            // BUG FIX #8 : appeler directement l'endpoint Laravel /api/ai/services/nearby
+            // L'ancienne URL "{$this->caraiUrl}/../api/ai/services/nearby" était incorrecte
+            $laravelBase = env('APP_URL', 'http://localhost');
+            $resp = Http::timeout(15)->get("{$laravelBase}/api/ai/services/nearby", $params);
+
+            if ($resp->successful()) {
+                return $resp->json();
+            }
+
+            // Fallback : essayer via CarAI Python
+            try {
+                $respCarai = Http::timeout(10)->get("{$this->caraiUrl}/nearby", $params);
+                if ($respCarai->successful()) {
+                    return $respCarai->json();
+                }
+            } catch (\Exception $e) {
+                Log::warning('CarAI nearby fallback échoué', ['error' => $e->getMessage()]);
+            }
+
+            return ['data' => []];
         });
 
         return response()->json($data);
@@ -264,7 +289,6 @@ class CarAIController extends Controller
         $conv = Conversation::find($convId);
 
         if (!$conv) {
-            // Créer la conversation à la volée
             $conv = Conversation::create([
                 'user_one_id'     => $user->id,
                 'user_two_id'     => null,
@@ -278,7 +302,7 @@ class CarAIController extends Controller
 
     private function fallbackResponse(Conversation $conv, Message $userMessage)
     {
-        $fallback = "Je suis momentanément indisponible. 😔 Réessaie dans quelques secondes ou contacte le support CarEasy.";
+        $fallback = "Je suis momentanément indisponible. Réessaie dans quelques secondes ou contacte le support CarEasy.";
 
         $aiMessage = Message::create([
             'conversation_id' => $conv->id,
@@ -294,9 +318,9 @@ class CarAIController extends Controller
             'reply'       => $fallback,
             'services'    => [],
             'suggestions' => [
-                '🔄 Réessayer',
-                '🔧 Trouver un garage',
-                '🛞 Vulcanisateur',
+                'Réessayer',
+                'Trouver un garage',
+                'Vulcanisateur',
             ],
         ], 503);
     }
@@ -314,7 +338,7 @@ class CarAIController extends Controller
                 'ai_output'         => mb_substr($aiData['reply'] ?? '', 0, 5000),
                 'detected_intent'   => $aiData['intent'] ?? null,
                 'detected_language' => $aiData['language'] ?? 'fr',
-                'model_version'     => 'carai-v2',
+                'model_version'     => 'carai-v9',
                 'created_at'        => now(),
             ]);
         } catch (\Exception $e) {
