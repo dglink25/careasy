@@ -25,11 +25,11 @@ return [
         'http://localhost:5174',   // Vite port alternatif
         'http://127.0.0.1:5173',
         'http://127.0.0.1:3000',
-         'https://careasy-frontend.vercel.app',
+         'https://careasy26.vercel.app',
     ],
 
     'allowed_origins_patterns' => [
-        '#^https://careasy-frontend(-[a-z0-9]+)?\.vercel\.app$#',  // ← sous-domaines Vercel preview
+        '#^https://careasy26(-[a-z0-9]+)?\.vercel\.app$#',  // ← sous-domaines Vercel preview
     ],
 
     'allowed_headers' => ['*'],
