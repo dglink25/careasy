@@ -10,11 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 class AiServiceController extends Controller {
 
-    // ══════════════════════════════════════════════════════════════════════
-    //  GET /api/ai/services/nearby
-    //  Recherche par GPS + Haversine — utilisé par CarAI Python
-    // ══════════════════════════════════════════════════════════════════════
-
     public function nearby(Request $request) {
         $lat    = (float) $request->input('lat', 0);
         $lng    = (float) $request->input('lng', 0);
@@ -25,9 +20,7 @@ class AiServiceController extends Controller {
         if (!$lat || !$lng) {
             return response()->json(['message' => 'lat et lng requis'], 400);
         }
-
-        // BUG FIX #10 : augmenter le rayon par défaut à 50km si aucun résultat
-        // (évite les réponses vides quand les entreprises sont loin du point GPS)
+        
         $haversineWhere = "(6371 * acos(
             cos(radians({$lat})) * cos(radians(entreprises.latitude))
             * cos(radians(entreprises.longitude) - radians({$lng}))
@@ -112,14 +105,6 @@ class AiServiceController extends Controller {
         return response()->json(['data' => $result, 'count' => $result->count()]);
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    //  GET /api/ai/services
-    //  Recherche par domaine sans GPS — utilisé par CarAI Python (fallback)
-    //
-    //  BUG FIX #11 : L'ancienne version ne retournait pas les champs
-    //  attendus par _normalize_service() dans main.py.
-    //  On retourne maintenant un format cohérent.
-    // ══════════════════════════════════════════════════════════════════════
 
     public function index(Request $request)
     {
