@@ -1337,6 +1337,4 @@ private function sendFCMNotification(User $recipient, array $payload): void
         return response()->json(['message' => 'Message supprimé']);
     }
 
-
-
 }
