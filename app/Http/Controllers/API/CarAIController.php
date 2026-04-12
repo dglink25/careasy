@@ -125,7 +125,7 @@ class CarAIController extends Controller
         // 3. Sauvegarder la réponse IA
         $aiMessage = Message::create([
             'conversation_id' => $conv->id,
-            'sender_id'       => null,
+            'sender_id'       => 1,
             'content'         => $aiData['reply'],
             'type'            => 'text',
             'ai_metadata'     => [
