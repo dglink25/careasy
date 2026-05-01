@@ -52,12 +52,8 @@ class CarAIController extends Controller
         ]);
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    //  POST /api/carai/chat
-    // ══════════════════════════════════════════════════════════════════════
 
-    public function chat(Request $request)
-    {
+    public function chat(Request $request) {
         $validated = $request->validate([
             'message'         => 'required|string|max:2000',
             'conversation_id' => 'required|integer',

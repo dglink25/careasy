@@ -25,7 +25,9 @@ return [
         'http://localhost:5174',   // Vite port alternatif
         'http://127.0.0.1:5173',
         'http://127.0.0.1:3000',
-         'https://careasy26.vercel.app',
+        'https://careasy26.vercel.app',
+        'http://localhost:3001',   // Node.js whatsapp-web.js (dev)
+        'https://service-whatsapp-careasy.vercel.app', // Node.js whatsapp-web.js (prod)
     ],
 
     'allowed_origins_patterns' => [
