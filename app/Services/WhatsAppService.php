@@ -12,7 +12,7 @@ class WhatsAppService{
     protected int    $timeout;
 
     public function __construct() {
-        $this->baseUrl = config('whatsapp.gateway_url', 'http://localhost:3001');
+        $this->baseUrl = config('whatsapp.gateway_url', 'https://campus357.alwaysdata.net');
         $this->secret  = config('whatsapp.api_secret', '35abced573ff026656aaf2e6e1dec87a22b1ea51c3cc27417c5b0fad7b54a67b');
         $this->timeout = 10;
     }

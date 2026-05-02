@@ -27,7 +27,7 @@ return [
         'http://127.0.0.1:3000',
         'https://careasy26.vercel.app',
         'http://localhost:3001',   // Node.js whatsapp-web.js (dev)
-        'https://service-whatsapp-careasy.vercel.app', // Node.js whatsapp-web.js (prod)
+        'https://campus357.alwaysdata.net', // Node.js whatsapp-web.js (prod)
     ],
 
     'allowed_origins_patterns' => [
