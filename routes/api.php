@@ -25,6 +25,7 @@ use App\Http\Controllers\Auth\QrLoginController;
 use App\Http\Controllers\Auth\SessionController; 
 
 use App\Http\Controllers\API\CarAIController;
+use App\Http\Controllers\API\Admin\SmsAdminController;
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
@@ -177,6 +178,9 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::patch('/plans/{id}/toggle-status',  [AdminPlanController::class, 'toggleStatus']);
     Route::post('entreprises/{id}/extend-trial', [EntrepriseAdminController::class, 'extendTrial']);
     Route::post('/qr-tokens/purge',            [QrLoginController::class, 'purgeExpired']);
+
+    Route::get('/sms/status', [SmsAdminController::class, 'status']);
+    Route::post('/sms/test',  [SmsAdminController::class, 'test']);
 });
 
 // ── IA ────────────────────────────────────────────────────────────────────────

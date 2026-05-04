@@ -2,24 +2,33 @@
 
 namespace App\Console\Commands;
 
+use App\Services\SmsService;
 use App\Services\WhatsAppService;
 use Illuminate\Console\Command;
 
 class SendRdvReminders extends Command
 {
     protected $signature   = 'rdv:send-reminders';
-    protected $description = 'Envoie les rappels WhatsApp pour les RDV de demain';
+    protected $description = 'Envoie les rappels WhatsApp + SMS pour les RDV de demain';
 
-    public function handle(WhatsAppService $whatsApp): int{
-        $this->info('📱 Envoi des rappels WhatsApp RDV J-1...');
+    public function handle(WhatsAppService $whatsApp, SmsService $sms): int
+    {
+        $this->info('📱 Envoi des rappels RDV J-1 (WhatsApp + SMS)...');
 
+        // ── WhatsApp ──────────────────────────────────────────────────────────
         try {
             $whatsApp->sendReminderForTomorrow();
-            $this->info('Rappels envoyés avec succès.');
-        } 
-        catch (\Exception $e) {
-            $this->error('Erreur : ' . $e->getMessage());
-            return Command::FAILURE;
+            $this->info('Rappels WhatsApp envoyés.');
+        } catch (\Exception $e) {
+            $this->warn('WhatsApp échoué : ' . $e->getMessage());
+        }
+
+        // ── SMS ───────────────────────────────────────────────────────────────
+        try {
+            $sms->sendReminderForTomorrow();
+            $this->info('Rappels SMS envoyés.');
+        } catch (\Exception $e) {
+            $this->warn('SMS échoué : ' . $e->getMessage());
         }
 
         return Command::SUCCESS;
