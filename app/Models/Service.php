@@ -26,7 +26,8 @@ class Service extends Model{
         'medias',
         'is_open_24h',
         'schedule',
-        'is_always_open'
+        'is_always_open',
+        'is_visibility',
     ];
 
     protected $casts = [

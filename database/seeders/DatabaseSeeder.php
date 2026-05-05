@@ -13,7 +13,7 @@ class DatabaseSeeder extends Seeder {
     public function run(): void {
         User::factory()->create([
             'name'     => 'CarAI',
-            'email'    => 'dondiegue21@gmail.com',
+            'email'    => 'dglink25@gmail.com',
             'password' => Hash::make('ai_careasy_2025'),
             'role'     => 'admin',
         ]);

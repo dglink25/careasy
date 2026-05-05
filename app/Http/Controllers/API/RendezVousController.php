@@ -6,7 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\RendezVous;
 use App\Models\Service;
 use App\Models\User;
-use App\Notifications\RdvNotification; // ← AJOUT
+use App\Notifications\RdvNotification;
+use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -14,7 +15,14 @@ use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class RendezVousController extends Controller{
-    public function getAvailableSlots($serviceId, $date) {
+    protected WhatsAppService $whatsApp;
+
+    public function __construct(WhatsAppService $whatsApp){
+        $this->whatsApp = $whatsApp;
+    }
+
+    public function getAvailableSlots($serviceId, $date)
+    {
         try {
             $service = Service::with('entreprise')->findOrFail($serviceId);
             if (!$service->entreprise || $service->entreprise->status !== 'validated') {
@@ -36,8 +44,7 @@ class RendezVousController extends Controller{
                 'phone' => [
                     'required',
                     'regex:/^[0-9+\s\-]+$/',
-                    \Illuminate\Validation\Rule::unique('users', 'phone')
-                        ->ignore($user->id),  
+                    \Illuminate\Validation\Rule::unique('users', 'phone')->ignore($user->id),
                 ]
             ], [
                 'phone.unique' => 'Ce numéro est déjà utilisé par un autre compte.',
@@ -95,18 +102,25 @@ class RendezVousController extends Controller{
 
             $rendezVous->load(['service', 'client', 'prestataire', 'entreprise']);
 
-            
+            // ── Notification in-app ───────────────────────────────────────────
             try {
                 $prestataire = User::find($service->prestataire_id);
                 if ($prestataire) {
                     $prestataire->notify(new RdvNotification($rendezVous, 'pending'));
                 }
             } catch (\Exception $e) {
-                Log::warning('Notification RDV pending échouée:', ['error' => $e->getMessage()]);
+                Log::warning('Notification in-app RDV pending échouée:', ['error' => $e->getMessage()]);
+            }
+
+            // ── Notification WhatsApp ─────────────────────────────────────────
+            try {
+                $this->whatsApp->notifyRdvPending($rendezVous);
+            } catch (\Exception $e) {
+                Log::warning('Notification WhatsApp RDV pending échouée:', ['error' => $e->getMessage()]);
             }
 
             return response()->json([
-                'message'    => 'Demande de rendez-vous envoyée avec succès',
+                'message'     => 'Demande de rendez-vous envoyée avec succès',
                 'rendez_vous' => $rendezVous,
             ], 201);
 
@@ -116,18 +130,15 @@ class RendezVousController extends Controller{
         }
     }
 
-    public function index() {
+    public function index(){
         $user = Auth::user();
 
         $rendezVous = RendezVous::with([
                 'service', 'entreprise', 'service.domaine', 'client', 'prestataire'
             ])
             ->where(function ($query) use ($user) {
-                // Récupérer TOUS les RDV où l'utilisateur est impliqué,
-                // que ce soit comme prestataire OU comme client.
-                // Un prestataire peut aussi passer des commandes à d'autres prestataires.
                 $query->where('prestataire_id', $user->id)
-                    ->orWhere('client_id', $user->id);
+                      ->orWhere('client_id', $user->id);
             })
             ->orderBy('date', 'desc')
             ->orderBy('start_time', 'desc')
@@ -136,15 +147,16 @@ class RendezVousController extends Controller{
         return response()->json($rendezVous);
     }
 
-    public function show($id) {
-        $rendezVous = RendezVous::with(['service', 'client', 'prestataire', 'entreprise', 'service.domaine', 'review'])->findOrFail($id);
+    public function show($id)
+    {
+        $rendezVous = RendezVous::with(['service', 'client', 'prestataire', 'entreprise', 'service.domaine', 'review'])
+            ->findOrFail($id);
         return response()->json($rendezVous);
     }
 
-    public function confirm($id)
-    {
+    public function confirm($id)  {
         $user       = Auth::user();
-        $rendezVous = RendezVous::with(['client', 'service', 'prestataire'])->findOrFail($id);
+        $rendezVous = RendezVous::with(['client', 'service', 'prestataire', 'entreprise'])->findOrFail($id);
 
         if ($rendezVous->prestataire_id !== $user->id) {
             return response()->json(['message' => 'Non autorisé'], 403);
@@ -158,14 +170,21 @@ class RendezVousController extends Controller{
             'confirmed_at' => Carbon::now(),
         ]);
 
-        
+        // ── Notification in-app ───────────────────────────────────────────────
         try {
             $client = User::find($rendezVous->client_id);
             if ($client) {
                 $client->notify(new RdvNotification($rendezVous, 'confirmed'));
             }
         } catch (\Exception $e) {
-            Log::warning('Notification RDV confirmed échouée:', ['error' => $e->getMessage()]);
+            Log::warning('Notification in-app RDV confirmed échouée:', ['error' => $e->getMessage()]);
+        }
+
+        // ── Notification WhatsApp ─────────────────────────────────────────────
+        try {
+            $this->whatsApp->notifyRdvConfirmed($rendezVous);
+        } catch (\Exception $e) {
+            Log::warning('Notification WhatsApp RDV confirmed échouée:', ['error' => $e->getMessage()]);
         }
 
         return response()->json([
@@ -174,10 +193,9 @@ class RendezVousController extends Controller{
         ]);
     }
 
-    public function cancel(Request $request, $id)
-    {
+    public function cancel(Request $request, $id) {
         $user       = Auth::user();
-        $rendezVous = RendezVous::with(['client', 'prestataire', 'service'])->findOrFail($id);
+        $rendezVous = RendezVous::with(['client', 'prestataire', 'service', 'entreprise'])->findOrFail($id);
 
         if ($rendezVous->client_id !== $user->id && $rendezVous->prestataire_id !== $user->id) {
             return response()->json(['message' => 'Non autorisé'], 403);
@@ -192,11 +210,12 @@ class RendezVousController extends Controller{
         }
 
         $rendezVous->update([
-            'status'             => RendezVous::STATUS_CANCELLED,
-            'cancelled_at'       => Carbon::now(),
-            'prestataire_notes'  => $request->reason,
+            'status'            => RendezVous::STATUS_CANCELLED,
+            'cancelled_at'      => Carbon::now(),
+            'prestataire_notes' => $request->reason,
         ]);
 
+        // ── Notification in-app ───────────────────────────────────────────────
         try {
             $notifyUserId = $rendezVous->client_id === $user->id
                 ? $rendezVous->prestataire_id
@@ -207,7 +226,14 @@ class RendezVousController extends Controller{
                 $notifyUser->notify(new RdvNotification($rendezVous, 'cancelled'));
             }
         } catch (\Exception $e) {
-            Log::warning('Notification RDV cancelled échouée:', ['error' => $e->getMessage()]);
+            Log::warning('Notification in-app RDV cancelled échouée:', ['error' => $e->getMessage()]);
+        }
+
+        // ── Notification WhatsApp ─────────────────────────────────────────────
+        try {
+            $this->whatsApp->notifyRdvCancelled($rendezVous, $user->id);
+        } catch (\Exception $e) {
+            Log::warning('Notification WhatsApp RDV cancelled échouée:', ['error' => $e->getMessage()]);
         }
 
         return response()->json([
@@ -216,10 +242,9 @@ class RendezVousController extends Controller{
         ]);
     }
 
-    public function complete($id)
-    {
+    public function complete($id) {
         $user       = Auth::user();
-        $rendezVous = RendezVous::with(['client', 'service'])->findOrFail($id);
+        $rendezVous = RendezVous::with(['client', 'service', 'entreprise'])->findOrFail($id);
 
         if ($rendezVous->prestataire_id !== $user->id) {
             return response()->json(['message' => 'Non autorisé'], 403);
@@ -233,14 +258,21 @@ class RendezVousController extends Controller{
             'completed_at' => Carbon::now(),
         ]);
 
-        
+        // ── Notification in-app ───────────────────────────────────────────────
         try {
             $client = User::find($rendezVous->client_id);
             if ($client) {
                 $client->notify(new RdvNotification($rendezVous, 'completed'));
             }
         } catch (\Exception $e) {
-            Log::warning('Notification RDV completed échouée:', ['error' => $e->getMessage()]);
+            Log::warning('Notification in-app RDV completed échouée:', ['error' => $e->getMessage()]);
+        }
+
+        // ── Notification WhatsApp ─────────────────────────────────────────────
+        try {
+            $this->whatsApp->notifyRdvCompleted($rendezVous);
+        } catch (\Exception $e) {
+            Log::warning('Notification WhatsApp RDV completed échouée:', ['error' => $e->getMessage()]);
         }
 
         return response()->json([
@@ -249,8 +281,7 @@ class RendezVousController extends Controller{
         ]);
     }
 
-    public function calendar(Request $request)
-    {
+    public function calendar(Request $request) {
         $user = Auth::user();
 
         $validator = Validator::make($request->all(), [
@@ -272,7 +303,8 @@ class RendezVousController extends Controller{
 
             if ($user->isPrestataire()) {
                 $query->where('prestataire_id', $user->id);
-            } else {
+            } 
+            else {
                 $query->where('client_id', $user->id);
             }
 
@@ -285,10 +317,10 @@ class RendezVousController extends Controller{
 
             foreach ($rendezVous as $rdv) {
                 $color  = match ($rdv->status) {
-                    RendezVous::STATUS_CONFIRMED  => '#10b981',
-                    RendezVous::STATUS_CANCELLED  => '#ef4444',
-                    RendezVous::STATUS_COMPLETED  => '#6b7280',
-                    default                       => '#f59e0b',
+                    RendezVous::STATUS_CONFIRMED => '#10b981',
+                    RendezVous::STATUS_CANCELLED => '#ef4444',
+                    RendezVous::STATUS_COMPLETED => '#6b7280',
+                    default                      => '#f59e0b',
                 };
                 $events[] = [
                     'id'              => (string) $rdv->id,
@@ -300,11 +332,11 @@ class RendezVousController extends Controller{
                     'textColor'       => '#ffffff',
                     'allDay'          => false,
                     'extendedProps'   => [
-                        'status'      => $rdv->status,
-                        'client'      => ['id' => $rdv->client->id, 'name' => $rdv->client->name, 'phone' => $rdv->client->phone ?? null],
-                        'service'     => ['id' => $rdv->service->id, 'name' => $rdv->service->name],
-                        'entreprise'  => ['id' => $rdv->entreprise->id, 'name' => $rdv->entreprise->name],
-                        'notes'       => $rdv->client_notes,
+                        'status'     => $rdv->status,
+                        'client'     => ['id' => $rdv->client->id, 'name' => $rdv->client->name, 'phone' => $rdv->client->phone ?? null],
+                        'service'    => ['id' => $rdv->service->id, 'name' => $rdv->service->name],
+                        'entreprise' => ['id' => $rdv->entreprise->id, 'name' => $rdv->entreprise->name],
+                        'notes'      => $rdv->client_notes,
                     ],
                 ];
             }

@@ -254,7 +254,8 @@ class EntrepriseController extends Controller
 
         try {
             $entrepriseId = DB::table('entreprises')->insertGetId($insertData);
-        } catch (\Throwable $e) {
+        } 
+        catch (\Throwable $e) {
             Log::error('INSERT ENTREPRISE FAILED', ['error' => $e->getMessage()]);
             return response()->json([
                 'error' => "Impossible de creer l'entreprise : " . $e->getMessage(),
@@ -288,10 +289,7 @@ class EntrepriseController extends Controller
             'entreprise_id' => $entrepriseId,
         ], 201);
     }
-
-    // =========================================================================
-    // COMPLETE PROFILE
-    // =========================================================================
+    
 
     public function completeProfile(Request $request, $id)
     {

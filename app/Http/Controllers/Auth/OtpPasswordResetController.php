@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules;
 use Twilio\Rest\Client as TwilioClient;
+use App\Services\SmsService;
 
 class OtpPasswordResetController extends Controller{
 
@@ -311,94 +312,87 @@ class OtpPasswordResetController extends Controller{
         $minutes   = PasswordResetOtp::TTL_MINUTES;
 
         return <<<HTML
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="480" cellpadding="0" cellspacing="0"
-               style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-          <!-- Header -->
-          <tr>
-            <td style="background:linear-gradient(135deg,#E63946,#FF6B6B);padding:32px;text-align:center;">
-              <div style="font-size:36px;font-weight:900;color:#fff;letter-spacing:2px;">CarEasy</div>
-              <div style="color:rgba(255,255,255,0.85);font-size:14px;margin-top:6px;">
-                Réinitialisation de mot de passe
-              </div>
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+            <tr>
+            <td align="center">
+                <table width="480" cellpadding="0" cellspacing="0"
+                    style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+                <!-- Header -->
+                <tr>
+                    <td style="background:linear-gradient(135deg,#E63946,#FF6B6B);padding:32px;text-align:center;">
+                    <div style="font-size:36px;font-weight:900;color:#fff;letter-spacing:2px;">CarEasy</div>
+                    <div style="color:rgba(255,255,255,0.85);font-size:14px;margin-top:6px;">
+                        Réinitialisation de mot de passe
+                    </div>
+                    </td>
+                </tr>
+                <!-- Body -->
+                <tr>
+                    <td style="padding:36px 40px;">
+                    <p style="font-size:16px;color:#2D3436;margin:0 0 12px;">
+                        Bonjour <strong>{$firstName}</strong>,
+                    </p>
+                    <p style="font-size:15px;color:#636e72;margin:0 0 28px;line-height:1.6;">
+                        Vous avez demandé à réinitialiser votre mot de passe. 
+                        Voici votre code de vérification :
+                    </p>
+                    <!-- Code OTP -->
+                    <div style="background:#FFF5F5;border:2px dashed #E63946;border-radius:12px;
+                                padding:24px;text-align:center;margin:0 0 28px;">
+                        <div style="font-size:48px;font-weight:900;letter-spacing:12px;
+                                    color:#E63946;font-family:monospace;">{$code}</div>
+                        <div style="font-size:13px;color:#b2bec3;margin-top:8px;">
+                        Valide pendant <strong style="color:#E63946;">{$minutes} minutes</strong>
+                        </div>
+                    </div>
+                    <p style="font-size:13px;color:#b2bec3;line-height:1.6;margin:0 0 8px;">
+                        Ne partagez jamais ce code. Si vous n'êtes pas à l'origine de cette demande, 
+                        ignorez cet email.
+                    </p>
+                    </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                    <td style="background:#f8f9fa;padding:20px 40px;text-align:center;
+                                border-top:1px solid #f0f0f0;">
+                    <p style="font-size:12px;color:#b2bec3;margin:0;">
+                        © {$this->currentYear()} CarEasy · Tous droits réservés
+                    </p>
+                    </td>
+                </tr>
+                </table>
             </td>
-          </tr>
-          <!-- Body -->
-          <tr>
-            <td style="padding:36px 40px;">
-              <p style="font-size:16px;color:#2D3436;margin:0 0 12px;">
-                Bonjour <strong>{$firstName}</strong>,
-              </p>
-              <p style="font-size:15px;color:#636e72;margin:0 0 28px;line-height:1.6;">
-                Vous avez demandé à réinitialiser votre mot de passe. 
-                Voici votre code de vérification :
-              </p>
-              <!-- Code OTP -->
-              <div style="background:#FFF5F5;border:2px dashed #E63946;border-radius:12px;
-                          padding:24px;text-align:center;margin:0 0 28px;">
-                <div style="font-size:48px;font-weight:900;letter-spacing:12px;
-                            color:#E63946;font-family:monospace;">{$code}</div>
-                <div style="font-size:13px;color:#b2bec3;margin-top:8px;">
-                  Valide pendant <strong style="color:#E63946;">{$minutes} minutes</strong>
-                </div>
-              </div>
-              <p style="font-size:13px;color:#b2bec3;line-height:1.6;margin:0 0 8px;">
-                Ne partagez jamais ce code. Si vous n'êtes pas à l'origine de cette demande, 
-                ignorez cet email.
-              </p>
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="background:#f8f9fa;padding:20px 40px;text-align:center;
-                        border-top:1px solid #f0f0f0;">
-              <p style="font-size:12px;color:#b2bec3;margin:0;">
-                © {$this->currentYear()} CarEasy · Tous droits réservés
-              </p>
-            </td>
-          </tr>
+            </tr>
         </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-HTML;
+        </body>
+        </html>
+        HTML;
     }
 
     private function currentYear(): string{
         return date('Y');
     }
 
-    // ── Envoi SMS via Twilio ──────────────────────────────────────────────────
+    
 
     private function sendBySms(string $phone, string $code, string $name): void {
-        $firstName = explode(' ', $name)[0];
-        $minutes   = PasswordResetOtp::TTL_MINUTES;
+        $sms = app(SmsService::class);
 
-        $sid    = env('TWILIO_ACCOUNT_SID');
-        $token  = env('TWILIO_AUTH_TOKEN');
-        $msgSid = env('TWILIO_MESSAGING_SERVICE_SID');
+        $sent = $sms->sendOtp($phone, $code, $name);
 
-        if (!$sid || !$token || !$msgSid) {
-            throw new \RuntimeException('Twilio non configuré (variables manquantes).');
+        if (!$sent) {
+            throw new \RuntimeException(
+                'Le SMS OTP n\'a pas pu être envoyé. Vérifiez la gateway SMS.'
+            );
         }
-
-        $twilio = new TwilioClient($sid, $token);
-
-        $twilio->messages->create($phone, [
-            'messagingServiceSid' => $msgSid,
-            'body'                => "CarEasy - Bonjour {$firstName}, votre code de réinitialisation est : {$code}\nValide {$minutes} min. Ne le partagez jamais.",
-        ]);
     }
+
 
 }

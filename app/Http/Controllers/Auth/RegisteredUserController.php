@@ -11,21 +11,15 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
+use App\Services\SmsService;
+use Illuminate\Support\Facades\Log;
+
 
 use Twilio\Rest\Client;
 
-class RegisteredUserController extends Controller
-{
-    /**
-     * Handle an incoming registration request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
-    public function store(Request $request)
-    {
+class RegisteredUserController extends Controller{
+    
+    public function store(Request $request) {
         // Étape 1: Vérifier qu'on a soit email soit téléphone, mais pas les deux
         $hasEmail = $request->has('email') && !empty($request->email);
         $hasPhone = $request->has('phone') && !empty($request->phone);
@@ -149,6 +143,20 @@ class RegisteredUserController extends Controller
 
         // Étape 9: Connecter l'utilisateur
         Auth::login($user);
+
+                try {
+            $sms = app(SmsService::class);
+            if ($hasPhone && !empty($user->phone)) {
+                // SMS sur le numéro de l'utilisateur lui-même
+                $sms->notifyRegistration($user->phone, $user->name);
+            } elseif ($hasEmail && !empty($user->phone)) {
+                // Si l'utilisateur a aussi un téléphone dans son profil
+                $sms->notifyRegistration($user->phone, $user->name);
+            }
+        } catch (\Exception $e) {
+            Log::warning('[SMS] Notification inscription échouée : ' . $e->getMessage());
+        }
+ 
 
         $sid = env('TWILIO_ACCOUNT_SID');
         $tokenTwilio = env('TWILIO_AUTH_TOKEN');

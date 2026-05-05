@@ -11,3 +11,12 @@ Route::prefix('auth')->group(function () {
     Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirect');
     Route::get('/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('google.callback');
 });
+
+
+Route::get('/confidentialite', function () {
+    return view('privacy');
+});
+
+Route::get('/conditions', function () {
+    return view('terms');
+});

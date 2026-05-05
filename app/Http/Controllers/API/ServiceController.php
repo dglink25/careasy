@@ -317,7 +317,7 @@ class ServiceController extends Controller{
     }
 
     public function show($id)   {
-        $service = Service::with('entreprise', 'domaine')->where('is_always_open', true)->find($id);
+        $service = Service::with('entreprise', 'domaine')->where('is_visibility', true)->find($id);
 
         if (!$service) {
             return response()->json(['message' => 'Service non trouvé'], 404);
