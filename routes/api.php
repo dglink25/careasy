@@ -22,8 +22,8 @@ use App\Http\Controllers\API\PushNotificationController;
 use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\ReviewController;
 use App\Http\Controllers\Auth\QrLoginController;
-use App\Http\Controllers\Auth\SessionController; 
-
+use App\Http\Controllers\Auth\SessionController;
+use App\Http\Controllers\Auth\VerifyContactController; // ← déjà importé
 use App\Http\Controllers\API\CarAIController;
 use App\Http\Controllers\API\Admin\SmsAdminController;
 
@@ -31,6 +31,12 @@ Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
 require __DIR__.'/auth.php';
 
+// ── Vérification contact AVANT inscription (PUBLIC — sans auth) ───────────────
+// ⚠️ DOIT être en dehors du middleware auth:sanctum
+Route::prefix('verify-contact')->middleware('throttle:10,1')->group(function () {
+    Route::post('/send',  [VerifyContactController::class, 'send'])->name('verify.contact.send');
+    Route::post('/check', [VerifyContactController::class, 'check'])->name('verify.contact.check');
+});
 
 Route::middleware('throttle:10,1')->group(function () {
     Route::post('/auth/qr-login', [QrLoginController::class, 'login']);
@@ -109,13 +115,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // ════════════════════════════════════════════════════════════════════
     //  GESTION DES SESSIONS & SÉCURITÉ
     // ════════════════════════════════════════════════════════════════════
-
-    // Sessions actives
     Route::get('/user/sessions',                [SessionController::class, 'index']);
     Route::delete('/user/sessions/{id}',        [SessionController::class, 'revoke']);
     Route::post('/user/logout-all',             [SessionController::class, 'logoutAll']);
-
-    // Historique des connexions (30 derniers jours)
     Route::get('/user/login-history',           [SessionController::class, 'loginHistory']);
 
     // ── QR LOGIN — routes protégées ───────────────────────────────────────
@@ -209,33 +211,18 @@ Route::get('/paiements/cancel',  [PaiementController::class, 'cancel'])->name('p
 Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirectMobile');
 Route::post('/google/callback/mobile', [GoogleAuthController::class, 'handleGoogleCallbackMobile']);
 
-
 Route::prefix('auth')->group(function () {
     Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])
         ->name('api.google.redirect');
 });
 
-
 Route::prefix('carai')->middleware('auth:sanctum')->group(function () {
-
-    // Démarrer ou retrouver la conv CarAI de l'utilisateur
     Route::post('/conversations/start', [CarAIController::class, 'startConversation']);
-
-    // Envoyer un message à CarAI
     Route::post('/chat', [CarAIController::class, 'chat']);
-
-    // Historique d'une conversation
     Route::get('/conversations/{id}/messages', [CarAIController::class, 'history']);
-
-    // Effacer l'historique (RGPD)
     Route::delete('/conversations/{id}', [CarAIController::class, 'clearHistory']);
-
 });
-
-// ── Public (pas besoin de token pour la recherche rapide) ─────────────────────
 
 Route::prefix('carai')->group(function () {
-    // Recherche de services proches (utilisée par l'écran d'accueil)
     Route::get('/nearby', [CarAIController::class, 'nearby']);
 });
-
