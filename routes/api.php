@@ -31,8 +31,7 @@ Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
 require __DIR__.'/auth.php';
 
-// ── Vérification contact AVANT inscription (PUBLIC — sans auth) ───────────────
-// ⚠️ DOIT être en dehors du middleware auth:sanctum
+
 Route::prefix('verify-contact')->middleware('throttle:10,1')->group(function () {
     Route::post('/send',  [VerifyContactController::class, 'send'])->name('verify.contact.send');
     Route::post('/check', [VerifyContactController::class, 'check'])->name('verify.contact.check');
