@@ -82,7 +82,8 @@ class ServiceController extends Controller{
             'end_time'            => $service->end_time,
             'schedule'            => $service->schedule,
             'is_visibility'       => $service->is_visibility ?? true,
-            // ⭐ NOUVEAU — données de rating
+            'promo_start_date'    => $service->promo_start_date,
+            'promo_end_date'      => $service->promo_end_date,
             'total_reviews'       => (int) ($reviewStats->total_reviews ?? 0),
             'total_stars'         => (int) ($reviewStats->total_stars ?? 0),
             'average_rating'      => $reviewStats->total_reviews > 0
@@ -229,7 +230,6 @@ class ServiceController extends Controller{
                 }
             }
 
-            // Préparer les données
             $data = [
                 'entreprise_id' => $entreprise->id,
                 'prestataire_id' => $user->id,
@@ -246,7 +246,6 @@ class ServiceController extends Controller{
                 'is_always_open' => $request->boolean('is_always_open', false),
             ];
 
-            // Validation des règles de prix
             if ($data['is_price_on_request']) {
                 $data['price'] = null;
                 $data['price_promo'] = null;
