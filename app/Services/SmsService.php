@@ -24,12 +24,10 @@ class SmsService
         $this->timeout     = 15;
     }
 
- 
-
     private function isCloudMode(): bool
-{
-    return true;
-}
+    {
+        return true;
+    }
 
     private function healthEndpoint(): string
     {
@@ -41,15 +39,14 @@ class SmsService
     private function messageEndpoint(): string
     {
         return $this->isCloudMode()
-            ? $this->baseUrl . '/messages'  // pluriel cloud
-            : $this->baseUrl . '/message';  // singulier local
+            ? $this->baseUrl . '/messages'
+            : $this->baseUrl . '/message';
     }
 
     // ─── Vérifier que la gateway est joignable ────────────────────────────────
     public function isAvailable(): bool
     {
         if (!$this->enabled || empty($this->baseUrl)) {
-            Log::debug('[SMS] isAvailable=false : désactivé ou URL vide');
             return false;
         }
 
@@ -59,17 +56,7 @@ class SmsService
                 ->withBasicAuth($this->user, $this->pass)
                 ->get($url);
 
-            $ok = $response->successful();
-
-            Log::debug('[SMS] isAvailable check', [
-                'url'    => $url,
-                'mode'   => $this->isCloudMode() ? 'cloud' : 'local',
-                'status' => $response->status(),
-                'body'   => $response->body(),
-                'result' => $ok ? 'ONLINE' : 'OFFLINE',
-            ]);
-
-            return $ok;
+            return $response->successful();
 
         } catch (\Exception $e) {
             Log::warning('[SMS] Gateway non joignable : ' . $e->getMessage());
@@ -98,13 +85,6 @@ class SmsService
             'phoneNumbers' => [$normalized],
         ];
 
-        Log::info('[SMS] Tentative envoi', [
-            'endpoint' => $endpoint,
-            'mode'     => $this->isCloudMode() ? 'cloud' : 'local',
-            'phone'    => $normalized,
-            'message'  => mb_substr($message, 0, 50) . '...',
-        ]);
-
         $maxRetries = 10;
 
         for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
@@ -113,16 +93,8 @@ class SmsService
                     ->withBasicAuth($this->user, $this->pass)
                     ->post($endpoint, $payload);
 
-                Log::info("[SMS] Réponse tentative {$attempt}/{$maxRetries}", [
-                    'status' => $response->status(),
-                    'body'   => $response->body(),
-                ]);
-
                 if ($response->successful() && in_array($response->status(), [200, 202])) {
                     $data = $response->json();
-                    Log::info("[SMS] SMS accepté par la gateway", [
-                        'state' => $data['state'] ?? null,
-                    ]);
                     Log::info("[SMS] SMS envoyé à {$normalized}", [
                         'id'      => $data['id'] ?? ($data['ids'][0] ?? null),
                         'state'   => $data['state'] ?? ($data['status'] ?? null),
@@ -131,35 +103,22 @@ class SmsService
                     return true;
                 }
 
-                // 404 = mauvais endpoint — inutile de réessayer
                 if ($response->status() === 404) {
-                    Log::error('[SMS] 404 — Mauvais endpoint : ' . $endpoint, [
-                        'baseUrl' => $this->baseUrl,
-                        'mode'    => $this->isCloudMode() ? 'cloud' : 'local',
-                        'tip'     => 'Si URL=api.sms-gate.app → mode cloud (POST /messages). Sinon mode local (POST /message)',
-                    ]);
+                    Log::error('[SMS] 404 — Mauvais endpoint : ' . $endpoint);
                     return false;
                 }
 
-                // 403 = auth ou Host not allowed
                 if ($response->status() === 403) {
-                    Log::error('[SMS] 403 — Auth incorrecte ou Host bloqué', [
-                        'body' => $response->body(),
-                        'tip'  => '"Host not in allowlist" = activez Cloud server dans l\'app Android',
-                    ]);
+                    Log::error('[SMS] 403 — Auth incorrecte ou Host bloqué');
                     return false;
                 }
 
-                // 401 = mauvais identifiants
                 if ($response->status() === 401) {
-                    Log::error('[SMS] 401 — Identifiants incorrects', [
-                        'user' => $this->user,
-                        'tip'  => 'Vérifiez SMS_GATEWAY_USER / SMS_GATEWAY_PASS dans .env',
-                    ]);
+                    Log::error('[SMS] 401 — Identifiants incorrects');
                     return false;
                 }
 
-                Log::warning("[SMS] ❌ Échec tentative {$attempt}", [
+                Log::warning("[SMS] Échec tentative {$attempt}", [
                     'status' => $response->status(),
                     'body'   => $response->body(),
                 ]);
@@ -170,7 +129,7 @@ class SmsService
             }
         }
 
-        Log::error("[SMS] ❌ Impossible d'envoyer à {$normalized}", ['endpoint' => $endpoint]);
+        Log::error("[SMS] Impossible d'envoyer à {$normalized}", ['endpoint' => $endpoint]);
         return false;
     }
 
@@ -197,11 +156,6 @@ class SmsService
                     ]);
 
                 if (!$response->successful()) {
-                    Log::warning('[SMS] Bulk partiel échoué', [
-                        'phones' => $phones,
-                        'status' => $response->status(),
-                        'body'   => $response->body(),
-                    ]);
                     $allOk = false;
                 }
             } catch (\Exception $e) {
@@ -221,14 +175,17 @@ class SmsService
         $heure   = $this->formatTime($rdv->start_time);
         $service = $rdv->service?->name    ?? 'votre service';
         $ent     = $rdv->entreprise?->name ?? '';
+        $client  = $rdv->client?->name     ?? 'Un client';
 
+        // Notifier le prestataire
         if ($rdv->prestataire && !empty($rdv->prestataire->phone)) {
             $this->sendMessage(
                 $rdv->prestataire->phone,
-                "CarEasy - Nouvelle demande RDV\nClient : {$rdv->client?->name}\nService : {$service}\nDate : {$date} a {$heure}\nConnectez-vous pour confirmer."
+                "CarEasy - Nouvelle demande RDV\nClient : {$client}\nService : {$service}\nDate : {$date} a {$heure}\nConnectez-vous pour confirmer."
             );
         }
 
+        // Notifier le client
         if ($rdv->client && !empty($rdv->client->phone)) {
             $this->sendMessage(
                 $rdv->client->phone,
@@ -249,13 +206,16 @@ class SmsService
 
     public function notifyRdvCancelled(\App\Models\RendezVous $rdv, int $cancelledById): void
     {
+        $date    = $this->formatDate($rdv->date);
+        $service = $rdv->service?->name ?? 'Service';
+        $raison  = $rdv->prestataire_notes ? "\nMotif : {$rdv->prestataire_notes}" : '';
+
         $notifyUser = $cancelledById === $rdv->client_id ? $rdv->prestataire : $rdv->client;
         if (!$notifyUser || empty($notifyUser->phone)) return;
 
-        $raison = $rdv->prestataire_notes ? "\nMotif : {$rdv->prestataire_notes}" : '';
         $this->sendMessage(
             $notifyUser->phone,
-            "CarEasy - RDV annule\nService : {$rdv->service?->name}\nDate : {$this->formatDate($rdv->date)}{$raison}\nReprenez RDV sur CarEasy."
+            "CarEasy - RDV annule\nService : {$service}\nDate : {$date}{$raison}\nReprenez RDV sur CarEasy."
         );
     }
 
@@ -269,15 +229,30 @@ class SmsService
         );
     }
 
+    // ─── Rappel RDV (client ET prestataire) ──────────────────────────────────
     public function notifyRdvReminder(\App\Models\RendezVous $rdv): void
     {
-        if (!$rdv->client || empty($rdv->client->phone)) return;
+        $date    = $this->formatDate($rdv->date);
+        $heure   = $this->formatTime($rdv->start_time);
+        $service = $rdv->service?->name    ?? 'Service';
+        $ent     = $rdv->entreprise?->name ?? '';
+        $client  = $rdv->client?->name     ?? 'Le client';
 
-        $ent = $rdv->entreprise?->name ?? '';
-        $this->sendMessage(
-            $rdv->client->phone,
-            "CarEasy - Rappel RDV demain\nService : {$rdv->service?->name}" . ($ent ? " - {$ent}" : '') . "\nDate : {$this->formatDate($rdv->date)} a {$this->formatTime($rdv->start_time)}\nN'oubliez pas !"
-        );
+        // Rappel pour le client
+        if ($rdv->client && !empty($rdv->client->phone)) {
+            $this->sendMessage(
+                $rdv->client->phone,
+                "CarEasy - Rappel RDV demain\nService : {$service}" . ($ent ? " - {$ent}" : '') . "\nDate : {$date} a {$heure}\nN'oubliez pas !"
+            );
+        }
+
+        // Rappel pour le prestataire également
+        if ($rdv->prestataire && !empty($rdv->prestataire->phone)) {
+            $this->sendMessage(
+                $rdv->prestataire->phone,
+                "CarEasy - Rappel RDV demain\nClient : {$client}\nService : {$service}\nDate : {$date} a {$heure}\nPreparez-vous !"
+            );
+        }
     }
 
     public function notifyRegistration(string $phone, string $name): void
@@ -286,7 +261,8 @@ class SmsService
         $this->sendMessage($phone, "CarEasy - Bienvenue {$firstName} !\nVotre compte est cree. Trouvez des prestataires auto pres de chez vous.");
     }
 
-    public function notifyEntrepriseApproved(\App\Models\Entreprise $entreprise): void{
+    public function notifyEntrepriseApproved(\App\Models\Entreprise $entreprise): void
+    {
         $user = $entreprise->prestataire;
         if (!$user || empty($user->phone)) return;
 
@@ -296,7 +272,8 @@ class SmsService
         );
     }
 
-    public function notifyEntrepriseRejected(\App\Models\Entreprise $entreprise, ?string $reason = null): void {
+    public function notifyEntrepriseRejected(\App\Models\Entreprise $entreprise, ?string $reason = null): void
+    {
         $user = $entreprise->prestataire;
         if (!$user || empty($user->phone)) return;
 
@@ -316,10 +293,11 @@ class SmsService
         );
     }
 
+    // ─── Rappels J-1 (client + prestataire via SMS) ───────────────────────────
     public function sendReminderForTomorrow(): void
     {
         $tomorrow = now()->addDay()->format('Y-m-d');
-        $rdvs     = \App\Models\RendezVous::with(['client', 'service', 'entreprise'])
+        $rdvs     = \App\Models\RendezVous::with(['client', 'prestataire', 'service', 'entreprise'])
             ->where('date', $tomorrow)
             ->where('status', \App\Models\RendezVous::STATUS_CONFIRMED)
             ->get();
@@ -329,7 +307,7 @@ class SmsService
             usleep(500_000);
         }
 
-        Log::info('[SMS] Rappels J-1 envoyés', ['count' => $rdvs->count()]);
+        Log::info('[SMS] Rappels J-1 envoyés (client + prestataire)', ['count' => $rdvs->count()]);
     }
 
     // ─── Helpers privés ───────────────────────────────────────────────────────
@@ -346,12 +324,14 @@ class SmsService
         return '+' . $clean;
     }
 
-    private function truncate(string $text, int $max = 160): string{
+    private function truncate(string $text, int $max = 160): string
+    {
         if (mb_strlen($text) <= $max) return $text;
         return mb_substr($text, 0, $max - 3) . '...';
     }
 
-    private function formatDate($date): string  {
+    private function formatDate($date): string
+    {
         if (!$date) return '';
         try {
             return \Carbon\Carbon::parse($date)->locale('fr')->isoFormat('dddd D MMMM YYYY');

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use App\Services\SmsService;
+use App\Services\WhatsAppService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\PasswordResetOtp;
@@ -87,20 +88,16 @@ class RegisteredUserController extends Controller{
 
         // Validation email
         if ($hasEmail) {
-
             $rules['email'] = [
                 'required',
                 'string',
                 'lowercase',
                 'email',
                 'max:255',
-
                 function ($attribute, $value, $fail) {
-
                     if (User::where('email', $value)->exists()) {
                         $fail('Cet email est déjà utilisé.');
                     }
-
                     if (User::where('phone', $value)->exists()) {
                         $fail('Cette valeur est déjà utilisée comme numéro de téléphone.');
                     }
@@ -110,30 +107,23 @@ class RegisteredUserController extends Controller{
 
         // Validation téléphone
         elseif ($hasPhone) {
-
             $rules['phone'] = [
                 'required',
                 'string',
                 'max:255',
-
                 function ($attribute, $value, $fail) {
-
                     if (!preg_match('/^[0-9+]{8,15}$/', $value)) {
                         $fail('Le format du numéro de téléphone est invalide.');
                     }
-
                     if (strlen($value) < 8) {
                         $fail('Le numéro doit contenir au moins 8 chiffres.');
                     }
-
                     if (strlen($value) > 15) {
                         $fail('Le numéro ne doit pas dépasser 15 chiffres.');
                     }
-
                     if (User::where('phone', $value)->exists()) {
                         $fail('Ce numéro de téléphone est déjà utilisé.');
                     }
-
                     if (User::where('email', $value)->exists()) {
                         $fail('Cette valeur est déjà utilisée comme adresse email.');
                     }
@@ -153,18 +143,13 @@ class RegisteredUserController extends Controller{
 
         // Email ou téléphone
         if ($hasEmail) {
-
             $userData['email'] = $validatedData['email'];
             $userData['email_verified_at'] = now();
-
             $userData['phone'] = null;
             $userData['phone_verified_at'] = null;
-
         } else {
-
             $userData['phone'] = $validatedData['phone'];
             $userData['phone_verified_at'] = null;
-
             $userData['email'] = null;
             $userData['email_verified_at'] = null;
         }
@@ -181,32 +166,29 @@ class RegisteredUserController extends Controller{
         // Login auto
         Auth::login($user);
 
-        // Notification SMS via ton SmsService uniquement
-        try {
-
-            $sms = app(SmsService::class);
-
-            if ($hasPhone && !empty($user->phone)) {
-                $this->sendPhoneVerificationOtp($user->phone);
-                $sms->notifyRegistration(
-                    $user->phone,
-                    $user->name
-                );
+        // Notifications d'inscription pour inscription par téléphone
+        if ($hasPhone && !empty($user->phone)) {
+            // SMS de bienvenue
+            try {
+                $sms = app(SmsService::class);
+                $sms->notifyRegistration($user->phone, $user->name);
+            } catch (\Exception $e) {
+                Log::warning('[SMS] Notification inscription échouée : ' . $e->getMessage());
             }
 
-        } catch (\Exception $e) {
-
-            Log::warning(
-                '[SMS] Notification inscription échouée : ' .
-                $e->getMessage()
-            );
+            // WhatsApp de bienvenue (EN PLUS du SMS)
+            try {
+                $whatsApp = app(WhatsAppService::class);
+                $whatsApp->notifyRegistration($user->phone, $user->name);
+            } catch (\Exception $e) {
+                Log::warning('[WhatsApp] Notification inscription échouée : ' . $e->getMessage());
+            }
         }
 
         // Réponse finale
         return response()->json([
             'success' => true,
             'message' => 'Inscription réussie',
-
             'user' => [
                 'id'         => $user->id,
                 'name'       => $user->name,
@@ -215,44 +197,8 @@ class RegisteredUserController extends Controller{
                 'role'       => $user->role,
                 'created_at' => $user->created_at,
             ],
-
             'token' => $token,
-
         ], 201);
-    }
-
-    private function sendPhoneVerificationOtp(string $phone): void{
-        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
-        try {
-            // supprimer anciens OTP
-            DB::table('password_reset_otps')
-                ->where('identifier', $phone)
-                ->where('identifier_type', 'phone')
-                ->delete();
-
-            // créer OTP
-            DB::table('password_reset_otps')->insert([
-                'identifier'       => $phone,
-                'identifier_type'  => 'phone',
-                'code'             => $code,
-                'used'             => false,
-                'expires_at'       => now()->addMinutes(10),
-                'attempts'         => 0,
-                'created_at'       => now(),
-                'updated_at'       => now(),
-            ]);
-
-            // envoi SMS
-            $sms = app(\App\Services\SmsService::class);
-            $sms->sendOtp($phone, 'Code de Vérification inscription CarEasy : ', $code);
-
-        } catch (\Exception $e) {
-            Log::error('[OTP REGISTER PHONE] échec envoi', [
-                'error' => $e->getMessage(),
-                'phone' => $phone,
-            ]);
-        }
     }
 
     public function checkEmail(Request $request){
@@ -266,9 +212,7 @@ class RegisteredUserController extends Controller{
 
         return response()->json([
             'available' => !$exists,
-            'message'   => !$exists
-                ? 'Email disponible'
-                : 'Email déjà utilisé'
+            'message'   => !$exists ? 'Email disponible' : 'Email déjà utilisé'
         ]);
     }
 
@@ -286,9 +230,7 @@ class RegisteredUserController extends Controller{
 
         return response()->json([
             'available' => !$exists,
-            'message'   => !$exists
-                ? 'Téléphone disponible'
-                : 'Téléphone déjà utilisé'
+            'message'   => !$exists ? 'Téléphone disponible' : 'Téléphone déjà utilisé'
         ]);
     }
 
