@@ -14,8 +14,7 @@ use Illuminate\Support\Facades\Cache;
 
 class VerifyContactController extends Controller
 {
-    public function send(Request $request): JsonResponse
-    {
+    public function send(Request $request): JsonResponse{
         // ── Valider manuellement (sans exception automatique) ─────────────────
         // On N'utilise PAS $request->validate() pour éviter les exceptions
         // qui cassent la transaction PostgreSQL
@@ -51,8 +50,6 @@ class VerifyContactController extends Controller
             $identifier = '+' . $digits;
         }
 
-        // ── Réinitialiser la connexion PostgreSQL avant toute requête DB ──────
-        // Ceci évite l'erreur "current transaction is aborted"
         $this->resetDbConnection();
 
         // ── Déjà utilisé ? ────────────────────────────────────────────────────
@@ -72,7 +69,8 @@ class VerifyContactController extends Controller
                     'code'    => 'ALREADY_USED',
                 ], 422);
             }
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             $this->resetDbConnection();
             Log::warning('[VerifyContact] Erreur vérif doublon', ['error' => $e->getMessage()]);
             // On continue — la vérification d'unicité se fera à l'inscription

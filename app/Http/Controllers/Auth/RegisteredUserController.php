@@ -12,11 +12,11 @@ use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
 use App\Services\SmsService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use App\Models\PasswordResetOtp;
 
-class RegisteredUserController extends Controller
-{
-    public function store(Request $request)
-    {
+class RegisteredUserController extends Controller{
+    public function store(Request $request) {
         // Vérifier le token de contact vérifié avant tout
         $verifyToken = $request->input('verify_token');
 
@@ -48,7 +48,8 @@ class RegisteredUserController extends Controller
                 'email' => $verifiedData['identifier'],
                 'phone' => null,
             ]);
-        } else {
+        } 
+        else {
             $request->merge([
                 'phone' => $verifiedData['identifier'],
                 'email' => null,
@@ -162,7 +163,7 @@ class RegisteredUserController extends Controller
         } else {
 
             $userData['phone'] = $validatedData['phone'];
-            $userData['phone_verified_at'] = now();
+            $userData['phone_verified_at'] = null;
 
             $userData['email'] = null;
             $userData['email_verified_at'] = null;
@@ -186,7 +187,7 @@ class RegisteredUserController extends Controller
             $sms = app(SmsService::class);
 
             if ($hasPhone && !empty($user->phone)) {
-
+                $this->sendPhoneVerificationOtp($user->phone);
                 $sms->notifyRegistration(
                     $user->phone,
                     $user->name
@@ -220,8 +221,41 @@ class RegisteredUserController extends Controller
         ], 201);
     }
 
-    public function checkEmail(Request $request)
-    {
+    private function sendPhoneVerificationOtp(string $phone): void{
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        try {
+            // supprimer anciens OTP
+            DB::table('password_reset_otps')
+                ->where('identifier', $phone)
+                ->where('identifier_type', 'phone')
+                ->delete();
+
+            // créer OTP
+            DB::table('password_reset_otps')->insert([
+                'identifier'       => $phone,
+                'identifier_type'  => 'phone',
+                'code'             => $code,
+                'used'             => false,
+                'expires_at'       => now()->addMinutes(10),
+                'attempts'         => 0,
+                'created_at'       => now(),
+                'updated_at'       => now(),
+            ]);
+
+            // envoi SMS
+            $sms = app(\App\Services\SmsService::class);
+            $sms->sendOtp($phone, 'Code de Vérification inscription CarEasy : ', $code);
+
+        } catch (\Exception $e) {
+            Log::error('[OTP REGISTER PHONE] échec envoi', [
+                'error' => $e->getMessage(),
+                'phone' => $phone,
+            ]);
+        }
+    }
+
+    public function checkEmail(Request $request){
         $request->validate([
             'email' => ['required', 'email'],
         ]);
