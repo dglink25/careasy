@@ -984,7 +984,7 @@ private function sendFCMNotification(User $recipient, array $payload): void
         $fileUrl  = null;
 
         try {
-            DB::beginTransaction();
+            //DB::beginTransaction();
 
             if ($request->hasFile('file')) {
                 $filePath = $this->uploadFile($request->file('file'), $conv->id, $request->type);
@@ -1014,7 +1014,7 @@ private function sendFCMNotification(User $recipient, array $payload): void
             $messageData             = $message->toArray();
             $messageData['file_url'] = $fileUrl ?: $message->file_url;
 
-            DB::commit();
+            //DB::commit();
 
             $receiverId = $conv->user_one_id === $userId
                 ? $conv->user_two_id
@@ -1052,7 +1052,7 @@ private function sendFCMNotification(User $recipient, array $payload): void
             return response()->json($messageData, 201);
 
         } catch (\Exception $e) {
-            DB::rollBack();
+            //DB::rollBack();
             if ($filePath) $this->deleteFile($filePath);
             Log::error('Erreur envoi message: ' . $e->getMessage());
             return response()->json(['message' => 'Erreur interne: ' . $e->getMessage()], 500);
