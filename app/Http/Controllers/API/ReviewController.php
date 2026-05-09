@@ -48,10 +48,6 @@ class ReviewController extends Controller
             ], 409);
         }
 
-        // ── Insertion directe (pas de transaction explicite) ───────────────
-        // Neon pgBouncer en mode "transaction pooling" gère chaque statement
-        // dans sa propre transaction implicite. Un BEGIN explicite cause
-        // SQLSTATE[25P02] si une requête précédente a échoué dans la connexion.
         try {
             $review = Review::create([
                 'rendez_vous_id' => $rendezVous->id,
@@ -147,4 +143,29 @@ class ReviewController extends Controller
             ], 500);
         }
     }
+
+        public function forService($serviceId)
+    {
+        $reviews = \App\Models\Review::with(['client:id,name'])
+            ->whereHas('rendezVous', function ($q) use ($serviceId) {
+                $q->where('service_id', $serviceId);
+            })
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($review) {
+                return [
+                    'id'         => $review->id,
+                    'rating'     => $review->rating,
+                    'comment'    => $review->comment,
+                    'created_at' => $review->created_at,
+                    'client'     => [
+                        'id'   => $review->client?->id,
+                        'name' => $review->client?->name,
+                    ],
+                ];
+            });
+ 
+        return response()->json($reviews);
+    }
+
 }
