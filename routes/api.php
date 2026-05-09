@@ -164,6 +164,7 @@ Route::get('entreprises/{id}',          [EntrepriseController::class, 'show']);
 Route::get('search',                    [EntrepriseController::class, 'search']);
 Route::get('services',                  [ServiceController::class, 'index']);
 Route::get('services/{id}',             [ServiceController::class, 'show']);
+Route::get('services/{serviceId}/reviews', [ReviewController::class, 'forService']); 
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
