@@ -10,7 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
-class NotifyInactiveUsers extends Command{
+class NotifyInactiveUsers extends Command   {
     protected $signature = 'users:notify-inactive
                             {--days=30 : Nombre de jours d\'inactivité avant notification}
                             {--max-reminders=3 : Nombre maximum de rappels par utilisateur}
