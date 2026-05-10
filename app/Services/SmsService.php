@@ -14,8 +14,7 @@ class SmsService
     protected bool   $enabled;
     protected int    $timeout;
 
-    public function __construct()
-    {
+    public function __construct() {
         $this->baseUrl     = rtrim(config('sms.gateway_url', ''), '/');
         $this->user        = config('sms.gateway_user', 'admin');
         $this->pass        = config('sms.gateway_pass', '');
@@ -24,28 +23,10 @@ class SmsService
         $this->timeout     = 15;
     }
 
-    private function isCloudMode(): bool
-    {
-        return true;
-    }
-
-    private function healthEndpoint(): string
-    {
-        return $this->isCloudMode()
-            ? $this->baseUrl
-            : $this->baseUrl . '/health';
-    }
-
-    private function messageEndpoint(): string
-    {
-        return $this->isCloudMode()
-            ? $this->baseUrl . '/messages'
-            : $this->baseUrl . '/message';
-    }
+   
 
     // ─── Vérifier que la gateway est joignable ────────────────────────────────
-    public function isAvailable(): bool
-    {
+    public function isAvailable(): bool {
         if (!$this->enabled || empty($this->baseUrl)) {
             return false;
         }
@@ -65,8 +46,7 @@ class SmsService
     }
 
     // ─── Envoyer un SMS simple ────────────────────────────────────────────────
-    public function sendMessage(string $phone, string $message): bool
-    {
+    public function sendMessage(string $phone, string $message): bool {
         if (!$this->enabled) {
             Log::info('[SMS] Désactivé — message non envoyé à ' . $phone);
             return false;
@@ -134,8 +114,7 @@ class SmsService
     }
 
     // ─── Envoyer à plusieurs destinataires ───────────────────────────────────
-    public function sendBulk(array $recipients): bool
-    {
+    public function sendBulk(array $recipients): bool {
         if (!$this->enabled || empty($recipients)) return false;
 
         $grouped = [];
@@ -169,8 +148,7 @@ class SmsService
 
     // ─── Templates RDV ────────────────────────────────────────────────────────
 
-    public function notifyRdvPending(\App\Models\RendezVous $rdv): void
-    {
+    public function notifyRdvPending(\App\Models\RendezVous $rdv): void {
         $date    = $this->formatDate($rdv->date);
         $heure   = $this->formatTime($rdv->start_time);
         $service = $rdv->service?->name    ?? 'votre service';
@@ -194,8 +172,7 @@ class SmsService
         }
     }
 
-    public function notifyRdvConfirmed(\App\Models\RendezVous $rdv): void
-    {
+    public function notifyRdvConfirmed(\App\Models\RendezVous $rdv): void {
         if (!$rdv->client || empty($rdv->client->phone)) return;
 
         $this->sendMessage(
@@ -204,8 +181,7 @@ class SmsService
         );
     }
 
-    public function notifyRdvCancelled(\App\Models\RendezVous $rdv, int $cancelledById): void
-    {
+    public function notifyRdvCancelled(\App\Models\RendezVous $rdv, int $cancelledById): void {
         $date    = $this->formatDate($rdv->date);
         $service = $rdv->service?->name ?? 'Service';
         $raison  = $rdv->prestataire_notes ? "\nMotif : {$rdv->prestataire_notes}" : '';
@@ -219,8 +195,7 @@ class SmsService
         );
     }
 
-    public function notifyRdvCompleted(\App\Models\RendezVous $rdv): void
-    {
+    public function notifyRdvCompleted(\App\Models\RendezVous $rdv): void{
         if (!$rdv->client || empty($rdv->client->phone)) return;
 
         $this->sendMessage(
@@ -230,8 +205,7 @@ class SmsService
     }
 
     // ─── Rappel RDV (client ET prestataire) ──────────────────────────────────
-    public function notifyRdvReminder(\App\Models\RendezVous $rdv): void
-    {
+    public function notifyRdvReminder(\App\Models\RendezVous $rdv): void {
         $date    = $this->formatDate($rdv->date);
         $heure   = $this->formatTime($rdv->start_time);
         $service = $rdv->service?->name    ?? 'Service';
@@ -255,14 +229,12 @@ class SmsService
         }
     }
 
-    public function notifyRegistration(string $phone, string $name): void
-    {
+    public function notifyRegistration(string $phone, string $name): void {
         $firstName = explode(' ', $name)[0];
         $this->sendMessage($phone, "CarEasy - Bienvenue {$firstName} !\nVotre compte est cree. Trouvez des prestataires auto pres de chez vous.");
     }
 
-    public function notifyEntrepriseApproved(\App\Models\Entreprise $entreprise): void
-    {
+    public function notifyEntrepriseApproved(\App\Models\Entreprise $entreprise): void {
         $user = $entreprise->prestataire;
         if (!$user || empty($user->phone)) return;
 
@@ -272,8 +244,7 @@ class SmsService
         );
     }
 
-    public function notifyEntrepriseRejected(\App\Models\Entreprise $entreprise, ?string $reason = null): void
-    {
+    public function notifyEntrepriseRejected(\App\Models\Entreprise $entreprise, ?string $reason = null): void{
         $user = $entreprise->prestataire;
         if (!$user || empty($user->phone)) return;
 
@@ -284,8 +255,7 @@ class SmsService
         $this->sendMessage($user->phone, $msg);
     }
 
-    public function sendOtp(string $phone, string $code, string $name = ''): bool
-    {
+    public function sendOtp(string $phone, string $code, string $name = ''): bool {
         $greeting = $name ? "Bonjour " . explode(' ', $name)[0] . ", " : '';
         return $this->sendMessage(
             $phone,
@@ -312,8 +282,7 @@ class SmsService
 
     // ─── Helpers privés ───────────────────────────────────────────────────────
 
-    private function normalizePhone(string $phone): ?string
-    {
+    private function normalizePhone(string $phone): ?string {
         $clean = preg_replace('/[^\d+]/', '', $phone);
         if (empty($clean)) return null;
 
@@ -324,14 +293,12 @@ class SmsService
         return '+' . $clean;
     }
 
-    private function truncate(string $text, int $max = 160): string
-    {
+    private function truncate(string $text, int $max = 160): string{
         if (mb_strlen($text) <= $max) return $text;
         return mb_substr($text, 0, $max - 3) . '...';
     }
 
-    private function formatDate($date): string
-    {
+    private function formatDate($date): string {
         if (!$date) return '';
         try {
             return \Carbon\Carbon::parse($date)->locale('fr')->isoFormat('dddd D MMMM YYYY');
@@ -344,4 +311,17 @@ class SmsService
     {
         return $time ? substr($time, 0, 5) : '';
     }
+
+    private function isCloudMode(): bool {
+        return str_contains($this->baseUrl, 'api.sms-gate.app');
+    }
+
+    private function healthEndpoint(): string{
+        return $this->baseUrl . '/3rdparty/v1/health';
+    }
+
+    private function messageEndpoint(): string {
+        return $this->baseUrl . '/3rdparty/v1/messages';
+    }
+
 }
