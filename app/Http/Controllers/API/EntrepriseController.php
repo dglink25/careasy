@@ -83,15 +83,14 @@ class EntrepriseController extends Controller
         ]);
     }
 
-    public function index()
-    {
+    public function index() {
         return Entreprise::with('domaines', 'service')
             ->where('status', 'validated')
+            ->visible() 
             ->get();
     }
 
-    public function mine()
-    {
+    public function mine() {
         $user = Auth::user();
 
         if (!$user) {
@@ -112,8 +111,7 @@ class EntrepriseController extends Controller
         return response()->json($entreprises);
     }
 
-    public function show($id)
-    {
+    public function show($id) {
         $entreprise = Entreprise::with('domaines', 'services', 'prestataire')->find($id);
 
         if (!$entreprise) {
@@ -123,36 +121,29 @@ class EntrepriseController extends Controller
         return response()->json($entreprise);
     }
 
-    public function indexByDomaine($domaineId)
-    {
+    public function indexByDomaine($domaineId)  {
         return response()->json(
             Entreprise::where('status', 'validated')
+                ->visible() 
                 ->whereHas('domaines', fn($q) => $q->where('domaines.id', $domaineId))
                 ->with('domaines', 'services')
                 ->get()
         );
     }
 
-    public function search(Request $request)
-    {
+    public function search(Request $request) {
         $s = $request->query('q', '');
 
         return response()->json(
             Entreprise::where('status', 'validated')
+                ->visible()
                 ->where('name', 'LIKE', "%{$s}%")
                 ->with('domaines', 'services')
                 ->get()
         );
     }
 
-    // =========================================================================
-    // STORE
-    // Pas de DB::beginTransaction() — incompatible avec Neon pgBouncer
-    // en mode "transaction pooling".
-    // =========================================================================
-
-    public function store(Request $request)
-    {
+    public function store(Request $request) {
         Log::info('START STORE');
 
         $user = Auth::user();

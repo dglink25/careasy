@@ -160,7 +160,7 @@ Route::get('entreprises',               [EntrepriseController::class, 'index']);
 Route::get('entreprises/domaine/{id}',  [EntrepriseController::class, 'indexByDomaine']);
 Route::get('entreprises/form/data',     [EntrepriseController::class, 'getFormData']);
 Route::get('entreprises/{id}',          [EntrepriseController::class, 'show']);
-Route::get('search',                    [EntrepriseController::class, 'search']);
+Route::get('/search',                   [ServiceController::class, 'search']);
 Route::get('services',                  [ServiceController::class, 'index']);
 Route::get('services/{id}',             [ServiceController::class, 'show']);
 Route::get('services/{serviceId}/reviews', [ReviewController::class, 'forService']); 
