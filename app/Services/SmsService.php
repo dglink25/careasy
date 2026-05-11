@@ -280,7 +280,7 @@ class SmsService
         Log::info('[SMS] Rappels J-1 envoyés (client + prestataire)', ['count' => $rdvs->count()]);
     }
 
-    private function normalizePhone(string $phone): ?string {
+    private function normalizePhone(string $phone): ?string  {
         $digits = preg_replace('/\D/', '', $phone);
         if (empty($digits)) return null;
 
@@ -289,20 +289,17 @@ class SmsService
             $digits = substr($digits, 3);
         }
 
-        // Format local 10 chiffres commençant par 0 (nouveau format béninois)
-        // ex: 0197035431 → +2290197035431
+        // Déjà en format local 10 chiffres (commence par 0) → +2290XXXXXXXXX
         if (preg_match('/^0\d{9}$/', $digits)) {
-            return '+229' . $digits;
+            return '+229' . $digits;                    // +2290197035431 
         }
 
-        // Format local 8 chiffres (ancien format béninois) → migrer vers 10 chiffres
-        // ex: 97035431 → 0197035431 → +2290197035431
+        // Format local 8 chiffres → ajouter le préfixe 01 → +22901XXXXXXXX
         if (preg_match('/^\d{8}$/', $digits)) {
-            return '+229' . '01' . $digits;
+            return '+229' . '01' . $digits;             // +2290197035431 
         }
 
-        // Format non reconnu (numéro international hors Bénin, trop court, etc.)
-        Log::warning('[SMS] Numéro non normalisable — format non reconnu', [
+        Log::warning('[SMS] Numéro non normalisable', [
             'phone_raw' => substr($phone, 0, 6) . '***',
         ]);
         return null;

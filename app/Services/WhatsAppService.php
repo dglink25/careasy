@@ -36,7 +36,17 @@ class WhatsAppService
     }
 
     // ─── Envoyer avec retry automatique (3 tentatives) ───────────────────────
-    public function sendMessage(string $phone, string $message): bool  {
+    public function sendMessage(string $phone, string $message): bool{
+        // Normaliser AVANT d'envoyer
+        $normalized = $this->normalizePhone($phone);
+
+        if (!$normalized) {
+            Log::warning('[WhatsApp] Numéro non normalisable — envoi ignoré', [
+                'phone_raw' => substr($phone, 0, 6) . '***',
+            ]);
+            return false;
+        }
+
         $maxRetries = 3;
 
         for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
@@ -44,12 +54,12 @@ class WhatsAppService
                 $response = Http::timeout($this->timeout)
                     ->withHeaders($this->headers())
                     ->post("{$this->baseUrl}/send", [
-                        'phone'   => $phone,
+                        'phone'   => $normalized,           // ← utiliser $normalized
                         'message' => $message,
                     ]);
 
                 if ($response->successful() && $response->json('success')) {
-                    Log::info("WhatsApp envoyé à {$phone} (tentative {$attempt})");
+                    Log::info("[WhatsApp] Envoyé à {$normalized} (tentative {$attempt})");
                     return true;
                 }
 
@@ -60,22 +70,46 @@ class WhatsAppService
                     continue;
                 }
 
-                Log::warning("WhatsApp échec à {$phone}", [
+                Log::warning("[WhatsApp] Échec à {$normalized}", [
                     'status'  => $response->status(),
                     'body'    => $response->body(),
                     'attempt' => $attempt,
                 ]);
 
             } catch (\Exception $e) {
-                Log::warning("WhatsApp erreur tentative {$attempt}: {$e->getMessage()}");
-                if ($attempt < $maxRetries) {
-                    sleep(2);
-                }
+                Log::warning("[WhatsApp] Erreur tentative {$attempt}: {$e->getMessage()}");
+                if ($attempt < $maxRetries) sleep(2);
             }
         }
 
-        Log::error("WhatsApp: impossible d'envoyer à {$phone} après {$maxRetries} tentatives");
+        Log::error("[WhatsApp] Impossible d'envoyer à {$normalized} après {$maxRetries} tentatives");
         return false;
+    }
+
+    // ─── Normaliser vers le format WhatsApp : +229XXXXXXXX (8 chiffres locaux) ──
+    private function normalizePhone(string $phone): ?string {
+        $digits = preg_replace('/\D/', '', $phone);
+        if (empty($digits)) return null;
+
+        // Retirer le code pays Bénin s'il est présent
+        if (str_starts_with($digits, '229')) {
+            $digits = substr($digits, 3);
+        }
+
+        // Format local 10 chiffres commençant par 01 → retirer 01 → 8 chiffres
+        if (preg_match('/^01(\d{8})$/', $digits, $m)) {
+            return '+229' . $m[1];                      // +22997035431 ✅
+        }
+
+        // Format local 8 chiffres → déjà correct pour WhatsApp
+        if (preg_match('/^\d{8}$/', $digits)) {
+            return '+229' . $digits;                    // +22997035431 ✅
+        }
+
+        Log::warning('[WhatsApp] Numéro non normalisable', [
+            'phone_raw' => substr($phone, 0, 6) . '***',
+        ]);
+        return null;
     }
 
     // ─── Envoi en masse ───────────────────────────────────────────────────────
