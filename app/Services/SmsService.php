@@ -282,26 +282,41 @@ class SmsService
 
     // ─── Helpers privés ───────────────────────────────────────────────────────
 
-    private function normalizePhone(string $phone): ?string{
+    private function normalizePhone(string $phone): ?string {
+        // 1. Garder uniquement chiffres et + initial
         $clean = preg_replace('/[^\d+]/', '', $phone);
         if (empty($clean)) return null;
 
-        // Extract raw digits (drop leading +)
+        // 2. Extraire les chiffres purs
         $digits = ltrim($clean, '+');
         if (empty($digits)) return null;
 
-        // Strip leading zeros that would produce an invalid country code
-        $digits = ltrim($digits, '0');
-        if (empty($digits)) return null;
+        // 3. Retirer le code pays Bénin s'il est présent
+        if (str_starts_with($digits, '229')) {
+            $digits = substr($digits, 3);
+        }
 
-        // Benin local 8-digit number (e.g. "97035431")
-        if (preg_match('/^\d{8}$/', $digits)) return '+229' . $digits;
+        // 4. Retirer les préfixes locaux béninois
+        //    - "01" + 8 chiffres  → ex: 0197035431 (10 chiffres)
+        //    - "0"  + 8 chiffres  → ex: 097035431  (9 chiffres)
+        if (str_starts_with($digits, '01') && strlen($digits) === 10) {
+            $digits = substr($digits, 2);
+        } elseif (str_starts_with($digits, '0') && strlen($digits) === 9) {
+            $digits = substr($digits, 1);
+        }
 
-        // Already has Benin country code (e.g. "22997035431")
-        if (preg_match('/^229\d{8}$/', $digits)) return '+' . $digits;
+        // 5. Doit être exactement 8 chiffres pour un numéro béninois valide
+        if (preg_match('/^\d{8}$/', $digits)) {
+            return '+229' . $digits;
+        }
 
-        // Any other number that already has a country code
-        return '+' . $digits;
+        // 6. Numéro international hors Bénin — retourner tel quel avec +
+        if (strlen($digits) >= 10 && strlen($digits) <= 15) {
+            return '+' . $digits;
+        }
+
+        Log::warning('[SMS] Numéro non normalisable', ['phone_raw' => $phone]);
+        return null;
     }
 
     private function truncate(string $text, int $max = 160): string{

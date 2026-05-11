@@ -15,9 +15,7 @@ use Illuminate\Support\Facades\Cache;
 class VerifyContactController extends Controller
 {
     public function send(Request $request): JsonResponse{
-        // ── Valider manuellement (sans exception automatique) ─────────────────
-        // On N'utilise PAS $request->validate() pour éviter les exceptions
-        // qui cassent la transaction PostgreSQL
+        
         $identifier_raw = trim($request->input('identifier', ''));
         $type           = $request->input('type', '');
 
@@ -48,11 +46,11 @@ class VerifyContactController extends Controller
                     'code'    => 'INVALID_FORMAT',
                 ], 422);
             }
-            $identifier = $this->normalizePhone($digits);
+            $identifier = $this->normalizePhoneIdentifier($identifier_raw);
             if (!$identifier) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Numéro de téléphone invalide.',
+                    'message' => 'Numéro de téléphone invalide (format non reconnu).',
                     'code'    => 'INVALID_FORMAT',
                 ], 422);
             }
@@ -186,8 +184,7 @@ class VerifyContactController extends Controller
         ]);
     }
 
-    public function check(Request $request): JsonResponse
-    {
+    public function check(Request $request): JsonResponse{
         $identifier_raw = trim($request->input('identifier', ''));
         $type           = $request->input('type', '');
         $code_input     = trim($request->input('code', ''));
@@ -202,11 +199,15 @@ class VerifyContactController extends Controller
 
         if ($type === 'email') {
             $identifier = strtolower(trim($identifier_raw));
-        } else {
-            $digits = preg_replace('/\D/', '', $identifier_raw);
-            $identifier = $this->normalizePhone($digits);
+        } 
+        else {
+            $identifier = $this->normalizePhoneIdentifier($identifier_raw);
             if (!$identifier) {
-                return response()->json(['success' => false, 'message' => 'Paramètres invalides.', 'code' => 'INVALID_FORMAT'], 422);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Paramètres invalides.',
+                    'code'    => 'INVALID_FORMAT',
+                ], 422);
             }
         }
 
@@ -421,4 +422,34 @@ class VerifyContactController extends Controller
 
         return null; // too short to be valid
     }
+
+    
+    private function normalizePhoneIdentifier(string $raw): ?string{
+        $digits = preg_replace('/\D/', '', $raw);
+        if (empty($digits)) return null;
+
+        // Retirer le code pays 229 si présent
+        if (str_starts_with($digits, '229')) {
+            $digits = substr($digits, 3);
+        }
+
+        // Retirer les préfixes locaux
+        if (str_starts_with($digits, '01') && strlen($digits) === 10) {
+            $digits = substr($digits, 2);
+        } elseif (str_starts_with($digits, '0') && strlen($digits) === 9) {
+            $digits = substr($digits, 1);
+        }
+
+        if (preg_match('/^\d{8}$/', $digits)) {
+            return '+229' . $digits;
+        }
+
+        // International hors Bénin
+        if (strlen($digits) >= 10 && strlen($digits) <= 15) {
+            return '+' . $digits;
+        }
+
+        return null;
+    }
+
 }
