@@ -26,6 +26,7 @@ use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Auth\VerifyContactController; // ← déjà importé
 use App\Http\Controllers\API\CarAIController;
 use App\Http\Controllers\API\Admin\SmsAdminController;
+use App\Http\Controllers\API\NotificationSettingsController;
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
@@ -104,8 +105,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/settings',                     [UserSettingsController::class, 'getSettings']);
     Route::put('/user/settings',                     [UserSettingsController::class, 'updateSettings']);
     Route::put('/user/theme',                        [UserSettingsController::class, 'updateTheme']);
-    Route::get('/user/notification-settings',        [UserSettingsController::class, 'getNotificationSettings']);
-    Route::put('/user/notification-settings',        [UserSettingsController::class, 'updateNotificationSettings']);
+   
+    Route::get('/user/notification-settings',        [NotificationSettingsController::class, 'index']);
+    Route::put('/user/notification-settings',        [NotificationSettingsController::class, 'update']);
+    
     Route::post('/user/profile-photo',               [UserSettingsController::class, 'updateProfilePhoto']);
     Route::delete('/user/profile-photo',             [UserSettingsController::class, 'deleteProfilePhoto']);
     Route::post('/check-email-availability',         [UserSettingsController::class, 'checkEmailAvailability']);
