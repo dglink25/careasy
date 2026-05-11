@@ -50,8 +50,10 @@ class VerifyContactController extends Controller
             if (!$identifier) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Numéro de téléphone invalide (format non reconnu).',
+                    'message' => 'Numéro non reconnu. Formats acceptés : '
+                            . 'XXXXXXXX · 01XXXXXXXX · +229XXXXXXXX  · +22901XXXXXXXX ',
                     'code'    => 'INVALID_FORMAT',
+                    'expected_format' => '+22901XXXXXXXX',
                 ], 422);
             }
         }
@@ -423,30 +425,23 @@ class VerifyContactController extends Controller
         return null; // too short to be valid
     }
 
-    
     private function normalizePhoneIdentifier(string $raw): ?string{
         $digits = preg_replace('/\D/', '', $raw);
         if (empty($digits)) return null;
 
-        // Retirer le code pays 229 si présent
+        // Retirer le code pays Bénin s'il est présent
         if (str_starts_with($digits, '229')) {
             $digits = substr($digits, 3);
         }
 
-        // Retirer les préfixes locaux
-        if (str_starts_with($digits, '01') && strlen($digits) === 10) {
-            $digits = substr($digits, 2);
-        } elseif (str_starts_with($digits, '0') && strlen($digits) === 9) {
-            $digits = substr($digits, 1);
-        }
-
-        if (preg_match('/^\d{8}$/', $digits)) {
+        // Format local 10 chiffres commençant par 0
+        if (preg_match('/^0\d{9}$/', $digits)) {
             return '+229' . $digits;
         }
 
-        // International hors Bénin
-        if (strlen($digits) >= 10 && strlen($digits) <= 15) {
-            return '+' . $digits;
+        // Format local 8 chiffres → migration automatique
+        if (preg_match('/^\d{8}$/', $digits)) {
+            return '+229' . '01' . $digits;
         }
 
         return null;
