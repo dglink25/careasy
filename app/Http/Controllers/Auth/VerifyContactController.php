@@ -38,7 +38,8 @@ class VerifyContactController extends Controller
                 ], 422);
             }
             $identifier = strtolower(trim($identifier_raw));
-        } else {
+        } 
+        else {
             $digits = preg_replace('/\D/', '', $identifier_raw);
             if (strlen($digits) < 8 || strlen($digits) > 15) {
                 return response()->json([
@@ -47,7 +48,14 @@ class VerifyContactController extends Controller
                     'code'    => 'INVALID_FORMAT',
                 ], 422);
             }
-            $identifier = '+' . $digits;
+            $identifier = $this->normalizePhone($digits);
+            if (!$identifier) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Numéro de téléphone invalide.',
+                    'code'    => 'INVALID_FORMAT',
+                ], 422);
+            }
         }
 
         $this->resetDbConnection();
@@ -192,9 +200,15 @@ class VerifyContactController extends Controller
             return response()->json(['success' => false, 'message' => 'Le code doit contenir 6 chiffres.', 'code' => 'INVALID_FORMAT'], 422);
         }
 
-        $identifier = $type === 'email'
-            ? strtolower(trim($identifier_raw))
-            : '+' . preg_replace('/\D/', '', $identifier_raw);
+        if ($type === 'email') {
+            $identifier = strtolower(trim($identifier_raw));
+        } else {
+            $digits = preg_replace('/\D/', '', $identifier_raw);
+            $identifier = $this->normalizePhone($digits);
+            if (!$identifier) {
+                return response()->json(['success' => false, 'message' => 'Paramètres invalides.', 'code' => 'INVALID_FORMAT'], 422);
+            }
+        }
 
         // ── Réinitialiser la connexion ────────────────────────────────────────
         $this->resetDbConnection();
@@ -290,9 +304,7 @@ class VerifyContactController extends Controller
         ]);
     }
 
-    // ── Réinitialiser la connexion PostgreSQL ─────────────────────────────────
-    // Indispensable avec Neon (serverless) et PgBouncer (pooler)
-    // quand une transaction précédente a échoué
+  
     private function resetDbConnection(): void
     {
         try {
@@ -396,5 +408,17 @@ class VerifyContactController extends Controller
         if (!$sent) {
             throw new \RuntimeException('SMS non envoyé par le gateway.');
         }
+    }
+
+    // Add the helper at the bottom of the class:
+    private function normalizePhone(string $digits): ?string {
+        $digits = ltrim($digits, '0');
+        if (empty($digits)) return null;
+
+        if (preg_match('/^\d{8}$/', $digits))    return '+229' . $digits;
+        if (preg_match('/^229\d{8}$/', $digits)) return '+' . $digits;
+        if (strlen($digits) >= 10)               return '+' . $digits;
+
+        return null; // too short to be valid
     }
 }

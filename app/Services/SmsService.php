@@ -282,15 +282,26 @@ class SmsService
 
     // ─── Helpers privés ───────────────────────────────────────────────────────
 
-    private function normalizePhone(string $phone): ?string {
+    private function normalizePhone(string $phone): ?string{
         $clean = preg_replace('/[^\d+]/', '', $phone);
         if (empty($clean)) return null;
 
-        if (preg_match('/^\d{8}$/', $clean))    return '+229' . $clean;
-        if (preg_match('/^229\d{8}$/', $clean)) return '+' . $clean;
-        if (str_starts_with($clean, '+'))        return $clean;
+        // Extract raw digits (drop leading +)
+        $digits = ltrim($clean, '+');
+        if (empty($digits)) return null;
 
-        return '+' . $clean;
+        // Strip leading zeros that would produce an invalid country code
+        $digits = ltrim($digits, '0');
+        if (empty($digits)) return null;
+
+        // Benin local 8-digit number (e.g. "97035431")
+        if (preg_match('/^\d{8}$/', $digits)) return '+229' . $digits;
+
+        // Already has Benin country code (e.g. "22997035431")
+        if (preg_match('/^229\d{8}$/', $digits)) return '+' . $digits;
+
+        // Any other number that already has a country code
+        return '+' . $digits;
     }
 
     private function truncate(string $text, int $max = 160): string{
