@@ -413,18 +413,6 @@ class VerifyContactController extends Controller
         }
     }
 
-    // Add the helper at the bottom of the class:
-    private function normalizePhone(string $digits): ?string {
-        $digits = ltrim($digits, '0');
-        if (empty($digits)) return null;
-
-        if (preg_match('/^\d{8}$/', $digits))    return '+229' . $digits;
-        if (preg_match('/^229\d{8}$/', $digits)) return '+' . $digits;
-        if (strlen($digits) >= 10)               return '+' . $digits;
-
-        return null; // too short to be valid
-    }
-
     private function normalizePhoneIdentifier(string $raw): ?string{
         $digits = preg_replace('/\D/', '', $raw);
         if (empty($digits)) return null;
