@@ -12,8 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Cache;
 
-class VerifyContactController extends Controller
-{
+class VerifyContactController extends Controller{
     public function send(Request $request): JsonResponse{
         
         $identifier_raw = trim($request->input('identifier', ''));
@@ -143,10 +142,54 @@ class VerifyContactController extends Controller
             if ($type === 'email') {
                 $this->sendEmail($identifier, $code);
             } else {
-                $this->sendSms($identifier, $code);
+                $smsSent      = false;
+                $whatsappSent = false;
+                $errors       = [];
+
+                // ── Tentative SMS ─────────────────────────────────────────────
+                try {
+                    $smsSent = $this->sendSms($identifier, $code);
+                } catch (\Exception $e) {
+                    $errors[] = 'SMS: ' . $e->getMessage();
+                    Log::warning('[VerifyContact] SMS échoué', ['error' => $e->getMessage()]);
+                }
+
+                // ── Tentative WhatsApp ────────────────────────────────────────
+                try {
+                    $whatsappSent = $this->sendWhatsApp($identifier, $code);
+                } catch (\Exception $e) {
+                    $errors[] = 'WhatsApp: ' . $e->getMessage();
+                    Log::warning('[VerifyContact] WhatsApp échoué', ['error' => $e->getMessage()]);
+                }
+
+                // ── Les deux ont échoué → rollback OTP + erreur ───────────────
+                if (!$smsSent && !$whatsappSent) {
+                    try {
+                        $this->resetDbConnection();
+                        DB::statement('DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?', [
+                            $identifier, $type,
+                        ]);
+                    } catch (\Exception $_) {}
+
+                    Log::error('[VerifyContact] Tous les canaux ont échoué', [
+                        'identifier' => substr($identifier, 0, 5) . '***',
+                        'errors'     => $errors,
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Impossible d\'envoyer le code. Vérifiez que le numéro est correct.',
+                        'code'    => 'SEND_FAILED',
+                    ], 500);
+                }
+
+                Log::info('[VerifyContact] Code envoyé', [
+                    'sms'      => $smsSent ? 'OK' : 'ÉCHEC',
+                    'whatsapp' => $whatsappSent ? 'OK' : 'ÉCHEC',
+                ]);
             }
         } catch (\Exception $e) {
-            // Supprimer l'OTP si l'envoi échoue
+            // Email uniquement — garder le catch existant pour email
             try {
                 $this->resetDbConnection();
                 DB::statement('DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?', [
@@ -154,16 +197,11 @@ class VerifyContactController extends Controller
                 ]);
             } catch (\Exception $_) {}
 
-            Log::error('[VerifyContact] Envoi échoué', [
-                'type'  => $type,
-                'error' => $e->getMessage(),
-            ]);
+            Log::error('[VerifyContact] Envoi email échoué', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => $type === 'email'
-                    ? 'Impossible d\'envoyer l\'email. Vérifiez que l\'adresse est correcte.'
-                    : 'Impossible d\'envoyer le SMS. Vérifiez que le numéro est correct.',
+                'message' => 'Impossible d\'envoyer l\'email. Vérifiez que l\'adresse est correcte.',
                 'code'    => 'SEND_FAILED',
             ], 500);
         }
@@ -404,13 +442,23 @@ class VerifyContactController extends Controller
         HTML;
     }
 
-    private function sendSms(string $phone, string $code): void
+    // ── Retourne bool au lieu de throw ───────────────────────────────────────
+    private function sendSms(string $phone, string $code): bool
     {
-        $sms  = app(\App\Services\SmsService::class);
-        $sent = $sms->sendOtp($phone, $code, 'Inscription CarEasy');
-        if (!$sent) {
-            throw new \RuntimeException('SMS non envoyé par le gateway.');
-        }
+        $sms = app(\App\Services\SmsService::class);
+        return $sms->sendOtp($phone, $code, '');
+    }
+
+    private function sendWhatsApp(string $phone, string $code): bool
+    {
+        $minutes = \App\Models\PasswordResetOtp::TTL_MINUTES;
+        $whatsapp = app(\App\Services\WhatsAppService::class);
+
+        $message = "*Votre code CarEasy : {$code}*\n\n"
+                . "Valide pendant *{$minutes} minutes*.\n"
+                . "Ne partagez jamais ce code.";
+
+        return $whatsapp->sendMessage($phone, $message);
     }
 
     private function normalizePhoneIdentifier(string $raw): ?string{
