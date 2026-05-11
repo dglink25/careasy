@@ -443,18 +443,16 @@ class VerifyContactController extends Controller{
     }
 
     // ── Retourne bool au lieu de throw ───────────────────────────────────────
-    private function sendSms(string $phone, string $code): bool
-    {
+    private function sendSms(string $phone, string $code): bool  {
         $sms = app(\App\Services\SmsService::class);
         return $sms->sendOtp($phone, $code, '');
     }
 
-    private function sendWhatsApp(string $phone, string $code): bool
-    {
+    private function sendWhatsApp(string $phone, string $code): bool {
         $minutes = \App\Models\PasswordResetOtp::TTL_MINUTES;
         $whatsapp = app(\App\Services\WhatsAppService::class);
 
-        $message = "*Votre code CarEasy : {$code}*\n\n"
+        $message = "*Votre code de vérification CarEasy : {$code}*\n\n"
                 . "Valide pendant *{$minutes} minutes*.\n"
                 . "Ne partagez jamais ce code.";
 
