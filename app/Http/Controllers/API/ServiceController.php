@@ -45,7 +45,7 @@ class ServiceController extends Controller{
         $services = Service::with(['entreprise', 'domaine', 'reviews'])
             ->where('is_visibility', true) 
             ->whereHas('entreprise', fn($q) => 
-                $q->where('status', 'validated')
+                $q->where('status', 'validated')->visible() 
             )
             ->orderBy('created_at', 'desc')
             ->get()
@@ -118,7 +118,7 @@ class ServiceController extends Controller{
                 })
                 ->where('is_visibility', true) 
                 ->whereHas('entreprise', function($q) {
-                    $q->where('status', 'validated');
+                    $q->where('status', 'validated')->visible();
                 })
                 ->limit(10)
                 ->get()
@@ -139,6 +139,7 @@ class ServiceController extends Controller{
                     ->orWhere('description', 'LIKE', "%{$query}%");
                 })
                 ->where('status', 'validated')
+                ->visible()
                 ->limit(10)
                 ->get()
                 ->map(function ($entreprise) {
@@ -316,7 +317,12 @@ class ServiceController extends Controller{
     }
 
     public function show($id)   {
-        $service = Service::with('entreprise', 'domaine')->where('is_visibility', true)->find($id);
+        $service = Service::with('entreprise', 'domaine')
+                ->where('is_visibility', true)
+                ->whereHas('entreprise', fn($q) =>
+                    $q->where('status', 'validated')->visible()
+                )
+                ->find($id);
 
         if (!$service) {
             return response()->json(['message' => 'Service non trouvé'], 404);

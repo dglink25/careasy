@@ -85,6 +85,35 @@ class Entreprise extends Model{
             ->where('date_fin', '>', now());
     }
 
+
+    public function isVisible(): bool{
+        if ($this->isInTrialPeriod()) {
+            return true;
+        }
+
+        return Abonnement::where('entreprise_id', $this->id)
+            ->where('statut', 'actif')
+            ->where('date_fin', '>', now())
+            ->exists();
+    }
+
+    public function scopeVisible($query) {
+        return $query->where(function ($q) {
+            // Essai gratuit en cours
+            $q->where(function ($sub) {
+                $sub->whereNotNull('trial_starts_at')
+                    ->whereNotNull('trial_ends_at')
+                    ->where('trial_starts_at', '<=', now())
+                    ->where('trial_ends_at', '>', now());
+            })
+            // OU abonnement actif
+            ->orWhereHas('abonnements', function ($sub) {
+                $sub->where('statut', 'actif')
+                    ->where('date_fin', '>', now());
+            });
+        });
+    }
+
     public function activateTrialPeriod() {
         if ($this->has_used_trial) {
             return false;
@@ -100,8 +129,7 @@ class Entreprise extends Model{
         return $this->save();
     }
 
-    public function isInTrialPeriod(): bool
-    {
+    public function isInTrialPeriod(): bool{
         if (!$this->trial_starts_at || !$this->trial_ends_at) {
             return false;
         }

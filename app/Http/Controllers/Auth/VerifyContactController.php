@@ -12,13 +12,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Cache;
 
-class VerifyContactController extends Controller
-{
-    public function send(Request $request): JsonResponse
-    {
-        // ── Valider manuellement (sans exception automatique) ─────────────────
-        // On N'utilise PAS $request->validate() pour éviter les exceptions
-        // qui cassent la transaction PostgreSQL
+class VerifyContactController extends Controller{
+    public function send(Request $request): JsonResponse{
+        
         $identifier_raw = trim($request->input('identifier', ''));
         $type           = $request->input('type', '');
 
@@ -39,7 +35,8 @@ class VerifyContactController extends Controller
                 ], 422);
             }
             $identifier = strtolower(trim($identifier_raw));
-        } else {
+        } 
+        else {
             $digits = preg_replace('/\D/', '', $identifier_raw);
             if (strlen($digits) < 8 || strlen($digits) > 15) {
                 return response()->json([
@@ -48,11 +45,18 @@ class VerifyContactController extends Controller
                     'code'    => 'INVALID_FORMAT',
                 ], 422);
             }
-            $identifier = '+' . $digits;
+            $identifier = $this->normalizePhoneIdentifier($identifier_raw);
+            if (!$identifier) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Numéro non reconnu. Formats acceptés : '
+                            . 'XXXXXXXX · 01XXXXXXXX · +229XXXXXXXX  · +22901XXXXXXXX ',
+                    'code'    => 'INVALID_FORMAT',
+                    'expected_format' => '+22901XXXXXXXX',
+                ], 422);
+            }
         }
 
-        // ── Réinitialiser la connexion PostgreSQL avant toute requête DB ──────
-        // Ceci évite l'erreur "current transaction is aborted"
         $this->resetDbConnection();
 
         // ── Déjà utilisé ? ────────────────────────────────────────────────────
@@ -72,7 +76,8 @@ class VerifyContactController extends Controller
                     'code'    => 'ALREADY_USED',
                 ], 422);
             }
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             $this->resetDbConnection();
             Log::warning('[VerifyContact] Erreur vérif doublon', ['error' => $e->getMessage()]);
             // On continue — la vérification d'unicité se fera à l'inscription
@@ -137,10 +142,54 @@ class VerifyContactController extends Controller
             if ($type === 'email') {
                 $this->sendEmail($identifier, $code);
             } else {
-                $this->sendSms($identifier, $code);
+                $smsSent      = false;
+                $whatsappSent = false;
+                $errors       = [];
+
+                // ── Tentative SMS ─────────────────────────────────────────────
+                try {
+                    $smsSent = $this->sendSms($identifier, $code);
+                } catch (\Exception $e) {
+                    $errors[] = 'SMS: ' . $e->getMessage();
+                    Log::warning('[VerifyContact] SMS échoué', ['error' => $e->getMessage()]);
+                }
+
+                // ── Tentative WhatsApp ────────────────────────────────────────
+                try {
+                    $whatsappSent = $this->sendWhatsApp($identifier, $code);
+                } catch (\Exception $e) {
+                    $errors[] = 'WhatsApp: ' . $e->getMessage();
+                    Log::warning('[VerifyContact] WhatsApp échoué', ['error' => $e->getMessage()]);
+                }
+
+                // ── Les deux ont échoué → rollback OTP + erreur ───────────────
+                if (!$smsSent && !$whatsappSent) {
+                    try {
+                        $this->resetDbConnection();
+                        DB::statement('DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?', [
+                            $identifier, $type,
+                        ]);
+                    } catch (\Exception $_) {}
+
+                    Log::error('[VerifyContact] Tous les canaux ont échoué', [
+                        'identifier' => substr($identifier, 0, 5) . '***',
+                        'errors'     => $errors,
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Impossible d\'envoyer le code. Vérifiez que le numéro est correct.',
+                        'code'    => 'SEND_FAILED',
+                    ], 500);
+                }
+
+                Log::info('[VerifyContact] Code envoyé', [
+                    'sms'      => $smsSent ? 'OK' : 'ÉCHEC',
+                    'whatsapp' => $whatsappSent ? 'OK' : 'ÉCHEC',
+                ]);
             }
         } catch (\Exception $e) {
-            // Supprimer l'OTP si l'envoi échoue
+            // Email uniquement — garder le catch existant pour email
             try {
                 $this->resetDbConnection();
                 DB::statement('DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?', [
@@ -148,16 +197,11 @@ class VerifyContactController extends Controller
                 ]);
             } catch (\Exception $_) {}
 
-            Log::error('[VerifyContact] Envoi échoué', [
-                'type'  => $type,
-                'error' => $e->getMessage(),
-            ]);
+            Log::error('[VerifyContact] Envoi email échoué', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => $type === 'email'
-                    ? 'Impossible d\'envoyer l\'email. Vérifiez que l\'adresse est correcte.'
-                    : 'Impossible d\'envoyer le SMS. Vérifiez que le numéro est correct.',
+                'message' => 'Impossible d\'envoyer l\'email. Vérifiez que l\'adresse est correcte.',
                 'code'    => 'SEND_FAILED',
             ], 500);
         }
@@ -180,8 +224,7 @@ class VerifyContactController extends Controller
         ]);
     }
 
-    public function check(Request $request): JsonResponse
-    {
+    public function check(Request $request): JsonResponse{
         $identifier_raw = trim($request->input('identifier', ''));
         $type           = $request->input('type', '');
         $code_input     = trim($request->input('code', ''));
@@ -194,9 +237,19 @@ class VerifyContactController extends Controller
             return response()->json(['success' => false, 'message' => 'Le code doit contenir 6 chiffres.', 'code' => 'INVALID_FORMAT'], 422);
         }
 
-        $identifier = $type === 'email'
-            ? strtolower(trim($identifier_raw))
-            : '+' . preg_replace('/\D/', '', $identifier_raw);
+        if ($type === 'email') {
+            $identifier = strtolower(trim($identifier_raw));
+        } 
+        else {
+            $identifier = $this->normalizePhoneIdentifier($identifier_raw);
+            if (!$identifier) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Paramètres invalides.',
+                    'code'    => 'INVALID_FORMAT',
+                ], 422);
+            }
+        }
 
         // ── Réinitialiser la connexion ────────────────────────────────────────
         $this->resetDbConnection();
@@ -292,9 +345,7 @@ class VerifyContactController extends Controller
         ]);
     }
 
-    // ── Réinitialiser la connexion PostgreSQL ─────────────────────────────────
-    // Indispensable avec Neon (serverless) et PgBouncer (pooler)
-    // quand une transaction précédente a échoué
+  
     private function resetDbConnection(): void
     {
         try {
@@ -391,12 +442,43 @@ class VerifyContactController extends Controller
         HTML;
     }
 
-    private function sendSms(string $phone, string $code): void
-    {
-        $sms  = app(\App\Services\SmsService::class);
-        $sent = $sms->sendOtp($phone, $code, 'Inscription CarEasy');
-        if (!$sent) {
-            throw new \RuntimeException('SMS non envoyé par le gateway.');
-        }
+    // ── Retourne bool au lieu de throw ───────────────────────────────────────
+    private function sendSms(string $phone, string $code): bool  {
+        $sms = app(\App\Services\SmsService::class);
+        return $sms->sendOtp($phone, $code, '');
     }
+
+    private function sendWhatsApp(string $phone, string $code): bool {
+        $minutes = \App\Models\PasswordResetOtp::TTL_MINUTES;
+        $whatsapp = app(\App\Services\WhatsAppService::class);
+
+        $message = "*Votre code de vérification CarEasy : {$code}*\n\n"
+                . "Valide pendant *{$minutes} minutes*.\n"
+                . "Ne partagez jamais ce code.";
+
+        return $whatsapp->sendMessage($phone, $message);
+    }
+
+    private function normalizePhoneIdentifier(string $raw): ?string{
+        $digits = preg_replace('/\D/', '', $raw);
+        if (empty($digits)) return null;
+
+        // Retirer le code pays Bénin s'il est présent
+        if (str_starts_with($digits, '229')) {
+            $digits = substr($digits, 3);
+        }
+
+        // Format local 10 chiffres commençant par 0
+        if (preg_match('/^0\d{9}$/', $digits)) {
+            return '+229' . $digits;
+        }
+
+        // Format local 8 chiffres → migration automatique
+        if (preg_match('/^\d{8}$/', $digits)) {
+            return '+229' . '01' . $digits;
+        }
+
+        return null;
+    }
+
 }

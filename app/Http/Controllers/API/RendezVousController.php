@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Services\NotificationDispatcher;
 
 class RendezVousController extends Controller{
     protected WhatsAppService $whatsApp;
@@ -102,22 +103,13 @@ class RendezVousController extends Controller{
 
             $rendezVous->load(['service', 'client', 'prestataire', 'entreprise']);
 
-            // ── Notification in-app ───────────────────────────────────────────
+            // ── Notification 
             try {
-                $prestataire = User::find($service->prestataire_id);
-                if ($prestataire) {
-                    $prestataire->notify(new RdvNotification($rendezVous, 'pending'));
-                }
+                NotificationDispatcher::rdvPending($rendezVous);
             } catch (\Exception $e) {
-                Log::warning('Notification in-app RDV pending échouée:', ['error' => $e->getMessage()]);
+                Log::error('Erreur notification nouvelle demande RDV:', ['message' => $e->getMessage()]);    
             }
 
-            // ── Notification WhatsApp ─────────────────────────────────────────
-            try {
-                $this->whatsApp->notifyRdvPending($rendezVous);
-            } catch (\Exception $e) {
-                Log::warning('Notification WhatsApp RDV pending échouée:', ['error' => $e->getMessage()]);
-            }
 
             return response()->json([
                 'message'     => 'Demande de rendez-vous envoyée avec succès',
@@ -147,8 +139,7 @@ class RendezVousController extends Controller{
         return response()->json($rendezVous);
     }
 
-    public function show($id)
-    {
+    public function show($id){
         $rendezVous = RendezVous::with(['service', 'client', 'prestataire', 'entreprise', 'service.domaine', 'review'])
             ->findOrFail($id);
         return response()->json($rendezVous);
@@ -170,21 +161,11 @@ class RendezVousController extends Controller{
             'confirmed_at' => Carbon::now(),
         ]);
 
-        // ── Notification in-app ───────────────────────────────────────────────
+        // ── Notification ───────────────────────────────────────────────
         try {
-            $client = User::find($rendezVous->client_id);
-            if ($client) {
-                $client->notify(new RdvNotification($rendezVous, 'confirmed'));
-            }
+            NotificationDispatcher::rdvConfirmed($rendezVous);
         } catch (\Exception $e) {
-            Log::warning('Notification in-app RDV confirmed échouée:', ['error' => $e->getMessage()]);
-        }
-
-        // ── Notification WhatsApp ─────────────────────────────────────────────
-        try {
-            $this->whatsApp->notifyRdvConfirmed($rendezVous);
-        } catch (\Exception $e) {
-            Log::warning('Notification WhatsApp RDV confirmed échouée:', ['error' => $e->getMessage()]);
+            Log::error('Erreur notification RDV confirmé:', ['message' => $e->getMessage()]);    
         }
 
         return response()->json([
@@ -215,25 +196,12 @@ class RendezVousController extends Controller{
             'prestataire_notes' => $request->reason,
         ]);
 
-        // ── Notification in-app ───────────────────────────────────────────────
-        try {
-            $notifyUserId = $rendezVous->client_id === $user->id
-                ? $rendezVous->prestataire_id
-                : $rendezVous->client_id;
+        // ── Notification 
 
-            $notifyUser = User::find($notifyUserId);
-            if ($notifyUser) {
-                $notifyUser->notify(new RdvNotification($rendezVous, 'cancelled'));
-            }
-        } catch (\Exception $e) {
-            Log::warning('Notification in-app RDV cancelled échouée:', ['error' => $e->getMessage()]);
-        }
-
-        // ── Notification WhatsApp ─────────────────────────────────────────────
         try {
-            $this->whatsApp->notifyRdvCancelled($rendezVous, $user->id);
+            NotificationDispatcher::rdvCancelled($rendezVous, $user->id);
         } catch (\Exception $e) {
-            Log::warning('Notification WhatsApp RDV cancelled échouée:', ['error' => $e->getMessage()]);
+            Log::error('Erreur notification RDV annulé:', ['message' => $e->getMessage()]);    
         }
 
         return response()->json([
@@ -258,21 +226,11 @@ class RendezVousController extends Controller{
             'completed_at' => Carbon::now(),
         ]);
 
-        // ── Notification in-app ───────────────────────────────────────────────
+        // ── Notification 
         try {
-            $client = User::find($rendezVous->client_id);
-            if ($client) {
-                $client->notify(new RdvNotification($rendezVous, 'completed'));
-            }
+            NotificationDispatcher::rdvCompleted($rendezVous);
         } catch (\Exception $e) {
-            Log::warning('Notification in-app RDV completed échouée:', ['error' => $e->getMessage()]);
-        }
-
-        // ── Notification WhatsApp ─────────────────────────────────────────────
-        try {
-            $this->whatsApp->notifyRdvCompleted($rendezVous);
-        } catch (\Exception $e) {
-            Log::warning('Notification WhatsApp RDV completed échouée:', ['error' => $e->getMessage()]);
+            Log::error('Erreur notification RDV terminé:', ['message' => $e->getMessage()]);    
         }
 
         return response()->json([

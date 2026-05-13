@@ -144,6 +144,7 @@ class ReviewController extends Controller
         }
     }
 
+<<<<<<< HEAD
         public function forService($serviceId)
     {
         $reviews = \App\Models\Review::with(['client:id,name'])
@@ -166,6 +167,39 @@ class ReviewController extends Controller
             });
  
         return response()->json($reviews);
+=======
+    public function forService(int $serviceId){
+        try {
+            $reviews = Review::with(['client:id,name,profile_photo_path'])
+                ->whereHas('rendezVous', function ($q) use ($serviceId) {
+                    $q->where('service_id', $serviceId)
+                      ->where('status', RendezVous::STATUS_COMPLETED);
+                })
+                ->where('reported', false)      // exclure les avis signalés
+                ->orderByDesc('created_at')
+                ->limit(50)
+                ->get()
+                ->map(function ($review) {
+                    return [
+                        'id'         => $review->id,
+                        'rating'     => $review->rating,
+                        'comment'    => $review->comment,
+                        'created_at' => $review->created_at?->toIso8601String(),
+                        'client'     => [
+                            'id'                => $review->client?->id,
+                            'name'              => $review->client?->name ?? 'Client anonyme',
+                            'profile_photo_url' => $review->client?->profile_photo_url,
+                        ],
+                    ];
+                });
+
+            return response()->json($reviews);
+
+        } catch (\Exception $e) {
+            Log::error('Erreur forService reviews:', ['error' => $e->getMessage()]);
+            return response()->json([], 200); // retourner tableau vide plutôt qu'erreur
+        }
+>>>>>>> d0f3f6d199f1744f9da6bc504ed1901148306493
     }
 
 }

@@ -26,13 +26,13 @@ use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\Auth\VerifyContactController; // ← déjà importé
 use App\Http\Controllers\API\CarAIController;
 use App\Http\Controllers\API\Admin\SmsAdminController;
+use App\Http\Controllers\API\NotificationSettingsController;
 
 Route::get('/test', fn() => ['status' => 'API OK', 'version' => '1.0']);
 
 require __DIR__.'/auth.php';
 
-// ── Vérification contact AVANT inscription (PUBLIC — sans auth) ───────────────
-// ⚠️ DOIT être en dehors du middleware auth:sanctum
+
 Route::prefix('verify-contact')->middleware('throttle:10,1')->group(function () {
     Route::post('/send',  [VerifyContactController::class, 'send'])->name('verify.contact.send');
     Route::post('/check', [VerifyContactController::class, 'check'])->name('verify.contact.check');
@@ -105,8 +105,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/settings',                     [UserSettingsController::class, 'getSettings']);
     Route::put('/user/settings',                     [UserSettingsController::class, 'updateSettings']);
     Route::put('/user/theme',                        [UserSettingsController::class, 'updateTheme']);
-    Route::get('/user/notification-settings',        [UserSettingsController::class, 'getNotificationSettings']);
-    Route::put('/user/notification-settings',        [UserSettingsController::class, 'updateNotificationSettings']);
+   
+    Route::get('/user/notification-settings',        [NotificationSettingsController::class, 'index']);
+    Route::put('/user/notification-settings',        [NotificationSettingsController::class, 'update']);
+    
     Route::post('/user/profile-photo',               [UserSettingsController::class, 'updateProfilePhoto']);
     Route::delete('/user/profile-photo',             [UserSettingsController::class, 'deleteProfilePhoto']);
     Route::post('/check-email-availability',         [UserSettingsController::class, 'checkEmailAvailability']);
@@ -161,7 +163,7 @@ Route::get('entreprises',               [EntrepriseController::class, 'index']);
 Route::get('entreprises/domaine/{id}',  [EntrepriseController::class, 'indexByDomaine']);
 Route::get('entreprises/form/data',     [EntrepriseController::class, 'getFormData']);
 Route::get('entreprises/{id}',          [EntrepriseController::class, 'show']);
-Route::get('search',                    [EntrepriseController::class, 'search']);
+Route::get('/search',                   [ServiceController::class, 'search']);
 Route::get('services',                  [ServiceController::class, 'index']);
 Route::get('services/{id}',             [ServiceController::class, 'show']);
 Route::get('services/{serviceId}/reviews', [ReviewController::class, 'forService']); 
