@@ -13,19 +13,18 @@ use App\Notifications\TrialPeriodStartedNotification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\API\PushNotificationController;
+use App\Services\SmsService;
+use App\Services\WhatsAppService;
 
-class EntrepriseAdminController extends Controller
-{
-    protected function ensureAdmin()
-    {
+class EntrepriseAdminController extends Controller{
+    protected function ensureAdmin() {
         $user = Auth::user();
         if (!$user || $user->role !== 'admin') {
             abort(403, 'Unauthorized. Admin only.');
         }
     }
 
-    public function index(Request $request)
-    {
+    public function index(Request $request){
         $this->ensureAdmin();
 
         $query = Entreprise::with(['prestataire', 'domaines', 'services']);
@@ -55,8 +54,7 @@ class EntrepriseAdminController extends Controller
         return response()->json(['data' => $query->orderBy('created_at', 'desc')->get()]);
     }
 
-    public function show($id)
-    {
+    public function show($id) {
         $this->ensureAdmin();
 
         $entreprise = Entreprise::with(['prestataire', 'domaines', 'services', 'abonnements'])->find($id);
@@ -70,13 +68,7 @@ class EntrepriseAdminController extends Controller
         return response()->json($entreprise);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    //  APPROVE — sans DB::beginTransaction() (incompatible Neon pgBouncer)
-    //  Chaque opération est exécutée séquentiellement.
-    //  En cas d'erreur partielle, un log est émis pour correction manuelle.
-    // ════════════════════════════════════════════════════════════════════
-    public function approve(Request $request, $id)
-    {
+    public function approve(Request $request, $id)  {
         $this->ensureAdmin();
 
         $entreprise = Entreprise::find($id);
@@ -109,9 +101,15 @@ class EntrepriseAdminController extends Controller
             // 4. Notifications (non bloquantes)
             if ($entreprise->prestataire) {
                 try {
-                    $entreprise->prestataire->notify(
-                        new EntrepriseStatusChangedNotification($entreprise, 'validée', $entreprise->admin_note)
-                    );
+                    if($entreprise->prestataire->phone) {
+                        SmsService::notifyEntreprisePrestataireApproved($entreprise->prestataire->phone, $entreprise->name);
+                        WhatsAppService::notifyEntreprisePrestataireApproved($entreprise->prestataire->phone, $entreprise->name);
+                    }
+                    else{ 
+                        $entreprise->prestataire->notify(
+                            new EntrepriseStatusChangedNotification($entreprise, 'validée', $entreprise->admin_note)
+                        );
+                    }
                 } catch (\Exception $e) {
                     Log::warning('Notification email approve échouée', ['error' => $e->getMessage()]);
                 }
@@ -126,7 +124,7 @@ class EntrepriseAdminController extends Controller
 
                 try {
                     PushNotificationController::sendToUser($entreprise->prestataire, [
-                        'title' => '🎉 Entreprise validée !',
+                        'title' => 'Entreprise validée !',
                         'body'  => "Votre entreprise \"{$entreprise->name}\" a été approuvée et est maintenant en ligne !",
                         'type'  => 'entreprise_approved',
                         'url'   => '/mes-entreprises',
@@ -164,8 +162,7 @@ class EntrepriseAdminController extends Controller
         }
     }
 
-    private function createTrialSubscription(Entreprise $entreprise)
-    {
+    private function createTrialSubscription(Entreprise $entreprise)   {
         $existing = Abonnement::where('entreprise_id', $entreprise->id)
             ->where('type', 'trial')
             ->first();
@@ -197,8 +194,7 @@ class EntrepriseAdminController extends Controller
         return $abonnement;
     }
 
-    public function reject(Request $request, $id)
-    {
+    public function reject(Request $request, $id)  {
         $this->ensureAdmin();
 
         $request->validate(['admin_note' => 'required|string|min:10']);
@@ -220,16 +216,23 @@ class EntrepriseAdminController extends Controller
 
             if ($entreprise->prestataire) {
                 try {
-                    $entreprise->prestataire->notify(
-                        new EntrepriseStatusChangedNotification($entreprise, 'rejetée', $entreprise->admin_note)
-                    );
-                } catch (\Exception $e) {
+                    if($entreprise->prestataire->phone) {
+                        SmsService::notifyEntreprisePrestataireRejected($entreprise->prestataire->phone, $entreprise->name, $request->admin_note);
+                        WhatsAppService::notifyEntreprisePrestataireRejected($entreprise->prestataire->phone, $entreprise->name, $request->admin_note);
+                    }
+                    else{
+                        $entreprise->prestataire->notify(
+                            new EntrepriseStatusChangedNotification($entreprise, 'rejetée', $entreprise->admin_note)
+                        );
+                    }
+                } 
+                catch (\Exception $e) {
                     Log::warning('Notification email reject échouée', ['error' => $e->getMessage()]);
                 }
 
                 try {
                     PushNotificationController::sendToUser($entreprise->prestataire, [
-                        'title' => '⚠️ Entreprise refusée',
+                        'title' => 'Entreprise refusée',
                         'body'  => "Votre entreprise \"{$entreprise->name}\" a été refusée. Motif: "
                                    . substr($request->admin_note, 0, 100)
                                    . (strlen($request->admin_note) > 100 ? '...' : ''),
@@ -263,8 +266,7 @@ class EntrepriseAdminController extends Controller
         }
     }
 
-    public function extendTrial(Request $request, $id)
-    {
+    public function extendTrial(Request $request, $id){
         $this->ensureAdmin();
 
         $request->validate([
@@ -312,7 +314,7 @@ class EntrepriseAdminController extends Controller
             if ($entreprise->prestataire) {
                 try {
                     PushNotificationController::sendToUser($entreprise->prestataire, [
-                        'title' => '📅 Période d\'essai prolongée',
+                        'title' => 'Période d\'essai prolongée',
                         'body'  => "Votre période d'essai pour \"{$entreprise->name}\" a été prolongée de {$request->days} jours.",
                         'type'  => 'trial_extended',
                         'url'   => '/abonnements',

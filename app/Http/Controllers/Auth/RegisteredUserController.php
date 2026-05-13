@@ -147,9 +147,10 @@ class RegisteredUserController extends Controller{
             $userData['email_verified_at'] = now();
             $userData['phone'] = null;
             $userData['phone_verified_at'] = null;
-        } else {
+        } 
+        else {
             $userData['phone'] = $validatedData['phone'];
-            $userData['phone_verified_at'] = null;
+            $userData['phone_verified_at'] = now();
             $userData['email'] = null;
             $userData['email_verified_at'] = null;
         }
@@ -172,7 +173,8 @@ class RegisteredUserController extends Controller{
             try {
                 $sms = app(SmsService::class);
                 $sms->notifyRegistration($user->phone, $user->name);
-            } catch (\Exception $e) {
+            } 
+            catch (\Exception $e) {
                 Log::warning('[SMS] Notification inscription échouée : ' . $e->getMessage());
             }
 
@@ -219,8 +221,7 @@ class RegisteredUserController extends Controller{
         ]);
     }
 
-    public function checkPhone(Request $request)
-    {
+    public function checkPhone(Request $request) {
         $request->validate([
             'phone' => ['required', 'string'],
         ]);
@@ -237,8 +238,7 @@ class RegisteredUserController extends Controller{
         ]);
     }
 
-    private function cleanPhoneNumber($phone)
-    {
+    private function cleanPhoneNumber($phone) {
         $clean = preg_replace('/[^0-9+]/', '', $phone);
 
         if (substr_count($clean, '+') > 1) {

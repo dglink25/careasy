@@ -5,8 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class SmsService
-{
+class SmsService{
     protected string $baseUrl;
     protected string $user;
     protected string $pass;
@@ -231,7 +230,7 @@ class SmsService
 
     public function notifyRegistration(string $phone, string $name): void {
         $firstName = explode(' ', $name)[0];
-        $this->sendMessage($phone, "CarEasy - Bienvenue {$firstName} !\nVotre compte est cree. Trouvez des prestataires auto pres de chez vous.");
+        $this->sendMessage($phone, "CarEasy - Bienvenue {$firstName} !\nVotre compte est cree. Utilisez désormais *{$phone}* avec vôtre mot de passe pour les prochaines connexions. Trouvez des prestataires auto pres de chez vous.");
     }
 
     public function notifyEntrepriseApproved(\App\Models\Entreprise $entreprise): void {
@@ -289,14 +288,12 @@ class SmsService
             $digits = substr($digits, 3);
         }
 
-        // Déjà en format local 10 chiffres (commence par 0) → +2290XXXXXXXXX
         if (preg_match('/^0\d{9}$/', $digits)) {
-            return '+229' . $digits;                    // +2290197035431 
+            return '+229' . $digits;                    
         }
 
-        // Format local 8 chiffres → ajouter le préfixe 01 → +22901XXXXXXXX
         if (preg_match('/^\d{8}$/', $digits)) {
-            return '+229' . '01' . $digits;             // +2290197035431 
+            return '+229' . '01' . $digits;            
         }
 
         Log::warning('[SMS] Numéro non normalisable', [
@@ -335,6 +332,27 @@ class SmsService
 
     private function messageEndpoint(): string {
         return $this->baseUrl . '/3rdparty/v1/messages';
+    }
+
+    public static function notifyEntreprisePrestataireRejected(string $phone, string $entrepriseName, ?string $reason = null): void {
+        $msg = "CarEasy - Demande refusee\nEntreprise : {$entrepriseName}\n";
+        if ($reason) $msg .= "Motif : " . (strlen($reason) > 80 ? substr($reason, 0, 77) . '...' : $reason). "\n";
+
+        $msg .= "Corrigez et soumettez a nouveau.";
+        $msg .= "Pour toute question, contactez notre support via l'application ou par email au careasy26@gmail.com.\n\n";
+        $msg .= "Coordialement,\nL'équipe CarEasy";
+        self::sendMessage($phone, $msg);
+    }
+
+
+    public static function notifyEntreprisePrestataireApproved(string $phone, string $entrepriseName): void {
+        $date = now()->format('d/m/Y');
+        $msg = "CarEasy !\n";
+        $msg .= "Votre entreprise \"{$entrepriseName}\" a été approuvée et est maintenant publique pour les visiteurs clients.\n";
+        $msg .= "Vous bénéficiez d'un essai gratuit de 30 jours à compter du {$date}.";
+        $msg .= "Pour plus d'assistance, contactez notre support via l'application ou par email au careasy26@gmail.com.\n\n";
+        $msg .= "Coordialement,\nL'équipe CarEasy";
+        self::sendMessage($phone, $msg);
     }
 
 }

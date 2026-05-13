@@ -1,16 +1,5 @@
 <?php
-// app/Services/NotificationDispatcher.php
-// ═══════════════════════════════════════════════════════════════════════════
-// Service central d'envoi de notifications.
-// TOUTES les notifications passent par ce dispatcher qui vérifie
-// les préférences (canal + type) avant d'envoyer.
-//
-// Usage:
-//   NotificationDispatcher::rdvPending($rendezVous);
-//   NotificationDispatcher::rdvConfirmed($rendezVous);
-//   NotificationDispatcher::newMessage($conversation, $sender, $recipient);
-//   NotificationDispatcher::newService($service, $followers);
-// ═══════════════════════════════════════════════════════════════════════════
+
 
 namespace App\Services;
 

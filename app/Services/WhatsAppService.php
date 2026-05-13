@@ -155,6 +155,7 @@ class WhatsAppService
         $firstName = explode(' ', $name)[0];
         $message   = "*Bienvenue sur CarEasy, {$firstName} !*\n\n"
                    . "Votre compte a été créé avec succès. "
+                   . "Utilisez désormais *{$phone}* avec vôtre mot de passe pour les prochaines connexions.\n\n"
                    . "Trouvez des prestataires automobile près de chez vous et prenez rendez-vous facilement.\n\n"
                    . "_L'équipe CarEasy_";
 
@@ -329,8 +330,49 @@ class WhatsAppService
         }
     }
 
-    private function formatTime(?string $time): string
-    {
+    private function formatTime(?string $time): string  {
         return $time ? substr($time, 0, 5) : '';
+    }
+
+    public static function notifyEntreprisePrestataireApproved(
+        string $phone,
+        string $entrepriseName
+    ): void {
+
+        $date = now()->format('d/m/Y');
+
+        $msg = "*CarEasy - Entreprise approuvée*\n\n";
+        $msg .= "Votre entreprise \"{$entrepriseName}\" a été approuvée et est maintenant publique pour les visiteurs clients.\n";
+        $msg .= "Vous bénéficiez d'un essai gratuit de 30 jours à compter du {$date}.";
+        $msg .= "Pour tout demande d'assistance, contactez-nous via l'application ou par email au careasy26@gmail.com.\n\n";
+        $msg .= "Coordialement,\nL'équipe CarEasy";
+
+        self::sendMessage($phone, $msg);
+    }
+
+    public static function notifyEntreprisePrestataireRejected(
+        string $phone,
+        string $entrepriseName,
+        ?string $reason = null
+    ): void {
+
+        $msg = "*CarEasy - Demande refusée*\n\n";
+        $msg .= "Entreprise : {$entrepriseName}\n";
+
+        if ($reason) {
+            $msg .= "Motif : " . self::truncate($reason, 80) . "\n";
+        }
+
+        $msg .= "\nCorrigez puis soumettez à nouveau votre demande.";
+        $msg .= "Pour toute question, contactez notre support via l'application ou par email au careasy26@gmail.com.\n\n";
+        $msg .= "Coordialement,\nL'équipe CarEasy";
+
+        self::sendMessage($phone, $msg);
+    }
+
+    public static function truncate(string $text, int $maxLength): string {
+        return strlen($text) > $maxLength
+            ? substr($text, 0, $maxLength - 3) . '...'
+            : $text;
     }
 }
