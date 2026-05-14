@@ -731,4 +731,34 @@ class UserSettingsController extends Controller
             'message' => $isAvailable ? 'Téléphone disponible' : 'Téléphone déjà utilisé'
         ]);
     }
+    
+    public function updatePhone(Request $request): JsonResponse {
+        $request->validate([
+            'phone'        => ['required', 'string'],
+            'verify_token' => ['required', 'string'],
+        ]);
+
+        // Vérifier le token
+        $cached = Cache::store('file')->get("contact_verified:{$request->verify_token}");
+        if (!$cached || $cached['type'] !== 'phone') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Token de vérification invalide ou expiré.',
+            ], 422);
+        }
+
+        $user = $request->user();
+        $user->phone = $cached['identifier']; // utiliser l'identifiant normalisé du cache
+        $user->save();
+
+        Cache::store('file')->forget("contact_verified:{$request->verify_token}");
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Numéro de téléphone mis à jour.',
+            'user'    => $user,
+        ]);
+    }
+
+
 }

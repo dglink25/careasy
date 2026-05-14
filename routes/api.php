@@ -46,6 +46,8 @@ Route::middleware('throttle:10,1')->group(function () {
 
 Route::middleware('auth:sanctum')->group(function () {
 
+    Route::put('/user/phone', [UserSettingsController::class, 'updatePhone']);
+
     // ── Pusher broadcasting auth ──────────────────────────────────────────
     Route::post('/broadcasting/auth', fn(\Illuminate\Http\Request $r) => Broadcast::auth($r));
     Route::post('/pusher/auth',       fn(\Illuminate\Http\Request $r) => Broadcast::auth($r));
