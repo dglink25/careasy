@@ -12,6 +12,9 @@ use App\Models\User;
 use Cloudinary\Configuration\Configuration;
 use Cloudinary\Api\Upload\UploadApi;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
+
 
 class UserSettingsController extends Controller
 {
