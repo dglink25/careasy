@@ -11,8 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
-class PaiementController extends Controller
-{
+class PaiementController extends Controller{
     protected $fedapayService;
     protected $frontendUrl;
 
@@ -100,8 +99,7 @@ class PaiementController extends Controller
         }
     }
 
-    public function callback(Request $request)
-    {
+    public function callback(Request $request) {
         Log::info('=== CALLBACK FEDAPAY REÇU ===', [
             'url'      => $request->fullUrl(),
             'method'   => $request->method(),
@@ -111,32 +109,31 @@ class PaiementController extends Controller
         if ($request->isMethod('get')) {
             $transactionId = $request->query('id');
             $status        = $request->query('status');
+            $reference     = $request->query('reference'); // ← ajouter
 
-            if ($transactionId) {
-                $paiement = Paiement::where('fedapay_transaction_id', $transactionId)->first();
-
-                if ($paiement) {
-                    try {
-                        $paiement->update([
-                            'fedapay_status' => $status,
-                            'statut'         => $status === 'approved' ? 'succes' : 'echec',
-                            'date_paiement'  => $status === 'approved' ? now() : null,
-                        ]);
-
-                        if ($status === 'approved') {
-                            $this->creerAbonnement($paiement);
-                        }
-
-                        return $status === 'approved'
-                            ? redirect($this->frontendUrl . '/paiement/success?reference=' . $paiement->reference)
-                            : redirect($this->frontendUrl . '/paiement/cancel?reference=' . $paiement->reference);
-
-                    } catch (\Exception $e) {
-                        Log::error('Erreur traitement callback GET', ['error' => $e->getMessage()]);
-                    }
-                }
+            $paiement = null;
+            if ($reference) {
+                $paiement = Paiement::where('reference', $reference)->first();
             }
+            if (!$paiement && $transactionId) {
+                $paiement = Paiement::where('fedapay_transaction_id', $transactionId)->first();
+            }
+
+            if ($paiement && $status === 'approved' && $paiement->statut !== 'succes') {
+                $paiement->update([
+                    'fedapay_transaction_id' => $transactionId,
+                    'fedapay_status'         => $status,
+                    'statut'                 => 'succes',
+                    'date_paiement'          => now(),
+                ]);
+                $this->creerAbonnement($paiement);
+            }
+
+            return $status === 'approved'
+                ? redirect($this->frontendUrl . '/paiement/success?reference=' . ($reference ?? ''))
+                : redirect($this->frontendUrl . '/paiement/cancel?reference='  . ($reference ?? ''));
         }
+
 
         if ($request->isMethod('post')) {
             $data          = $request->all();
