@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 Route::get('/', function () {
     return ['Laravel' => app()->version()];
 });
+
 /*
 Route::prefix('auth')->group(function () {
     Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirect');
