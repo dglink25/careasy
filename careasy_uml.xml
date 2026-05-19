@@ -1,0 +1,325 @@
+@startuml
+skinparam classAttributeIconSize 0
+hide empty members
+
+class User {
+  +id : bigint
+  +name : string
+  +email : string
+  +phone : string
+  +password : string
+  +role : enum
+  +google_id : string
+  +profile_photo_path : string
+  +settings : json
+  +theme : string
+  +last_seen_at : datetime
+  +email_verified_at : datetime
+  +phone_verified_at : datetime
+  +isAdmin() : bool
+  +isPrestataire() : bool
+  +isClient() : bool
+  +getProfilePhotoUrlAttribute() : string
+  +getSettingsAttribute() : array
+  +setSettingsAttribute() : void
+  +getThemeAttribute() : string
+  +routeNotificationForFcm() : string
+  +sendPasswordResetNotification() : void
+}
+
+class Enterprise {
+  +id : bigint
+  +prestataire_id : bigint
+  +name : string
+  +ifu_number : string
+  +ifu_file : string
+  +pdf_full_name : string
+  +pdf_full_profession : string
+  +role_user : string
+  +logo : image
+  +certificate_number : string
+  +certificate_file : string
+  +status : enum
+  +latitude : decimal(10,7)
+  +google_formatted_address : string
+  +status_online : bool
+  +whatsapp_phone_call_phone : string
+  +trial_starts_at : datetime
+  +trial_ends_at : datetime
+  +has_used_trial : bool
+  +max_services_allowed : int
+  +max_employees_allowed : int
+  +has_api_access : bool
+  +admin_note : text
+  +activateTrialPeriod() : bool
+  +isInTrialPeriod() : bool
+  +isTrialExpired() : bool
+  +canAddService() : bool
+  +canAddEmployee() : bool
+  +getTrialDaysRemainingAttribute() : int
+  +getTrialStatusAttribute() : array
+}
+
+class Domaine {
+  +id : bigint
+  +name : string
+  +created_at : datetime
+  +enterprise_id : bigint
+}
+
+class Plan {
+  +id : bigint
+  +name : string
+  +code : string
+  +description : text
+  +price : decimal(10,2)
+  +type : string
+  +duration_days : int
+  +features : json
+  +limitations : json
+  +max_services : int
+  +max_employees : int
+  +has_priority_support : bool
+  +has_analytics : bool
+  +has_api_access : bool
+  +is_active : bool
+  +sort_order : int
+  +deleted_at : datetime
+  +getFormattedPriceAttribute() : string
+  +getDurationTextAttribute() : string
+  +getFeaturesListAttribute() : array
+  +getLimitationsListAttribute() : array
+  +setFeaturesAttribute() : void
+  +setLimitationsAttribute() : void
+}
+
+class Paiement {
+  +id : bigint
+  +reference : string
+  +user_id : bigint
+  +plan_id : bigint
+  +montant : decimal(10,2)
+  +devise : string
+  +methode_paiement : string
+  +statut : enum
+  +fedapay_response : json
+  +fedapay_transaction_id : string
+  +fedapay_status : string
+  +date_paiement : datetime
+  +estReussi() : bool
+  +estEnAttente() : bool
+  +getMontantFormateAttribute() : string
+  +getBaseReferenceAttribute() : string
+  +generateReference() : string
+}
+
+class Abonnement {
+  +id : bigint
+  +reference : string
+  +user_id : bigint
+  +plan_id : bigint
+  +paiement_id : bigint
+  +enterprise_id : bigint
+  +type : enum
+  +date_debut : datetime
+  +date_fin : datetime
+  +statut : enum
+  +renouvellement_auto : bool
+  +date_annulation : datetime
+  +motif_annulation : string
+  +metadata : json
+  +deleted_at : datetime
+  +estActif() : bool
+  +estExpire() : bool
+  +joursRestants() : int
+  +getJoursRestantsAttribute() : int
+  +getPeriodAttribute() : string
+  +getStatutLibelleAttribute() : string
+  +getStatutColorAttribute() : string
+}
+
+class Conversation {
+  +id : bigint
+  +user_one_id : bigint
+  +user_two_id : bigint
+  +service_id : bigint
+  +service_name : string
+  +enterprise_name : string
+  +created_at : datetime
+  +updated_at : datetime
+}
+
+class Message {
+  +id : bigint
+  +conversation_id : bigint
+  +sender_id : bigint
+  +content : text
+  +type : string
+  +file_path : string
+  +latitude : decimal(10,7)
+  +longitude : decimal(10,7)
+  +read_at : datetime
+  +ai_metadata : json
+  +temporary : string
+  +reply_to_id : bigint
+  +edited : bool
+  +fileUrl() : string
+  +isResolved() : bool
+}
+
+class Service {
+  +id : bigint
+  +enterprise_id : bigint
+  +prestataire_id : bigint
+  +domaine_id : bigint
+  +name : string
+  +price : decimal(10,2)
+  +price_promo : decimal(10,2)
+  +is_price_on_request : bool
+  +has_promo : bool
+  +promo_start_date : date
+  +promo_end_date : date
+  +description : text
+  +medias : json
+  +start_time : time
+  +end_time : time
+  +is_open_24h : bool
+  +schedule : json
+  +is_always_open : bool
+  +is_visibility : bool
+  +getDiscountPercentageAttribute() : int
+  +getFormattedPriceAttribute() : string
+  +isAvailableAt() : bool
+  +getFormattedSchedule() : array
+}
+
+class RendezVous {
+  +id : bigint
+  +service_id : bigint
+  +client_id : bigint
+  +prestataire_id : bigint
+  +enterprise_id : bigint
+  +date : date
+  +start_time : time
+  +end_time : time
+  +status : enum
+  +cancelled_completed_rescheduled : bool
+  +client_notes : text
+  +confirmed_at : datetime
+  +completed_at : datetime
+  +reminder_sent_client : bool
+  +reminder_sent_prestataire : bool
+  +last_reminder_sent_at : datetime
+  +isTimeSlotAvailable() : bool
+  +getAvailableSlots() : array
+  +isPending() : bool
+  +isCancelled() : bool
+  +canBeCancelled() : bool
+}
+
+class Review {
+  +id : bigint
+  +rendez_vous_id : bigint
+  +client_id : bigint
+  +prestataire_id : bigint
+  +rating : tinyint
+  +comment : text
+  +reported : bool
+  +report_reason : text
+  +reported_at : datetime
+}
+
+class LocationBenin {
+  +id : bigint
+  +code_admin : string
+  +arrondissement : string
+  +commune : string
+  +departement : string
+  +latitude : decimal(10,7)
+  +longitude : decimal(10,7)
+  +created_at : datetime
+  +updated_at : datetime
+}
+
+class AiFeedback {
+  +id : bigint
+  +message_id : bigint
+  +rating : tinyint
+  +comment : text
+  +is_helpful : bool
+  +language_detected : string
+  +domaine_detected : string
+}
+
+class PasswordResetOtp {
+  +id : bigint
+  +identifier : string
+  +identifier_type : enum
+  +code : string
+  +used : bool
+  +expires_at : datetime
+  +attempts : tinyint
+  +generateFor() : self
+  +verifyInputCode() : bool
+  +isExpired() : bool
+  +hasExceededAttempts() : bool
+  +secondsLeft() : int
+}
+
+class QrLoginToken {
+  +id : bigint
+  +user_id : bigint
+  +token : string
+  +status : enum
+  +expires_at : datetime
+  +used_by_device : string
+  +used_by_ip : string
+  +used_sanction_token : text
+  +used_at : datetime
+  +generateForUser() : self
+  +markUsed() : void
+}
+
+class LoginHistory {
+  +id : bigint
+  +user_id : bigint
+  +success : bool
+  +ip_address : string
+  +device : string
+  +location : string
+  +method : enum
+  +fail_reason : string
+  +user_agent : string
+}
+
+User "1" -- "0..*" Enterprise : possède
+Enterprise "1" -- "0..*" Domaine : contient
+Plan "1" -- "0..*" Abonnement : attribue
+User "1" -- "0..*" Abonnement : souscrit
+Paiement "1" -- "1" Abonnement : valide
+User "1" -- "0..*" Paiement : effectue
+Plan "1" -- "0..*" Paiement : concerne
+
+Conversation "1" -- "0..*" Message : contient
+User "1" -- "0..*" Message : envoie
+User "1" -- "0..*" Conversation : participe
+Service "1" -- "0..*" Conversation : concerne
+Message "0..1" -- "0..*" Message : reply_to
+
+Enterprise "1" -- "0..*" Service : propose
+Domaine "1" -- "0..*" Service : catégorise
+User "1" -- "0..*" Service : crée
+
+Service "1" -- "0..*" RendezVous : reçoit
+User "1" -- "0..*" RendezVous : client
+Enterprise "1" -- "0..*" RendezVous : gère
+
+RendezVous "1" -- "0..1" Review : reçoit
+User "1" -- "0..*" Review : rédige
+User "1" -- "0..*" Review : prestataire
+
+Message "1" -- "0..*" AiFeedback : feedback
+User "1" -- "0..*" QrLoginToken : génère
+User "1" -- "0..*" LoginHistory : historique
+
+@enduml

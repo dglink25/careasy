@@ -228,6 +228,11 @@ Route::prefix('carai')->middleware('auth:sanctum')->group(function () {
     Route::delete('/conversations/{id}', [CarAIController::class, 'clearHistory']);
 });
 
+Route::prefix('auth')->group(function () {
+    Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.redirect');
+    Route::get('/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('google.callback');
+});
+
 Route::prefix('carai')->group(function () {
     Route::get('/nearby', [CarAIController::class, 'nearby']);
 });
