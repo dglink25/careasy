@@ -62,7 +62,7 @@ class GoogleAuthController extends Controller{
             $token = $user->createToken('google-auth-token')->plainTextToken;
 
             // Rediriger vers le frontend avec le token
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+            $frontendUrl = env('FRONTEND_URL', 'https://careasy.cap-epac.bj');
             
             return redirect("$frontendUrl/auth/callback?token=" . $token . '&user=' . urlencode(json_encode([
                 'id' => $user->id,
