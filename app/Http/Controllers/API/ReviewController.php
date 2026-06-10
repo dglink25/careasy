@@ -144,31 +144,8 @@ class ReviewController extends Controller
         }
     }
 
-<<<<<<< HEAD
-        public function forService($serviceId)
+    public function forService(int $serviceId)
     {
-        $reviews = \App\Models\Review::with(['client:id,name'])
-            ->whereHas('rendezVous', function ($q) use ($serviceId) {
-                $q->where('service_id', $serviceId);
-            })
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($review) {
-                return [
-                    'id'         => $review->id,
-                    'rating'     => $review->rating,
-                    'comment'    => $review->comment,
-                    'created_at' => $review->created_at,
-                    'client'     => [
-                        'id'   => $review->client?->id,
-                        'name' => $review->client?->name,
-                    ],
-                ];
-            });
- 
-        return response()->json($reviews);
-=======
-    public function forService(int $serviceId){
         try {
             $reviews = Review::with(['client:id,name,profile_photo_path'])
                 ->whereHas('rendezVous', function ($q) use ($serviceId) {
@@ -199,7 +176,6 @@ class ReviewController extends Controller
             Log::error('Erreur forService reviews:', ['error' => $e->getMessage()]);
             return response()->json([], 200); // retourner tableau vide plutôt qu'erreur
         }
->>>>>>> d0f3f6d199f1744f9da6bc504ed1901148306493
     }
 
 }

@@ -6,6 +6,8 @@ use App\Http\Controllers\API\EntrepriseController;
 use App\Http\Controllers\API\ServiceController;
 use App\Http\Controllers\API\Admin\EntrepriseAdminController;
 use App\Http\Controllers\API\Admin\PlanController as AdminPlanController;
+use App\Http\Controllers\API\Admin\SignalementAdminController;
+use App\Http\Controllers\API\Admin\AbonnementAdminController;
 use App\Http\Controllers\API\MessageController;
 use App\Http\Controllers\API\UserSettingsController;
 use App\Http\Controllers\Auth\GoogleAuthController;
@@ -174,6 +176,8 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::get('entreprises/{id}',             [EntrepriseAdminController::class, 'show']);
     Route::post('entreprises/{id}/approve',    [EntrepriseAdminController::class, 'approve']);
     Route::post('entreprises/{id}/reject',     [EntrepriseAdminController::class, 'reject']);
+    Route::post('entreprises/{id}/extend-trial', [EntrepriseAdminController::class, 'extendTrial']);
+    
     Route::get('/plans',                       [AdminPlanController::class, 'index']);
     Route::post('/plans',                      [AdminPlanController::class, 'store']);
     Route::get('/plans/{id}',                  [AdminPlanController::class, 'show']);
@@ -181,11 +185,17 @@ Route::prefix('admin')->middleware('auth:sanctum')->group(function () {
     Route::delete('/plans/{id}',               [AdminPlanController::class, 'destroy']);
     Route::post('/plans/update-order',         [AdminPlanController::class, 'updateOrder']);
     Route::patch('/plans/{id}/toggle-status',  [AdminPlanController::class, 'toggleStatus']);
-    Route::post('entreprises/{id}/extend-trial', [EntrepriseAdminController::class, 'extendTrial']);
+    
+    Route::get('/abonnements',                 [AbonnementAdminController::class, 'index']);
+    Route::get('/abonnements/{id}',            [AbonnementAdminController::class, 'show']);
+    
+    Route::get('/signalements',                [SignalementAdminController::class, 'index']);
+    Route::patch('/signalements/{id}/resolve', [SignalementAdminController::class, 'resolve']);
+    Route::patch('/signalements/{id}/dismiss', [SignalementAdminController::class, 'dismiss']);
+    
     Route::post('/qr-tokens/purge',            [QrLoginController::class, 'purgeExpired']);
-
-    Route::get('/sms/status', [SmsAdminController::class, 'status']);
-    Route::post('/sms/test',  [SmsAdminController::class, 'test']);
+    Route::get('/sms/status',                  [SmsAdminController::class, 'status']);
+    Route::post('/sms/test',                   [SmsAdminController::class, 'test']);
 });
 
 // ── IA ────────────────────────────────────────────────────────────────────────
