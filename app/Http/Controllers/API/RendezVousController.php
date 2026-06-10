@@ -104,11 +104,13 @@ class RendezVousController extends Controller{
             $rendezVous->load(['service', 'client', 'prestataire', 'entreprise']);
 
             // ── Notification 
-            try {
-                NotificationDispatcher::rdvPending($rendezVous);
-            } catch (\Exception $e) {
-                Log::error('Erreur notification nouvelle demande RDV:', ['message' => $e->getMessage()]);    
-            }
+            app()->terminating(function () use ($rendezVous) {
+                try {
+                    NotificationDispatcher::rdvPending($rendezVous);
+                } catch (\Exception $e) {
+                    Log::error('Erreur notification RDV:', ['message' => $e->getMessage()]);
+                }
+            });
 
 
             return response()->json([

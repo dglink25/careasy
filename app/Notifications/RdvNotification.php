@@ -9,7 +9,11 @@ use NotificationChannels\Fcm\FcmChannel;
 use NotificationChannels\Fcm\FcmMessage;
 use NotificationChannels\Fcm\Resources\Notification as FcmNotification;
 
-class RdvNotification extends Notification{
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class RdvNotification implements ShouldQueue {
+    use Queueable;
     protected $rdv;
     protected string $action;
     protected ?string $reason;

@@ -10,6 +10,7 @@ use App\Notifications\InactivityReminderNotification;
 use Illuminate\Support\Facades\Log;
 
 class NotificationDispatcher{
+    
     // ─── Singletons ───────────────────────────────────────────────────────
     private static function sms(): SmsService {
         return app(SmsService::class);
@@ -20,8 +21,13 @@ class NotificationDispatcher{
     }
 
     public static function rdvPending(RendezVous $rdv): void {
+        
         $prestataire = $rdv->prestataire;
         $client      = $rdv->client;
+
+        // Créer un job dédié
+        dispatch(fn() => self::sms()->notifyRdvPending($rdv))->afterResponse();
+        dispatch(fn() => self::whatsapp()->notifyRdvPending($rdv))->afterResponse();
 
         // ── Prestataire ──────────────────────────────────────────────────
         if ($prestataire) {

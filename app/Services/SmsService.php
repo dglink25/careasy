@@ -19,7 +19,7 @@ class SmsService{
         $this->pass        = config('sms.gateway_pass', '');
         $this->senderPhone = config('sms.sender_phone', '+2290194119476');
         $this->enabled     = config('sms.enabled', true);
-        $this->timeout     = 15;
+        $this->timeout     = 5;
     }
 
    
@@ -64,7 +64,7 @@ class SmsService{
             'phoneNumbers' => [$normalized],
         ];
 
-        $maxRetries = 10;
+        $maxRetries = 2;
 
         for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
             try {
