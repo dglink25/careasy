@@ -10,26 +10,38 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Cache;
 
-
-
-class VerifyContactController extends Controller{
-    public function send(Request $request): JsonResponse{
-        
+class VerifyContactController extends Controller
+{
+    // =========================================================================
+    // POST /verify-contact/send
+    // Body : identifier (email ou téléphone), type ('email'|'phone')
+    // =========================================================================
+    public function send(Request $request): JsonResponse
+    {
         $identifier_raw = trim($request->input('identifier', ''));
         $type           = $request->input('type', '');
 
+        // ── Validation des paramètres d'entrée ────────────────────────────────
         if (empty($identifier_raw)) {
-            return response()->json(['success' => false, 'message' => 'Le champ contact est requis.', 'code' => 'INVALID_FORMAT'], 422);
-        }
-        if (!in_array($type, ['email', 'phone'])) {
-            return response()->json(['success' => false, 'message' => 'Type invalide.', 'code' => 'INVALID_FORMAT'], 422);
+            return response()->json([
+                'success' => false,
+                'message' => 'Le champ contact est requis.',
+                'code'    => 'INVALID_FORMAT',
+            ], 422);
         }
 
-        // ── Validation du format ──────────────────────────────────────────────
+        if (! in_array($type, ['email', 'phone'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Type invalide. Valeurs acceptées : email, phone.',
+                'code'    => 'INVALID_FORMAT',
+            ], 422);
+        }
+
+        // ── Normalisation et validation du format ─────────────────────────────
         if ($type === 'email') {
-            if (!filter_var($identifier_raw, FILTER_VALIDATE_EMAIL)) {
+            if (! filter_var($identifier_raw, FILTER_VALIDATE_EMAIL)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'L\'adresse email est invalide.',
@@ -37,101 +49,80 @@ class VerifyContactController extends Controller{
                 ], 422);
             }
             $identifier = strtolower(trim($identifier_raw));
-        } 
-        else {
-            $digits = preg_replace('/\D/', '', $identifier_raw);
-            if (strlen($digits) < 8 || strlen($digits) > 15) {
+        } else {
+            $identifier = $this->normalizePhone($identifier_raw);
+            if (! $identifier) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Le numéro de téléphone est invalide (8–15 chiffres).',
+                    'message' => 'Numéro invalide. Formats acceptés : XXXXXXXX · 01XXXXXXXX · +229XXXXXXXX',
                     'code'    => 'INVALID_FORMAT',
-                ], 422);
-            }
-            $identifier = $this->normalizePhoneIdentifier($identifier_raw);
-            if (!$identifier) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Numéro non reconnu. Formats acceptés : '
-                            . 'XXXXXXXX · 01XXXXXXXX · +229XXXXXXXX  · +22901XXXXXXXX ',
-                    'code'    => 'INVALID_FORMAT',
-                    'expected_format' => '+22901XXXXXXXX',
                 ], 422);
             }
         }
 
-        $this->resetDbConnection();
+        // ── Vérifier que l'identifiant n'est pas déjà utilisé ─────────────────
+        $column  = $type === 'email' ? 'email' : 'phone';
+        $already = User::where($column, $identifier)->exists();
 
-        // ── Déjà utilisé ? ────────────────────────────────────────────────────
-        try {
-            if ($type === 'email') {
-                $already = User::where('email', $identifier)->exists();
-            } else {
-                $already = User::where('phone', $identifier)->exists();
-            }
-
-            if ($already) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $type === 'email'
-                        ? 'Cette adresse email est déjà associée à un compte.'
-                        : 'Ce numéro de téléphone est déjà associé à un compte.',
-                    'code'    => 'ALREADY_USED',
-                ], 422);
-            }
-        } 
-        catch (\Exception $e) {
-            $this->resetDbConnection();
-            Log::warning('[VerifyContact] Erreur vérif doublon', ['error' => $e->getMessage()]);
-            // On continue — la vérification d'unicité se fera à l'inscription
+        if ($already) {
+            return response()->json([
+                'success' => false,
+                'message' => $type === 'email'
+                    ? 'Cette adresse email est déjà associée à un compte.'
+                    : 'Ce numéro de téléphone est déjà associé à un compte.',
+                'code'    => 'ALREADY_USED',
+            ], 422);
         }
 
-        // ── Anti-spam via cache fichier ───────────────────────────────────────
-        $spamKey  = 'otp_spam_' . md5($identifier . $type);
-        try {
-            $lastSent = Cache::store('file')->get($spamKey);
-            if ($lastSent) {
-                $wait = PasswordResetOtp::RESEND_DELAY - (time() - (int)$lastSent);
-                if ($wait > 0) {
-                    return response()->json([
-                        'success'      => false,
-                        'message'      => "Veuillez attendre {$wait} secondes avant de renvoyer un code.",
-                        'code'         => 'RESEND_TOO_SOON',
-                        'wait_seconds' => $wait,
-                    ], 429);
-                }
+        // ── Anti-spam : vérifier le délai entre deux envois en DB ─────────────
+        $lastOtp = DB::selectOne(
+            'SELECT created_at FROM password_reset_otps
+             WHERE identifier = ? AND identifier_type = ?
+             ORDER BY id DESC LIMIT 1',
+            [$identifier, $type]
+        );
+
+        if ($lastOtp) {
+            $secondsSinceLast = now()->diffInSeconds(\Carbon\Carbon::parse($lastOtp->created_at), false);
+            // diffInSeconds avec false = négatif si dans le passé, positif si dans le futur
+            // On veut : combien de secondes se sont écoulées depuis le dernier envoi
+            $elapsed = now()->timestamp - \Carbon\Carbon::parse($lastOtp->created_at)->timestamp;
+            $wait    = PasswordResetOtp::RESEND_DELAY - $elapsed;
+
+            if ($wait > 0) {
+                return response()->json([
+                    'success'      => false,
+                    'message'      => "Veuillez attendre {$wait} secondes avant de renvoyer un code.",
+                    'code'         => 'RESEND_TOO_SOON',
+                    'wait_seconds' => $wait,
+                ], 429);
             }
-        } catch (\Exception $e) {
-            // Cache indisponible — on ignore l'anti-spam
         }
 
         // ── Générer le code OTP ───────────────────────────────────────────────
-        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $code      = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expiresAt = now()->addMinutes(PasswordResetOtp::TTL_MINUTES)->toDateTimeString();
+        $now       = now()->toDateTimeString();
 
-        // ── Sauvegarder en DB avec gestion PostgreSQL ─────────────────────────
+        // ── Supprimer les anciens OTP pour cet identifiant puis insérer ────────
         try {
-            $this->resetDbConnection();
-
-            // Supprimer anciens OTP
-            DB::statement('DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?', [
-                $identifier,
-                $type,
-            ]);
-
-            // Insérer le nouveau OTP avec des paramètres liés (évite le bug de quoting)
-            $expiresAt = now()->addMinutes(PasswordResetOtp::TTL_MINUTES)->toDateTimeString();
-            $now       = now()->toDateTimeString();
-
             DB::statement(
-                'INSERT INTO password_reset_otps (identifier, identifier_type, code, used, expires_at, attempts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                [$identifier, $type, $code, false, $expiresAt, 0, $now, $now]
+                'DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?',
+                [$identifier, $type]
             );
 
+            DB::statement(
+                'INSERT INTO password_reset_otps
+                    (identifier, identifier_type, code, used, expires_at, attempts, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [$identifier, $type, $code, false, $expiresAt, 0, $now, $now]
+            );
         } catch (\Exception $e) {
             Log::error('[VerifyContact] Erreur sauvegarde OTP', [
                 'error'      => $e->getMessage(),
-                'identifier' => substr($identifier, 0, 5) . '***',
-                'type'       => $type,
+                'identifier' => $this->redact($identifier),
             ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur serveur lors de la génération du code. Réessayez.',
@@ -140,99 +131,22 @@ class VerifyContactController extends Controller{
         }
 
         // ── Envoyer le code ───────────────────────────────────────────────────
-        try {
-            if ($type === 'email') {
-                $this->sendEmail($identifier, $code);
-            } else {
-                $smsSent      = false;
-                $whatsappSent = false;
-                $errors       = [];
+        $sent = $this->dispatchCode($type, $identifier, $code);
 
-                // ── Tentative SMS ─────────────────────────────────────────────
-                try {
-                    $smsSent = $this->sendSms($identifier, $code);
-                } catch (\Exception $e) {
-                    $errors[] = 'SMS: ' . $e->getMessage();
-                    Log::warning('[VerifyContact] SMS échoué', ['error' => $e->getMessage()]);
-                }
-
-                // ── Tentative WhatsApp ────────────────────────────────────────
-                try {
-                    $whatsappSent = $this->sendWhatsApp($identifier, $code);
-                } catch (\Exception $e) {
-                    $errors[] = 'WhatsApp: ' . $e->getMessage();
-                    Log::warning('[VerifyContact] WhatsApp échoué', ['error' => $e->getMessage()]);
-                }
-
-                // ── Les deux ont échoué → rollback OTP + erreur ───────────────
-                if (!$smsSent && !$whatsappSent) {
-                    try {
-                        $this->resetDbConnection();
-                        DB::statement('DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?', [
-                            $identifier, $type,
-                        ]);
-                    } catch (\Exception $_) {}
-
-                    Log::error('[VerifyContact] Tous les canaux ont échoué', [
-                        'identifier' => substr($identifier, 0, 5) . '***',
-                        'errors'     => $errors,
-                    ]);
-
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Impossible d\'envoyer le code. Vérifiez que le numéro est correct.',
-                        'code'    => 'SEND_FAILED',
-                    ], 500);
-                }
-
-                Log::info('[VerifyContact] Code envoyé', [
-                    'sms'      => $smsSent ? 'OK' : 'ÉCHEC',
-                    'whatsapp' => $whatsappSent ? 'OK' : 'ÉCHEC',
-                ]);
-            }
-        } catch (\Exception $e) {
-            // Email uniquement — garder le catch existant pour email
+        if (! $sent) {
+            // Rollback : supprimer l'OTP si aucun canal n'a fonctionné
             try {
-                $this->resetDbConnection();
-                DB::statement('DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?', [
-                    $identifier, $type,
-                ]);
+                DB::statement(
+                    'DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?',
+                    [$identifier, $type]
+                );
             } catch (\Exception $_) {}
-
-            Log::error('[VerifyContact] Envoi email échoué', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Impossible d\'envoyer l\'email. Vérifiez que l\'adresse est correcte.',
+                'message' => 'Impossible d\'envoyer le code. Vérifiez que le contact est correct.',
                 'code'    => 'SEND_FAILED',
             ], 500);
-        }
-
-        // ── Récupérer l'OTP qu'on vient de créer ──────────────────────────────
-        $this->resetDbConnection();
-        $otpRow = DB::selectOne(
-            'SELECT * FROM password_reset_otps WHERE identifier = ? AND identifier_type = ? ORDER BY id DESC LIMIT 1',
-            [$identifier, $type]
-        );
-
-        if (!$otpRow) {
-            Log::error('[VerifyContact] OTP introuvable après insertion');
-            return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
-        }
-
-        // ── Générer le verify_token et le stocker en DB ───────────────────────
-        $verifyToken = hash('sha256', $identifier . $type . now()->timestamp . random_int(1000, 9999));
-
-        try {
-            $this->resetDbConnection();
-            DB::statement(
-                'UPDATE password_reset_otps SET verify_token = ?, verify_token_expires_at = ? WHERE id = ?',
-                [$verifyToken, now()->addMinutes(60)->toDateTimeString(), $otpRow->id]
-            );
-        }
-        catch (\Exception $e) {
-            Log::error('[VerifyContact] Erreur verify_token', ['error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
         }
 
         $masked = $type === 'email'
@@ -248,35 +162,59 @@ class VerifyContactController extends Controller{
         ]);
     }
 
-    public function check(Request $request): JsonResponse  {
+    // =========================================================================
+    // POST /verify-contact/check
+    // Body : identifier, type, code
+    // Retourne : verify_token (valide 60 min) à utiliser pour l'inscription
+    // =========================================================================
+    public function check(Request $request): JsonResponse
+    {
         $identifier_raw = trim($request->input('identifier', ''));
         $type           = $request->input('type', '');
         $code_input     = trim($request->input('code', ''));
 
-        if (empty($identifier_raw) || !in_array($type, ['email', 'phone'])) {
-            return response()->json(['success' => false, 'message' => 'Paramètres invalides.', 'code' => 'INVALID_FORMAT'], 422);
+        // ── Validation ────────────────────────────────────────────────────────
+        if (empty($identifier_raw) || ! in_array($type, ['email', 'phone'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paramètres invalides.',
+                'code'    => 'INVALID_FORMAT',
+            ], 422);
         }
-        if (!preg_match('/^[0-9]{6}$/', $code_input)) {
-            return response()->json(['success' => false, 'message' => 'Le code doit contenir 6 chiffres.', 'code' => 'INVALID_FORMAT'], 422);
+
+        if (! preg_match('/^[0-9]{6}$/', $code_input)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Le code doit contenir exactement 6 chiffres.',
+                'code'    => 'INVALID_FORMAT',
+            ], 422);
         }
 
         $identifier = $type === 'email'
             ? strtolower(trim($identifier_raw))
-            : $this->normalizePhoneIdentifier($identifier_raw);
+            : $this->normalizePhone($identifier_raw);
 
-        if (!$identifier) {
-            return response()->json(['success' => false, 'message' => 'Paramètres invalides.', 'code' => 'INVALID_FORMAT'], 422);
+        if (! $identifier) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paramètres invalides.',
+                'code'    => 'INVALID_FORMAT',
+            ], 422);
         }
 
-        // ── Récupérer l'OTP — UNE SEULE connexion, pas de reset ──────────────
+        // ── Récupérer l'OTP actif ─────────────────────────────────────────────
         $otpRow = DB::selectOne(
-            'SELECT * FROM password_reset_otps 
-            WHERE identifier = ? AND identifier_type = ? AND used = false AND expires_at > ?
-            ORDER BY created_at DESC LIMIT 1',
+            'SELECT * FROM password_reset_otps
+             WHERE identifier      = ?
+               AND identifier_type = ?
+               AND used            = false
+               AND expires_at      > ?
+             ORDER BY created_at DESC
+             LIMIT 1',
             [$identifier, $type, now()->toDateTimeString()]
         );
 
-        if (!$otpRow) {
+        if (! $otpRow) {
             return response()->json([
                 'success' => false,
                 'message' => 'Code expiré ou invalide. Demandez un nouveau code.',
@@ -284,8 +222,10 @@ class VerifyContactController extends Controller{
             ], 422);
         }
 
-        if ((int)$otpRow->attempts >= PasswordResetOtp::MAX_ATTEMPTS) {
+        // ── Vérifier le nombre de tentatives ──────────────────────────────────
+        if ((int) $otpRow->attempts >= PasswordResetOtp::MAX_ATTEMPTS) {
             DB::statement('DELETE FROM password_reset_otps WHERE id = ?', [$otpRow->id]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Trop de tentatives. Demandez un nouveau code.',
@@ -295,10 +235,13 @@ class VerifyContactController extends Controller{
 
         // ── Vérifier le code ──────────────────────────────────────────────────
         if ($otpRow->code !== $code_input) {
-            DB::statement('UPDATE password_reset_otps SET attempts = attempts + 1, updated_at = ? WHERE id = ?', [
-                now()->toDateTimeString(), $otpRow->id,
-            ]);
-            $remaining = max(0, PasswordResetOtp::MAX_ATTEMPTS - ((int)$otpRow->attempts + 1));
+            DB::statement(
+                'UPDATE password_reset_otps SET attempts = attempts + 1, updated_at = ? WHERE id = ?',
+                [now()->toDateTimeString(), $otpRow->id]
+            );
+
+            $remaining = max(0, PasswordResetOtp::MAX_ATTEMPTS - ((int) $otpRow->attempts + 1));
+
             return response()->json([
                 'success'            => false,
                 'message'            => "Code incorrect. {$remaining} tentative(s) restante(s).",
@@ -307,33 +250,34 @@ class VerifyContactController extends Controller{
             ], 422);
         }
 
-        // ── Code correct : tout en UN SEUL UPDATE atomique ────────────────────
-        $verifyToken = hash('sha256', $identifier . $type . now()->timestamp . random_int(1000, 9999));
+        // ── Code correct : marquer comme utilisé + générer verify_token ────────
+        $verifyToken          = hash('sha256', $identifier . $type . now()->timestamp . random_int(1000, 9999));
+        $verifyTokenExpiresAt = now()->addMinutes(60)->toDateTimeString();
 
-        $updated = DB::statement(
-            'UPDATE password_reset_otps 
-            SET used = true,
-                verify_token = ?,
-                verify_token_expires_at = ?,
-                updated_at = ?
-            WHERE id = ?',
-            [
-                $verifyToken,
-                now()->addMinutes(60)->toDateTimeString(),
-                now()->toDateTimeString(),
-                $otpRow->id,
-            ]
+        DB::statement(
+            'UPDATE password_reset_otps
+             SET used                    = true,
+                 verify_token            = ?,
+                 verify_token_expires_at = ?,
+                 updated_at              = ?
+             WHERE id = ?',
+            [$verifyToken, $verifyTokenExpiresAt, now()->toDateTimeString(), $otpRow->id]
         );
 
-        // ── Vérifier que l'UPDATE a bien fonctionné ───────────────────────────
-        $check = DB::selectOne(
+        // ── Confirmer que le token est bien enregistré ────────────────────────
+        $saved = DB::selectOne(
             'SELECT verify_token FROM password_reset_otps WHERE id = ?',
             [$otpRow->id]
         );
 
-        if (!$check || $check->verify_token !== $verifyToken) {
+        if (! $saved || $saved->verify_token !== $verifyToken) {
             Log::error('[VerifyContact] verify_token non sauvegardé', ['id' => $otpRow->id]);
-            return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur serveur. Réessayez.',
+                'code'    => 'SERVER_ERROR',
+            ], 500);
         }
 
         return response()->json([
@@ -344,48 +288,83 @@ class VerifyContactController extends Controller{
         ]);
     }
 
-  
-    private function resetDbConnection(): void
+    // =========================================================================
+    // Helpers privés
+    // =========================================================================
+
+    /**
+     * Envoie le code via le(s) canal(aux) approprié(s).
+     * Retourne true si au moins un canal a réussi.
+     */
+    private function dispatchCode(string $type, string $identifier, string $code): bool
     {
-        try {
-            // Forcer ROLLBACK de toute transaction en cours
-            DB::statement('ROLLBACK');
-        } catch (\Exception $_) {}
-
-        try {
-            // Reconnecter proprement
-            DB::reconnect();
-        } catch (\Exception $_) {}
-
-        try {
-            // S'assurer qu'on est hors transaction
-            if (DB::transactionLevel() > 0) {
-                DB::rollBack();
+        if ($type === 'email') {
+            try {
+                $this->sendEmail($identifier, $code);
+                return true;
+            } catch (\Exception $e) {
+                Log::error('[VerifyContact] Envoi email échoué', ['error' => $e->getMessage()]);
+                return false;
             }
-        } catch (\Exception $_) {}
+        }
+
+        // Phone : SMS + WhatsApp en parallèle, au moins un doit réussir
+        $smsSent      = false;
+        $whatsappSent = false;
+
+        try {
+            $smsSent = app(\App\Services\SmsService::class)->sendOtp($identifier, $code, '');
+        } catch (\Exception $e) {
+            Log::warning('[VerifyContact] SMS échoué', ['error' => $e->getMessage()]);
+        }
+
+        try {
+            $minutes = PasswordResetOtp::TTL_MINUTES;
+            $message = "*Votre code de vérification CarEasy : {$code}*\n\n"
+                     . "Valide pendant *{$minutes} minutes*.\n"
+                     . "Ne partagez jamais ce code.";
+
+            $whatsappSent = app(\App\Services\WhatsAppService::class)->sendMessage($identifier, $message);
+        } catch (\Exception $e) {
+            Log::warning('[VerifyContact] WhatsApp échoué', ['error' => $e->getMessage()]);
+        }
+
+        Log::info('[VerifyContact] Envoi code', [
+            'sms'      => $smsSent      ? 'OK' : 'ÉCHEC',
+            'whatsapp' => $whatsappSent ? 'OK' : 'ÉCHEC',
+            'phone'    => $this->redact($identifier),
+        ]);
+
+        return $smsSent || $whatsappSent;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private function maskEmail(string $email): string
+    private function normalizePhone(string $raw): ?string
     {
-        if (!str_contains($email, '@')) return '***';
-        [$local, $domain] = explode('@', $email, 2);
-        $visible = substr($local, 0, min(3, strlen($local)));
-        return $visible . str_repeat('*', max(1, strlen($local) - 3)) . '@' . $domain;
-    }
+        $digits = preg_replace('/\D/', '', $raw);
+        if (empty($digits)) return null;
 
-    private function maskPhone(string $phone): string
-    {
-        $clean = preg_replace('/\D/', '', $phone);
-        $len   = strlen($clean);
-        if ($len <= 4) return str_repeat('*', $len);
-        return substr($clean, 0, 2) . str_repeat('*', $len - 4) . substr($clean, -2);
+        // Retirer le code pays Bénin s'il est présent
+        if (str_starts_with($digits, '229')) {
+            $digits = substr($digits, 3);
+        }
+
+        // Format local 10 chiffres commençant par 0 → +229XXXXXXXXXX
+        if (preg_match('/^0\d{9}$/', $digits)) {
+            return '+229' . $digits;
+        }
+
+        // Format local 8 chiffres → +22901XXXXXXXX (migration automatique)
+        if (preg_match('/^\d{8}$/', $digits)) {
+            return '+22901' . $digits;
+        }
+
+        return null;
     }
 
     private function sendEmail(string $email, string $code): void
     {
         $minutes = PasswordResetOtp::TTL_MINUTES;
+
         Mail::send([], [], function ($m) use ($email, $code, $minutes) {
             $m->to($email)
               ->subject("Votre code CarEasy : {$code}")
@@ -393,8 +372,7 @@ class VerifyContactController extends Controller{
         });
     }
 
-    private function emailHtml(string $code, int $minutes): string
-    {
+    private function emailHtml(string $code, int $minutes): string  {
         return <<<HTML
         <!DOCTYPE html>
         <html lang="fr">
@@ -441,43 +419,25 @@ class VerifyContactController extends Controller{
         HTML;
     }
 
-    // ── Retourne bool au lieu de throw ───────────────────────────────────────
-    private function sendSms(string $phone, string $code): bool  {
-        $sms = app(\App\Services\SmsService::class);
-        return $sms->sendOtp($phone, $code, '');
+    private function maskEmail(string $email): string
+    {
+        if (! str_contains($email, '@')) return '***';
+        [$local, $domain] = explode('@', $email, 2);
+        $visible = substr($local, 0, min(3, strlen($local)));
+        return $visible . str_repeat('*', max(1, strlen($local) - 3)) . '@' . $domain;
     }
 
-    private function sendWhatsApp(string $phone, string $code): bool {
-        $minutes = \App\Models\PasswordResetOtp::TTL_MINUTES;
-        $whatsapp = app(\App\Services\WhatsAppService::class);
-
-        $message = "*Votre code de vérification CarEasy : {$code}*\n\n"
-                . "Valide pendant *{$minutes} minutes*.\n"
-                . "Ne partagez jamais ce code.";
-
-        return $whatsapp->sendMessage($phone, $message);
+    private function maskPhone(string $phone): string
+    {
+        $clean = preg_replace('/\D/', '', $phone);
+        $len   = strlen($clean);
+        if ($len <= 4) return str_repeat('*', $len);
+        return substr($clean, 0, 2) . str_repeat('*', $len - 4) . substr($clean, -2);
     }
 
-    private function normalizePhoneIdentifier(string $raw): ?string{
-        $digits = preg_replace('/\D/', '', $raw);
-        if (empty($digits)) return null;
-
-        // Retirer le code pays Bénin s'il est présent
-        if (str_starts_with($digits, '229')) {
-            $digits = substr($digits, 3);
-        }
-
-        // Format local 10 chiffres commençant par 0
-        if (preg_match('/^0\d{9}$/', $digits)) {
-            return '+229' . $digits;
-        }
-
-        // Format local 8 chiffres → migration automatique
-        if (preg_match('/^\d{8}$/', $digits)) {
-            return '+229' . '01' . $digits;
-        }
-
-        return null;
+    /** Tronque un identifiant pour les logs. */
+    private function redact(string $identifier): string
+    {
+        return substr($identifier, 0, 5) . '***';
     }
-
 }

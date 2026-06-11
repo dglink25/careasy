@@ -14,25 +14,29 @@ use Illuminate\Validation\Rules;
 
 class RegisteredUserController extends Controller
 {
-    // ─────────────────────────────────────────────────────────────────────────
+    // =========================================================================
     // POST /register
     // Body : verify_token, name, password, password_confirmation
-    // ─────────────────────────────────────────────────────────────────────────
+    // =========================================================================
     public function store(Request $request)
     {
-        // ── 1. Valider les champs de base ─────────────────────────────────────
+        // ── 1. Valider les champs soumis ──────────────────────────────────────
         $request->validate([
-            'verify_token'          => ['required', 'string'],
-            'name'                  => ['required', 'string', 'min:2', 'max:255'],
-            'password'              => ['required', 'confirmed', Rules\Password::defaults()],
+            'verify_token' => ['required', 'string'],
+            'name'         => ['required', 'string', 'min:2', 'max:255'],
+            'password'     => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // ── 2. Récupérer et valider le verify_token en DB ─────────────────────
+        // ── 2. Récupérer la ligne OTP liée au verify_token ────────────────────
+        //    Conditions strictes :
+        //    - verify_token correspond
+        //    - verify_token_expires_at non expiré
+        //    - used = true  (le code OTP a bien été validé dans /check)
         $otpRow = DB::selectOne(
             'SELECT * FROM password_reset_otps
-             WHERE verify_token = ?
+             WHERE verify_token            = ?
                AND verify_token_expires_at > ?
-               AND used = true
+               AND used                   = true
              LIMIT 1',
             [$request->verify_token, now()->toDateTimeString()]
         );
@@ -40,19 +44,19 @@ class RegisteredUserController extends Controller
         if (! $otpRow) {
             return response()->json([
                 'success' => false,
-                'message' => 'La vérification a expiré ou est invalide. Veuillez recommencer.',
+                'message' => 'La vérification a expiré ou est invalide. Veuillez recommencer depuis le début.',
                 'code'    => 'VERIFY_TOKEN_INVALID',
             ], 422);
         }
 
-        $identifier = $otpRow->identifier;       // email ou téléphone normalisé
-        $type       = $otpRow->identifier_type;  // 'email' | 'phone'
+        $identifier = $otpRow->identifier;      // email ou téléphone normalisé
+        $type       = $otpRow->identifier_type; // 'email' | 'phone'
 
         // ── 3. Vérifier que l'identifiant n'est pas déjà pris ─────────────────
+        //    (peut arriver si deux inscriptions concurrentes avec le même contact)
         $column = $type === 'email' ? 'email' : 'phone';
 
         if (User::where($column, $identifier)->exists()) {
-            // Invalider le token pour ne pas laisser traîner une entrée inutile
             $this->invalidateToken($otpRow->id);
 
             return response()->json([
@@ -72,24 +76,24 @@ class RegisteredUserController extends Controller
         ];
 
         if ($type === 'email') {
-            $userData['email']              = $identifier;
-            $userData['email_verified_at']  = now();
-            $userData['phone']              = null;
-            $userData['phone_verified_at']  = null;
+            $userData['email']             = $identifier;
+            $userData['email_verified_at'] = now();
+            $userData['phone']             = null;
+            $userData['phone_verified_at'] = null;
         } else {
-            $userData['phone']              = $identifier;
-            $userData['phone_verified_at']  = now();
-            $userData['email']              = null;
-            $userData['email_verified_at']  = null;
+            $userData['phone']             = $identifier;
+            $userData['phone_verified_at'] = now();
+            $userData['email']             = null;
+            $userData['email_verified_at'] = null;
         }
 
         // ── 5. Créer l'utilisateur ────────────────────────────────────────────
         $user = User::create($userData);
 
-        // ── 6. Invalider le token immédiatement après création ────────────────
+        // ── 6. Invalider immédiatement le token (usage unique) ────────────────
         $this->invalidateToken($otpRow->id);
 
-        // ── 7. Token API + login auto ─────────────────────────────────────────
+        // ── 7. Token API Sanctum + login automatique ──────────────────────────
         $token = $user->createToken('auth_token')->plainTextToken;
 
         event(new Registered($user));
@@ -116,11 +120,8 @@ class RegisteredUserController extends Controller
         ], 201);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────────
 
-    /** Invalide définitivement un token verify après usage. */
+    /** Invalide le verify_token après utilisation (usage unique). */
     private function invalidateToken(int $otpId): void
     {
         try {
@@ -154,9 +155,9 @@ class RegisteredUserController extends Controller
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Utilitaires de disponibilité (inchangés)
-    // ─────────────────────────────────────────────────────────────────────────
+    // =========================================================================
+    // Utilitaires de disponibilité (appelés par le frontend en temps réel)
+    // =========================================================================
 
     public function checkEmail(Request $request)
     {
