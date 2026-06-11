@@ -248,12 +248,11 @@ class VerifyContactController extends Controller{
         ]);
     }
 
-    public function check(Request $request): JsonResponse{
+    public function check(Request $request): JsonResponse  {
         $identifier_raw = trim($request->input('identifier', ''));
         $type           = $request->input('type', '');
         $code_input     = trim($request->input('code', ''));
 
-        // Validation manuelle
         if (empty($identifier_raw) || !in_array($type, ['email', 'phone'])) {
             return response()->json(['success' => false, 'message' => 'Paramètres invalides.', 'code' => 'INVALID_FORMAT'], 422);
         }
@@ -261,35 +260,21 @@ class VerifyContactController extends Controller{
             return response()->json(['success' => false, 'message' => 'Le code doit contenir 6 chiffres.', 'code' => 'INVALID_FORMAT'], 422);
         }
 
-        if ($type === 'email') {
-            $identifier = strtolower(trim($identifier_raw));
-        } 
-        else {
-            $identifier = $this->normalizePhoneIdentifier($identifier_raw);
-            if (!$identifier) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Paramètres invalides.',
-                    'code'    => 'INVALID_FORMAT',
-                ], 422);
-            }
+        $identifier = $type === 'email'
+            ? strtolower(trim($identifier_raw))
+            : $this->normalizePhoneIdentifier($identifier_raw);
+
+        if (!$identifier) {
+            return response()->json(['success' => false, 'message' => 'Paramètres invalides.', 'code' => 'INVALID_FORMAT'], 422);
         }
 
-        // ── Réinitialiser la connexion ────────────────────────────────────────
-        $this->resetDbConnection();
-
-        // ── Récupérer l'OTP ───────────────────────────────────────────────────
-        try {
-            $rows = DB::select(
-                'SELECT * FROM password_reset_otps WHERE identifier = ? AND identifier_type = ? AND used = ? AND expires_at > ? ORDER BY created_at DESC LIMIT 1',
-                [$identifier, $type, false, now()->toDateTimeString()]
-            );
-            $otpRow = $rows[0] ?? null;
-        } catch (\Exception $e) {
-            $this->resetDbConnection();
-            Log::error('[VerifyContact] Erreur lecture OTP', ['error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
-        }
+        // ── Récupérer l'OTP — UNE SEULE connexion, pas de reset ──────────────
+        $otpRow = DB::selectOne(
+            'SELECT * FROM password_reset_otps 
+            WHERE identifier = ? AND identifier_type = ? AND used = false AND expires_at > ?
+            ORDER BY created_at DESC LIMIT 1',
+            [$identifier, $type, now()->toDateTimeString()]
+        );
 
         if (!$otpRow) {
             return response()->json([
@@ -300,11 +285,7 @@ class VerifyContactController extends Controller{
         }
 
         if ((int)$otpRow->attempts >= PasswordResetOtp::MAX_ATTEMPTS) {
-            try {
-                $this->resetDbConnection();
-                DB::statement('DELETE FROM password_reset_otps WHERE id = ?', [$otpRow->id]);
-            } catch (\Exception $_) {}
-
+            DB::statement('DELETE FROM password_reset_otps WHERE id = ?', [$otpRow->id]);
             return response()->json([
                 'success' => false,
                 'message' => 'Trop de tentatives. Demandez un nouveau code.',
@@ -312,21 +293,12 @@ class VerifyContactController extends Controller{
             ], 422);
         }
 
-        // ── Incrémenter les tentatives ────────────────────────────────────────
-        try {
-            $this->resetDbConnection();
-            DB::statement('UPDATE password_reset_otps SET attempts = attempts + 1, updated_at = ? WHERE id = ?', [
-                now()->toDateTimeString(),
-                $otpRow->id,
-            ]);
-        } catch (\Exception $e) {
-            Log::warning('[VerifyContact] Erreur incrément tentative', ['error' => $e->getMessage()]);
-        }
-
         // ── Vérifier le code ──────────────────────────────────────────────────
         if ($otpRow->code !== $code_input) {
-            $newAttempts = (int)$otpRow->attempts + 1;
-            $remaining   = max(0, PasswordResetOtp::MAX_ATTEMPTS - $newAttempts);
+            DB::statement('UPDATE password_reset_otps SET attempts = attempts + 1, updated_at = ? WHERE id = ?', [
+                now()->toDateTimeString(), $otpRow->id,
+            ]);
+            $remaining = max(0, PasswordResetOtp::MAX_ATTEMPTS - ((int)$otpRow->attempts + 1));
             return response()->json([
                 'success'            => false,
                 'message'            => "Code incorrect. {$remaining} tentative(s) restante(s).",
@@ -335,30 +307,32 @@ class VerifyContactController extends Controller{
             ], 422);
         }
 
-        // ── Marquer comme utilisé ─────────────────────────────────────────────
-        try {
-            $this->resetDbConnection();
-            DB::statement('UPDATE password_reset_otps SET used = ?, updated_at = ? WHERE id = ?', [
-                true,
-                now()->toDateTimeString(),
-                $otpRow->id,
-            ]);
-        } catch (\Exception $e) {
-            Log::warning('[VerifyContact] Erreur marquage used', ['error' => $e->getMessage()]);
-        }
-
-        // ── Générer le verify_token et le stocker en DB ───────────────────────
+        // ── Code correct : tout en UN SEUL UPDATE atomique ────────────────────
         $verifyToken = hash('sha256', $identifier . $type . now()->timestamp . random_int(1000, 9999));
 
-        try {
-            $this->resetDbConnection();
-            DB::statement(
-                'UPDATE password_reset_otps SET verify_token = ?, verify_token_expires_at = ? WHERE id = ?',
-                [$verifyToken, now()->addMinutes(60)->toDateTimeString(), $otpRow->id]
-            );
-        }
-        catch (\Exception $e) {
-            Log::error('[VerifyContact] Erreur verify_token', ['error' => $e->getMessage()]);
+        $updated = DB::statement(
+            'UPDATE password_reset_otps 
+            SET used = true,
+                verify_token = ?,
+                verify_token_expires_at = ?,
+                updated_at = ?
+            WHERE id = ?',
+            [
+                $verifyToken,
+                now()->addMinutes(60)->toDateTimeString(),
+                now()->toDateTimeString(),
+                $otpRow->id,
+            ]
+        );
+
+        // ── Vérifier que l'UPDATE a bien fonctionné ───────────────────────────
+        $check = DB::selectOne(
+            'SELECT verify_token FROM password_reset_otps WHERE id = ?',
+            [$otpRow->id]
+        );
+
+        if (!$check || $check->verify_token !== $verifyToken) {
+            Log::error('[VerifyContact] verify_token non sauvegardé', ['id' => $otpRow->id]);
             return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
         }
 
@@ -366,7 +340,7 @@ class VerifyContactController extends Controller{
             'success'      => true,
             'message'      => 'Contact vérifié avec succès.',
             'verify_token' => $verifyToken,
-            'expires_in'   => 3600, // Mettre à jour ici aussi
+            'expires_in'   => 3600,
         ]);
     }
 

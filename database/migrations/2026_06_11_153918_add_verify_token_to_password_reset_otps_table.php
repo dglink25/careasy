@@ -19,10 +19,9 @@ return new class extends Migration
     /**
      * Reverse the migrations.
      */
-    public function down(): void
-    {
+    public function down(): void{
         Schema::table('password_reset_otps', function (Blueprint $table) {
-            //
+            $table->dropColumn(['verify_token', 'verify_token_expires_at']);
         });
     }
 };
