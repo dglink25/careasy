@@ -41,14 +41,6 @@ class RegisteredUserController extends Controller
             [$request->verify_token, now()->toDateTimeString()]
         );
 
-        if (! $otpRow) {
-            return response()->json([
-                'success' => false,
-                'message' => 'La vérification a expiré ou est invalide. Veuillez recommencer depuis le début.',
-                'code'    => 'VERIFY_TOKEN_INVALID',
-            ], 422);
-        }
-
         $identifier = $otpRow->identifier;      // email ou téléphone normalisé
         $type       = $otpRow->identifier_type; // 'email' | 'phone'
 
