@@ -330,7 +330,7 @@ class VerifyContactController extends Controller{
             Cache::store('file')->put(
                 "contact_verified:{$verifyToken}",
                 ['identifier' => $identifier, 'type' => $type],
-                900 // 15 minutes
+                3600 // 60 minutes (1 heure)
             );
         } catch (\Exception $e) {
             Log::error('[VerifyContact] Erreur cache verify_token', ['error' => $e->getMessage()]);
@@ -341,7 +341,7 @@ class VerifyContactController extends Controller{
             'success'      => true,
             'message'      => 'Contact vérifié avec succès.',
             'verify_token' => $verifyToken,
-            'expires_in'   => 900,
+            'expires_in'   => 3600, // Mettre à jour ici aussi
         ]);
     }
 

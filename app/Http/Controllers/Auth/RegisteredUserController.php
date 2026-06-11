@@ -40,8 +40,8 @@ class RegisteredUserController extends Controller{
             ], 422);
         }
 
-        // Invalider le token immédiatement (usage unique)
-        cache()->forget($cacheKey);
+        // NE PAS invalider le token immédiatement - seulement après succès
+        // cache()->forget($cacheKey); // ← COMMENTÉ
 
         // Forcer l'identifiant vérifié dans la requête
         if ($verifiedData['type'] === 'email') {
@@ -184,6 +184,9 @@ class RegisteredUserController extends Controller{
                 Log::warning('[WhatsApp] Notification inscription échouée : ' . $e->getMessage());
             }
         }
+
+        // Invalider le token APRÈS succès (éviter réutilisation)
+        cache()->forget($cacheKey);
 
         // Réponse finale
         return response()->json([
