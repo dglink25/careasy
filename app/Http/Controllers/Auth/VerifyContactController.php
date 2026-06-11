@@ -329,12 +329,14 @@ class VerifyContactController extends Controller{
         $verifyToken = hash('sha256', $identifier . $type . now()->timestamp . random_int(1000, 9999));
 
         try {
-            Cache::store('file')->put(
+            Cache::store('database')->put(
                 "contact_verified:{$verifyToken}",
                 ['identifier' => $identifier, 'type' => $type],
-                3600 // 60 minutes (1 heure)
+                3600
             );
-        } catch (\Exception $e) {
+
+        } 
+        catch (\Exception $e) {
             Log::error('[VerifyContact] Erreur cache verify_token', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
         }

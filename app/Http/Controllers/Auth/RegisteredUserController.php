@@ -31,7 +31,7 @@ class RegisteredUserController extends Controller{
         }
 
         $cacheKey     = "contact_verified:{$verifyToken}";
-        $verifiedData = Cache::store('file')->get($cacheKey);
+        $verifiedData = Cache::store('database')->get($cacheKey);
 
         if (!$verifiedData) {
             return response()->json([
