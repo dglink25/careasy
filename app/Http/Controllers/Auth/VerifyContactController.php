@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Cache;
 
+
+
 class VerifyContactController extends Controller{
     public function send(Request $request): JsonResponse{
         
