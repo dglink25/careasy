@@ -190,8 +190,7 @@ class RegisteredUserController extends Controller{
 
         // Invalider le token APRÈS succès (éviter réutilisation)
         
-        Cache::store('file')->forget($cacheKey);
-
+        Cache::store('database')->forget($cacheKey);
         // Réponse finale
         return response()->json([
             'success' => true,

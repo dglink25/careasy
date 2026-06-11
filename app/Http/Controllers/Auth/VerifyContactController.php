@@ -210,7 +210,7 @@ class VerifyContactController extends Controller{
 
         // ── Anti-spam : mémoriser l'envoi ─────────────────────────────────────
         try {
-            Cache::store('file')->put($spamKey, time(), PasswordResetOtp::RESEND_DELAY + 10);
+            Cache::store('database')->put($spamKey, time(), PasswordResetOtp::RESEND_DELAY + 10);
         } catch (\Exception $e) {}
 
         $masked = $type === 'email'
