@@ -14,12 +14,16 @@ class PasswordResetOtp extends Model{
         'used',
         'expires_at',
         'attempts',
+        'verify_token',
+        'verify_token_expires_at',
     ];
 
     protected $casts = [
         'used'       => 'boolean',
         'expires_at' => 'datetime',
         'attempts'   => 'integer',
+        'verify_token_expires_at' => 'datetime',
+        
     ];
 
     // ── Constantes ────────────────────────────────────────────────────────────
