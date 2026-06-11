@@ -15,6 +15,7 @@ use App\Services\WhatsAppService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\PasswordResetOtp;
+use Illuminate\Support\Facades\Cache;   
 
 class RegisteredUserController extends Controller{
     public function store(Request $request) {
@@ -30,7 +31,7 @@ class RegisteredUserController extends Controller{
         }
 
         $cacheKey     = "contact_verified:{$verifyToken}";
-        $verifiedData = cache()->get($cacheKey);
+        $verifiedData = Cache::store('file')->get($cacheKey);
 
         if (!$verifiedData) {
             return response()->json([
@@ -188,7 +189,8 @@ class RegisteredUserController extends Controller{
         }
 
         // Invalider le token APRÈS succès (éviter réutilisation)
-        cache()->forget($cacheKey);
+        
+        Cache::store('file')->forget($cacheKey);
 
         // Réponse finale
         return response()->json([
