@@ -208,10 +208,32 @@ class VerifyContactController extends Controller{
             ], 500);
         }
 
-        // ── Anti-spam : mémoriser l'envoi ─────────────────────────────────────
+        // ── Récupérer l'OTP qu'on vient de créer ──────────────────────────────
+        $this->resetDbConnection();
+        $otpRow = DB::selectOne(
+            'SELECT * FROM password_reset_otps WHERE identifier = ? AND identifier_type = ? ORDER BY id DESC LIMIT 1',
+            [$identifier, $type]
+        );
+
+        if (!$otpRow) {
+            Log::error('[VerifyContact] OTP introuvable après insertion');
+            return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
+        }
+
+        // ── Générer le verify_token et le stocker en DB ───────────────────────
+        $verifyToken = hash('sha256', $identifier . $type . now()->timestamp . random_int(1000, 9999));
+
         try {
-            Cache::store('database')->put($spamKey, time(), PasswordResetOtp::RESEND_DELAY + 10);
-        } catch (\Exception $e) {}
+            $this->resetDbConnection();
+            DB::statement(
+                'UPDATE password_reset_otps SET verify_token = ?, verify_token_expires_at = ? WHERE id = ?',
+                [$verifyToken, now()->addMinutes(60)->toDateTimeString(), $otpRow->id]
+            );
+        }
+        catch (\Exception $e) {
+            Log::error('[VerifyContact] Erreur verify_token', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
+        }
 
         $masked = $type === 'email'
             ? $this->maskEmail($identifier)
@@ -325,19 +347,18 @@ class VerifyContactController extends Controller{
             Log::warning('[VerifyContact] Erreur marquage used', ['error' => $e->getMessage()]);
         }
 
-        // ── Générer le verify_token dans le cache fichier ─────────────────────
+        // ── Générer le verify_token et le stocker en DB ───────────────────────
         $verifyToken = hash('sha256', $identifier . $type . now()->timestamp . random_int(1000, 9999));
 
         try {
-            Cache::store('database')->put(
-                "contact_verified:{$verifyToken}",
-                ['identifier' => $identifier, 'type' => $type],
-                3600
+            $this->resetDbConnection();
+            DB::statement(
+                'UPDATE password_reset_otps SET verify_token = ?, verify_token_expires_at = ? WHERE id = ?',
+                [$verifyToken, now()->addMinutes(60)->toDateTimeString(), $otpRow->id]
             );
-
-        } 
+        }
         catch (\Exception $e) {
-            Log::error('[VerifyContact] Erreur cache verify_token', ['error' => $e->getMessage()]);
+            Log::error('[VerifyContact] Erreur verify_token', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => 'Erreur serveur. Réessayez.', 'code' => 'SERVER_ERROR'], 500);
         }
 

@@ -31,7 +31,24 @@ class RegisteredUserController extends Controller{
         }
 
         $cacheKey     = "contact_verified:{$verifyToken}";
-        $verifiedData = Cache::store('database')->get($cacheKey);
+
+        $otpRow = DB::selectOne(
+            'SELECT * FROM password_reset_otps WHERE verify_token = ? AND verify_token_expires_at > ?',
+            [$verifyToken, now()->toDateTimeString()]
+        );
+
+        if (!$otpRow) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La vérification a expiré. Veuillez recommencer.',
+                'code'    => 'VERIFY_TOKEN_EXPIRED',
+            ], 422);
+        }
+
+        $verifiedData = [
+            'identifier' => $otpRow->identifier,
+            'type'       => $otpRow->identifier_type,
+        ];
 
         if (!$verifiedData) {
             return response()->json([
@@ -190,7 +207,7 @@ class RegisteredUserController extends Controller{
 
         // Invalider le token APRÈS succès (éviter réutilisation)
         
-        Cache::store('database')->forget($cacheKey);
+        DB::statement('UPDATE password_reset_otps SET verify_token = NULL, verify_token_expires_at = NULL WHERE id = ?', [$otpRow->id]);
         // Réponse finale
         return response()->json([
             'success' => true,
