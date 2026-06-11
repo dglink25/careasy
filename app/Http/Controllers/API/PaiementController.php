@@ -18,7 +18,7 @@ class PaiementController extends Controller{
     public function __construct(FedaPayService $fedapayService)
     {
         $this->fedapayService = $fedapayService;
-        $this->frontendUrl    = env('FRONTEND_URL', 'http://localhost:5173');
+        $this->frontendUrl    = env('FRONTEND_URL', 'https://careasy.cap-epac.bj');
     }
 
     public function initierPaiement(Request $request, $planId)
@@ -172,8 +172,7 @@ class PaiementController extends Controller{
         return redirect($this->frontendUrl . '/plans');
     }
 
-    public function success(Request $request)
-    {
+    public function success(Request $request) {
         return redirect($this->frontendUrl . '/paiement/success?reference=' . $request->get('reference'));
     }
 
