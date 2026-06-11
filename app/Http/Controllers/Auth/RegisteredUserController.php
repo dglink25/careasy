@@ -120,7 +120,6 @@ class RegisteredUserController extends Controller
         ], 201);
     }
 
-
     /** Invalide le verify_token après utilisation (usage unique). */
     private function invalidateToken(int $otpId): void
     {

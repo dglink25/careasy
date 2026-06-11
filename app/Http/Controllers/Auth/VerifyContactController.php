@@ -113,9 +113,9 @@ class VerifyContactController extends Controller
 
             DB::statement(
                 'INSERT INTO password_reset_otps
-                    (identifier, identifier_type, code, used, expires_at, attempts, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                [$identifier, $type, $code, false, $expiresAt, 0, $now, $now]
+                    (identifier, identifier_type, code, used, expires_at, attempts, created_at, updated_at, verify_token, verify_token_expires_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$identifier, $type, $code, false, $expiresAt, 0, $now, $now, null, null]
             );
         } catch (\Exception $e) {
             Log::error('[VerifyContact] Erreur sauvegarde OTP', [
