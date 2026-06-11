@@ -8,211 +8,103 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules;
-use Illuminate\Validation\ValidationException;
-use App\Services\SmsService;
-use App\Services\WhatsAppService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use App\Models\PasswordResetOtp;
-use Illuminate\Support\Facades\Cache;   
+use Illuminate\Validation\Rules;
 
-class RegisteredUserController extends Controller{
-    public function store(Request $request) {
-        // Vérifier le token de contact vérifié avant tout
-        $verifyToken = $request->input('verify_token');
+class RegisteredUserController extends Controller
+{
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /register
+    // Body : verify_token, name, password, password_confirmation
+    // ─────────────────────────────────────────────────────────────────────────
+    public function store(Request $request)
+    {
+        // ── 1. Valider les champs de base ─────────────────────────────────────
+        $request->validate([
+            'verify_token'          => ['required', 'string'],
+            'name'                  => ['required', 'string', 'min:2', 'max:255'],
+            'password'              => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
 
-        if (!$verifyToken) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Veuillez d\'abord vérifier votre email ou numéro de téléphone.',
-                'code'    => 'CONTACT_NOT_VERIFIED',
-            ], 422);
-        }
-
-        $cacheKey     = "contact_verified:{$verifyToken}";
-
+        // ── 2. Récupérer et valider le verify_token en DB ─────────────────────
         $otpRow = DB::selectOne(
-            'SELECT * FROM password_reset_otps WHERE verify_token = ? AND verify_token_expires_at > ?',
-            [$verifyToken, now()->toDateTimeString()]
+            'SELECT * FROM password_reset_otps
+             WHERE verify_token = ?
+               AND verify_token_expires_at > ?
+               AND used = true
+             LIMIT 1',
+            [$request->verify_token, now()->toDateTimeString()]
         );
 
-        if (!$otpRow) {
+        if (! $otpRow) {
             return response()->json([
                 'success' => false,
-                'message' => 'La vérification a expiré. Veuillez recommencer.',
-                'code'    => 'VERIFY_TOKEN_EXPIRED',
+                'message' => 'La vérification a expiré ou est invalide. Veuillez recommencer.',
+                'code'    => 'VERIFY_TOKEN_INVALID',
             ], 422);
         }
 
-        $verifiedData = [
-            'identifier' => $otpRow->identifier,
-            'type'       => $otpRow->identifier_type,
-        ];
+        $identifier = $otpRow->identifier;       // email ou téléphone normalisé
+        $type       = $otpRow->identifier_type;  // 'email' | 'phone'
 
-        if (!$verifiedData) {
+        // ── 3. Vérifier que l'identifiant n'est pas déjà pris ─────────────────
+        $column = $type === 'email' ? 'email' : 'phone';
+
+        if (User::where($column, $identifier)->exists()) {
+            // Invalider le token pour ne pas laisser traîner une entrée inutile
+            $this->invalidateToken($otpRow->id);
+
             return response()->json([
                 'success' => false,
-                'message' => 'La vérification a expiré. Veuillez recommencer.',
-                'code'    => 'VERIFY_TOKEN_EXPIRED',
+                'message' => $type === 'email'
+                    ? 'Cette adresse email est déjà associée à un compte.'
+                    : 'Ce numéro de téléphone est déjà associé à un compte.',
+                'code'    => 'ALREADY_USED',
             ], 422);
         }
 
-        // NE PAS invalider le token immédiatement - seulement après succès
-        // cache()->forget($cacheKey); // ← COMMENTÉ
-
-        // Forcer l'identifiant vérifié dans la requête
-        if ($verifiedData['type'] === 'email') {
-            $request->merge([
-                'email' => $verifiedData['identifier'],
-                'phone' => null,
-            ]);
-        } 
-        else {
-            $request->merge([
-                'phone' => $verifiedData['identifier'],
-                'email' => null,
-            ]);
-        }
-
-        // Vérifier qu'on a soit email soit téléphone
-        $hasEmail = $request->has('email') && !empty($request->email);
-        $hasPhone = $request->has('phone') && !empty($request->phone);
-
-        if (!$hasEmail && !$hasPhone) {
-            throw ValidationException::withMessages([
-                'contact' => ['Vous devez fournir soit un email, soit un numéro de téléphone.'],
-            ]);
-        }
-
-        if ($hasEmail && $hasPhone) {
-            throw ValidationException::withMessages([
-                'email' => ['Vous ne pouvez pas fournir à la fois un email et un téléphone.'],
-                'phone' => ['Vous ne pouvez pas fournir à la fois un téléphone et un email.'],
-            ]);
-        }
-
-        // Nettoyer téléphone
-        if ($hasPhone) {
-            $cleanPhone = $this->cleanPhoneNumber($request->phone);
-            $request->merge(['phone' => $cleanPhone]);
-        }
-
-        // Règles de validation
-        $rules = [
-            'name' => ['required', 'string', 'max:255', 'min:2'],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ];
-
-        // Validation email
-        if ($hasEmail) {
-            $rules['email'] = [
-                'required',
-                'string',
-                'lowercase',
-                'email',
-                'max:255',
-                function ($attribute, $value, $fail) {
-                    if (User::where('email', $value)->exists()) {
-                        $fail('Cet email est déjà utilisé.');
-                    }
-                    if (User::where('phone', $value)->exists()) {
-                        $fail('Cette valeur est déjà utilisée comme numéro de téléphone.');
-                    }
-                },
-            ];
-        }
-
-        // Validation téléphone
-        elseif ($hasPhone) {
-            $rules['phone'] = [
-                'required',
-                'string',
-                'max:255',
-                function ($attribute, $value, $fail) {
-                    if (!preg_match('/^[0-9+]{8,15}$/', $value)) {
-                        $fail('Le format du numéro de téléphone est invalide.');
-                    }
-                    if (strlen($value) < 8) {
-                        $fail('Le numéro doit contenir au moins 8 chiffres.');
-                    }
-                    if (strlen($value) > 15) {
-                        $fail('Le numéro ne doit pas dépasser 15 chiffres.');
-                    }
-                    if (User::where('phone', $value)->exists()) {
-                        $fail('Ce numéro de téléphone est déjà utilisé.');
-                    }
-                    if (User::where('email', $value)->exists()) {
-                        $fail('Cette valeur est déjà utilisée comme adresse email.');
-                    }
-                },
-            ];
-        }
-
-        // Validation
-        $validatedData = $request->validate($rules);
-
-        // Données utilisateur
+        // ── 4. Construire les données utilisateur ─────────────────────────────
         $userData = [
-            'name'     => $validatedData['name'],
-            'password' => Hash::make($validatedData['password']),
+            'name'     => $request->name,
+            'password' => Hash::make($request->password),
             'role'     => 'client',
         ];
 
-        // Email ou téléphone
-        if ($hasEmail) {
-            $userData['email'] = $validatedData['email'];
-            $userData['email_verified_at'] = now();
-            $userData['phone'] = null;
-            $userData['phone_verified_at'] = null;
-        } 
-        else {
-            $userData['phone'] = $validatedData['phone'];
-            $userData['phone_verified_at'] = now();
-            $userData['email'] = null;
-            $userData['email_verified_at'] = null;
+        if ($type === 'email') {
+            $userData['email']              = $identifier;
+            $userData['email_verified_at']  = now();
+            $userData['phone']              = null;
+            $userData['phone_verified_at']  = null;
+        } else {
+            $userData['phone']              = $identifier;
+            $userData['phone_verified_at']  = now();
+            $userData['email']              = null;
+            $userData['email_verified_at']  = null;
         }
 
-        // Création utilisateur
+        // ── 5. Créer l'utilisateur ────────────────────────────────────────────
         $user = User::create($userData);
 
-        // Token API
+        // ── 6. Invalider le token immédiatement après création ────────────────
+        $this->invalidateToken($otpRow->id);
+
+        // ── 7. Token API + login auto ─────────────────────────────────────────
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        // Event
         event(new Registered($user));
-
-        // Login auto
         Auth::login($user);
 
-        // Notifications d'inscription pour inscription par téléphone
-        if ($hasPhone && !empty($user->phone)) {
-            // SMS de bienvenue
-            try {
-                $sms = app(SmsService::class);
-                $sms->notifyRegistration($user->phone, $user->name);
-            } 
-            catch (\Exception $e) {
-                Log::warning('[SMS] Notification inscription échouée : ' . $e->getMessage());
-            }
-
-            // WhatsApp de bienvenue (EN PLUS du SMS)
-            try {
-                $whatsApp = app(WhatsAppService::class);
-                $whatsApp->notifyRegistration($user->phone, $user->name);
-            } catch (\Exception $e) {
-                Log::warning('[WhatsApp] Notification inscription échouée : ' . $e->getMessage());
-            }
+        // ── 8. Notifications de bienvenue (phone uniquement) ──────────────────
+        if ($type === 'phone' && ! empty($user->phone)) {
+            $this->sendWelcomeNotifications($user);
         }
 
-        // Invalider le token APRÈS succès (éviter réutilisation)
-        
-        DB::statement('UPDATE password_reset_otps SET verify_token = NULL, verify_token_expires_at = NULL WHERE id = ?', [$otpRow->id]);
-        // Réponse finale
+        // ── 9. Réponse ────────────────────────────────────────────────────────
         return response()->json([
             'success' => true,
             'message' => 'Inscription réussie',
-            'user' => [
+            'user'    => [
                 'id'         => $user->id,
                 'name'       => $user->name,
                 'email'      => $user->email,
@@ -220,48 +112,87 @@ class RegisteredUserController extends Controller{
                 'role'       => $user->role,
                 'created_at' => $user->created_at,
             ],
-            'token' => $token,
+            'token'   => $token,
         ], 201);
     }
 
-    public function checkEmail(Request $request){
-        $request->validate([
-            'email' => ['required', 'email'],
-        ]);
+    // ─────────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Invalide définitivement un token verify après usage. */
+    private function invalidateToken(int $otpId): void
+    {
+        try {
+            DB::statement(
+                'UPDATE password_reset_otps
+                 SET verify_token = NULL, verify_token_expires_at = NULL
+                 WHERE id = ?',
+                [$otpId]
+            );
+        } catch (\Exception $e) {
+            Log::warning('[Register] Impossible d\'invalider le verify_token', [
+                'otp_id' => $otpId,
+                'error'  => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Envoie SMS + WhatsApp de bienvenue en fire-and-forget. */
+    private function sendWelcomeNotifications(User $user): void
+    {
+        try {
+            app(\App\Services\SmsService::class)->notifyRegistration($user->phone, $user->name);
+        } catch (\Exception $e) {
+            Log::warning('[SMS] Notification inscription échouée : ' . $e->getMessage());
+        }
+
+        try {
+            app(\App\Services\WhatsAppService::class)->notifyRegistration($user->phone, $user->name);
+        } catch (\Exception $e) {
+            Log::warning('[WhatsApp] Notification inscription échouée : ' . $e->getMessage());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Utilitaires de disponibilité (inchangés)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function checkEmail(Request $request)
+    {
+        $request->validate(['email' => ['required', 'email']]);
 
         $exists = User::where('email', $request->email)
             ->orWhere('phone', $request->email)
             ->exists();
 
         return response()->json([
-            'available' => !$exists,
-            'message'   => !$exists ? 'Email disponible' : 'Email déjà utilisé'
+            'available' => ! $exists,
+            'message'   => ! $exists ? 'Email disponible' : 'Email déjà utilisé',
         ]);
     }
 
-    public function checkPhone(Request $request) {
-        $request->validate([
-            'phone' => ['required', 'string'],
-        ]);
+    public function checkPhone(Request $request)
+    {
+        $request->validate(['phone' => ['required', 'string']]);
 
-        $cleanPhone = $this->cleanPhoneNumber($request->phone);
-
-        $exists = User::where('phone', $cleanPhone)
-            ->orWhere('email', $cleanPhone)
+        $clean  = $this->cleanPhoneNumber($request->phone);
+        $exists = User::where('phone', $clean)
+            ->orWhere('email', $clean)
             ->exists();
 
         return response()->json([
-            'available' => !$exists,
-            'message'   => !$exists ? 'Téléphone disponible' : 'Téléphone déjà utilisé'
+            'available' => ! $exists,
+            'message'   => ! $exists ? 'Téléphone disponible' : 'Téléphone déjà utilisé',
         ]);
     }
 
-    private function cleanPhoneNumber($phone) {
+    private function cleanPhoneNumber(string $phone): string
+    {
         $clean = preg_replace('/[^0-9+]/', '', $phone);
 
         if (substr_count($clean, '+') > 1) {
-            $clean = preg_replace('/\+/', '', $clean);
-            $clean = '+' . $clean;
+            $clean = '+' . preg_replace('/\+/', '', $clean);
         }
 
         return $clean;
