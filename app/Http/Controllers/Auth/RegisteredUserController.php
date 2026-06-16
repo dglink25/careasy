@@ -28,7 +28,7 @@ class RegisteredUserController extends Controller{
                 'SELECT * FROM password_reset_otps
                 WHERE verify_token            = ?
                 AND verify_token_expires_at > NOW()
-                AND used                   = 1
+                AND used                   = true
                 LIMIT 1',
                 [$verifyToken]
             );
