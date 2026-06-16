@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
 
-class Service extends Model{
+class Service extends BaseModel {
     use HasFactory;
 
     protected $fillable = [

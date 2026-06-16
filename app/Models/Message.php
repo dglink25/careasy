@@ -4,8 +4,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Facades\Storage;
 
-class Message extends Model
-{
+class Message extends BaseModel {
     protected $fillable = [
         'conversation_id',
         'sender_id',
@@ -36,22 +35,18 @@ class Message extends Model
         return $this->belongsTo(Conversation::class);
     }
 
-    public function sender()
-    {
+    public function sender() {
         return $this->belongsTo(User::class, 'sender_id');
     }
 
-    // ✅ AJOUTÉ — message auquel celui-ci répond
-    public function replyTo()
-    {
+    public function replyTo() {
         return $this->belongsTo(Message::class, 'reply_to_id')
                     ->with(['sender:id,name,profile_photo_path']);
     }
 
     // ── Accesseurs ─────────────────────────────────────────────────────────
 
-    protected function fileUrl(): Attribute
-    {
+    protected function fileUrl(): Attribute {
         return Attribute::get(function () {
             if (!$this->file_path) return null;
             if (filter_var($this->file_path, FILTER_VALIDATE_URL)) return $this->file_path;

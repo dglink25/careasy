@@ -106,7 +106,7 @@ class MessageController extends Controller{
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        
+
         $userId = Auth::id();
         $user   = User::find($userId);
 
@@ -508,9 +508,6 @@ class MessageController extends Controller{
         return response()->json($conversation);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    //  MES CONVERSATIONS
-    // ──────────────────────────────────────────────────────────────────────
     public function myConversations(): \Illuminate\Http\JsonResponse {
         $userId = Auth::id();
         $user   = User::find($userId);
@@ -546,11 +543,7 @@ class MessageController extends Controller{
         return response()->json($conversations);
     }
 
-    // ──────────────────────────────────────────────────────────────────────
-    //  MESSAGES D'UNE CONVERSATION
-    // ──────────────────────────────────────────────────────────────────────
-    public function getMessages(int $conversationId): \Illuminate\Http\JsonResponse
-    {
+    public function getMessages(int $conversationId): \Illuminate\Http\JsonResponse {
         $conv = Conversation::with([
             'messages.sender',
             'messages.replyTo.sender',

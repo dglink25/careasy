@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Conversation extends Model{
+class Conversation extends BaseModel {
     protected $fillable = [
         'user_one_id',
         'user_two_id',
