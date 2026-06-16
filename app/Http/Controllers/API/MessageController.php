@@ -62,40 +62,40 @@ class MessageController extends Controller{
     }
 
     
-private function sendFCMNotification(User $recipient, array $payload): void
-{
-    if (empty($recipient->fcm_token)) {
-        return;
+    private function sendFCMNotification(User $recipient, array $payload): void
+    {
+        if (empty($recipient->fcm_token)) {
+            return;
+        }
+
+        try {
+            $messaging = Firebase::messaging();
+
+            // Créer la notification
+            $notification = Notification::create(
+                $payload['title'] ?? 'Notification',
+                $payload['body'] ?? ''
+            );
+
+            // Créer le message directement pour un token spécifique
+            $message = CloudMessage::fromArray([
+                'token' => $recipient->fcm_token,   // <-- définit la cible ici
+                'notification' => [
+                    'title' => $payload['title'] ?? 'Notification',
+                    'body' => $payload['body'] ?? '',
+                ],
+                'data' => $payload['data'] ?? [],
+            ]);
+
+            // Envoyer le message
+            $messaging->send($message);
+
+            Log::info('[FCM] Notification envoyée à user#' . $recipient->id);
+
+        } catch (\Exception $e) {
+            Log::error('[FCM] Exception: ' . $e->getMessage());
+        }
     }
-
-    try {
-        $messaging = Firebase::messaging();
-
-        // Créer la notification
-        $notification = Notification::create(
-            $payload['title'] ?? 'Notification',
-            $payload['body'] ?? ''
-        );
-
-        // Créer le message directement pour un token spécifique
-        $message = CloudMessage::fromArray([
-            'token' => $recipient->fcm_token,   // <-- définit la cible ici
-            'notification' => [
-                'title' => $payload['title'] ?? 'Notification',
-                'body' => $payload['body'] ?? '',
-            ],
-            'data' => $payload['data'] ?? [],
-        ]);
-
-        // Envoyer le message
-        $messaging->send($message);
-
-        Log::info('[FCM] Notification envoyée à user#' . $recipient->id);
-
-    } catch (\Exception $e) {
-        Log::error('[FCM] Exception: ' . $e->getMessage());
-    }
-}
 
 
     public function saveFcmToken(Request $request): \Illuminate\Http\JsonResponse {
@@ -507,36 +507,37 @@ private function sendFCMNotification(User $recipient, array $payload): void
     // ──────────────────────────────────────────────────────────────────────
     //  MES CONVERSATIONS
     // ──────────────────────────────────────────────────────────────────────
-    public function myConversations(): \Illuminate\Http\JsonResponse
-    {
+    public function myConversations(): \Illuminate\Http\JsonResponse {
         $userId = Auth::id();
         $user   = User::find($userId);
         $user->update(['last_seen_at' => now()]);
 
-        $conversations = Conversation::where('user_one_id', $userId)
-            ->orWhere('user_two_id', $userId)
-            ->with([
-                'messages' => function ($q) {
-                    $q->orderBy('created_at', 'desc')->limit(1);
-                },
-                'messages.sender',
-                'userOne',
-                'userTwo',
-            ])
-            ->latest('updated_at')
-            ->get()
-            ->map(function ($conv) use ($userId) {
-                $conv->other_user = (int)$conv->user_one_id === (int)$userId
-                    ? $conv->userTwo
-                    : $conv->userOne;
-
-                $conv->unread_count = Message::where('conversation_id', $conv->id)
-                    ->where('sender_id', '!=', $userId)
-                    ->whereNull('read_at')
-                    ->count();
-
-                return $conv;
-            });
+        $conversations = Conversation::where(function ($q) use ($userId) {
+            $q->where('user_one_id', $userId)
+            ->orWhere('user_two_id', $userId);
+        })
+        ->where('user_one_id', '!=', 1)   // exclure les convs avec l'admin
+        ->where('user_two_id', '!=', 1)
+        ->with([
+            'messages' => function ($q) {
+                $q->orderBy('created_at', 'desc')->limit(1);
+            },
+            'messages.sender',
+            'userOne',
+            'userTwo',
+        ])
+        ->latest('updated_at')
+        ->get()
+        ->map(function ($conv) use ($userId) {
+            $conv->other_user = (int)$conv->user_one_id === (int)$userId
+                ? $conv->userTwo
+                : $conv->userOne;
+            $conv->unread_count = Message::where('conversation_id', $conv->id)
+                ->where('sender_id', '!=', $userId)
+                ->whereNull('read_at')
+                ->count();
+            return $conv;
+        });
 
         return response()->json($conversations);
     }
