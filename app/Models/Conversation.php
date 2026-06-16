@@ -34,4 +34,9 @@ class Conversation extends Model{
     {
         return $this->belongsTo(Service::class);
     }
+
+    public function latestMessage() {
+        return $this->hasOne(Message::class)
+            ->ofMany('updated_at', 'max');
+    }
 }

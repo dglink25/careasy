@@ -62,8 +62,7 @@ class MessageController extends Controller{
     }
 
     
-    private function sendFCMNotification(User $recipient, array $payload): void
-    {
+    private function sendFCMNotification(User $recipient, array $payload): void {
         if (empty($recipient->fcm_token)) {
             return;
         }
@@ -107,8 +106,10 @@ class MessageController extends Controller{
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
+        
+        $userId = Auth::id();
+        $user   = User::find($userId);
 
-        $user = Auth::user();
         if (!$user) {
             return response()->json(['message' => 'Non authentifié'], 401);
         }
@@ -304,7 +305,7 @@ class MessageController extends Controller{
                     ['message' => $messageData, 'sender_id' => $userId]);
 
                 if ($recipient && !empty($recipient->fcm_token)) {
-                    
+
                     dispatch(function () use ($recipient, $user, $message) {
                         $this->sendFCMNotification($recipient, [
                             'title' => $user->name,
@@ -519,26 +520,26 @@ class MessageController extends Controller{
             $q->where('user_one_id', $userId)
             ->orWhere('user_two_id', $userId);
         })
-        ->where('user_one_id', '!=', 1)   // exclure les convs avec l'admin
+        ->where('user_one_id', '!=', 1)
         ->where('user_two_id', '!=', 1)
         ->with([
-            'messages' => function ($q) {
-                $q->orderBy('created_at', 'desc')->limit(1);
-            },
-            'messages.sender',
+            'latestMessage.sender',
             'userOne',
             'userTwo',
+        ])
+        ->withCount([
+            'messages as unread_count' => function ($q) use ($userId) {
+                $q->where('sender_id', '!=', $userId)
+                ->whereNull('read_at');
+            }
         ])
         ->latest('updated_at')
         ->get()
         ->map(function ($conv) use ($userId) {
-            $conv->other_user = (int)$conv->user_one_id === (int)$userId
+            $conv->other_user = $conv->user_one_id == $userId
                 ? $conv->userTwo
                 : $conv->userOne;
-            $conv->unread_count = Message::where('conversation_id', $conv->id)
-                ->where('sender_id', '!=', $userId)
-                ->whereNull('read_at')
-                ->count();
+
             return $conv;
         });
 
@@ -587,14 +588,16 @@ class MessageController extends Controller{
     // ──────────────────────────────────────────────────────────────────────
     //  STATUT EN LIGNE
     // ──────────────────────────────────────────────────────────────────────
-    public function updateOnlineStatus(): \Illuminate\Http\JsonResponse
-    {
-        $user = Auth::user();
+    public function updateOnlineStatus(): \Illuminate\Http\JsonResponse{
+        $user = User::findOrFail(Auth::id());
+
         if (!$user) {
             return response()->json(['message' => 'Non authentifié'], 401);
         }
 
-        $user->update(['last_seen_at' => now()]);
+        $user->update([
+            'last_seen_at' => now(),
+        ]);
 
         // Notifier les contacts via Pusher
         $conversations = Conversation::where('user_one_id', $user->id)
@@ -648,8 +651,7 @@ class MessageController extends Controller{
         ]);
     }
 
-    private function isMember(Conversation $conv, ?int $userId): bool
-    {
+    private function isMember(Conversation $conv, ?int $userId): bool {
         return $conv->user_one_id === $userId || $conv->user_two_id === $userId;
     }
 
@@ -660,16 +662,14 @@ class MessageController extends Controller{
         return Storage::disk('public')->url($filePath);
     }
 
-    private function uploadFile($file, int $convId, string $type): string
-    {
+    private function uploadFile($file, int $convId, string $type): string {
         $folderPath = "messages/{$convId}/{$type}";
         return $this->isCloudStorageEnabled()
             ? $this->uploadToCloudinary($file, $folderPath)
             : $this->uploadToLocalStorage($file, $folderPath);
     }
 
-    private function isCloudStorageEnabled(): bool
-    {
+    private function isCloudStorageEnabled(): bool  {
         return !empty(env('CLOUDINARY_CLOUD_NAME'))
             && !empty(env('CLOUDINARY_API_KEY'))
             && !empty(env('CLOUDINARY_API_SECRET'));
@@ -697,8 +697,7 @@ class MessageController extends Controller{
         }
     }
 
-    private function uploadToLocalStorage($file, string $folderPath): string
-    {
+    private function uploadToLocalStorage($file, string $folderPath): string{
         try {
             Storage::disk('public')->makeDirectory($folderPath);
             $fileName = Str::uuid() . '.' . $file->getClientOriginalExtension();
@@ -788,7 +787,7 @@ class MessageController extends Controller{
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $user = Auth::user();
+        $user = User::findOrFail(Auth::id());
         if (!$user) {
             return response()->json(['message' => 'Non authentifié'], 401);
         }
