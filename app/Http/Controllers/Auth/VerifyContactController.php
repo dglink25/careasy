@@ -162,11 +162,6 @@ class VerifyContactController extends Controller
         ]);
     }
 
-    // =========================================================================
-    // POST /verify-contact/check
-    // Body : identifier, type, code
-    // Retourne : verify_token (valide 60 min) à utiliser pour l'inscription
-    // =========================================================================
     public function check(Request $request): JsonResponse
     {
         $identifier_raw = trim($request->input('identifier', ''));
