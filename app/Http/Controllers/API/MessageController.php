@@ -304,18 +304,21 @@ class MessageController extends Controller{
                     ['message' => $messageData, 'sender_id' => $userId]);
 
                 if ($recipient && !empty($recipient->fcm_token)) {
-                    $this->sendFCMNotification($recipient, [
-                        'title' => $user->name,
-                        'body'  => $this->getNotificationBody($message),
-                        'data'  => [
-                            'conversation_id' => (string) $conv->id,
-                            'sender_id'       => (string) $userId,
-                            'sender_name'     => $user->name,
-                            'sender_photo'    => $user->profile_photo_url ?? '',
-                            'type'            => 'message',
-                            'click_action'    => 'FLUTTER_NOTIFICATION_CLICK',
-                        ],
-                    ]);
+                    
+                    dispatch(function () use ($recipient, $user, $message) {
+                        $this->sendFCMNotification($recipient, [
+                            'title' => $user->name,
+                            'body'  => $this->getNotificationBody($message),
+                            'data'  => [
+                                'conversation_id' => (string) $message->conversation_id,
+                                'sender_id'       => (string) $user->id,
+                                'sender_name'     => $user->name,
+                                'sender_photo'    => $user->profile_photo_url ?? '',
+                                'type'            => 'message',
+                                'click_action'    => 'FLUTTER_NOTIFICATION_CLICK',
+                            ],
+                        ]);
+                    })->afterResponse();
                 }
             }
 
