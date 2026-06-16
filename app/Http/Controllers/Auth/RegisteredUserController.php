@@ -18,7 +18,7 @@ class RegisteredUserController extends Controller
     // POST /register
     // Body : verify_token, name, password, password_confirmation
     // =========================================================================
-    public function store(Request $request)
+    public function stor(Request $request)
     {
         // ── 1. Valider les champs soumis ──────────────────────────────────────
         $request->validate([
