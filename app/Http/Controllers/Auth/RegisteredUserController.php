@@ -12,127 +12,142 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules;
 
-class RegisteredUserController extends Controller
-{
-    // =========================================================================
-    // POST /register
-    // Body : verify_token, name, password, password_confirmation
-    // =========================================================================
-    public function store(Request $request)
-    {
-        $request->validate([
-            'verify_token' => ['required', 'string'],
-            'name'         => ['required', 'string', 'min:2', 'max:255'],
-            'password'     => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+class RegisteredUserController extends Controller{
+    
+    public function store(Request $request) {
+        try {
+            $request->validate([
+                'verify_token' => ['required', 'string'],
+                'name'         => ['required', 'string', 'min:2', 'max:255'],
+                'password'     => ['required', 'confirmed', Rules\Password::defaults()],
+            ]);
 
-        // Nettoyer le token (espaces, encodage URL éventuels)
-        $verifyToken = trim(urldecode($request->verify_token));
+            $verifyToken = trim(urldecode($request->verify_token));
 
-        // Query défensive : used = 1 explicite + cast + log si null
-        $otpRow = DB::selectOne(
-            'SELECT * FROM password_reset_otps
-            WHERE verify_token            = ?
-            AND verify_token_expires_at > NOW()
-            AND used                   = 1
-            LIMIT 1',
-            [$verifyToken]
-        );
-
-        // Log pour déboguer en production sans APP_DEBUG
-        if (! $otpRow) {
-            $debug = DB::selectOne(
-                'SELECT id, used, verify_token_expires_at,
-                        (verify_token = ?) as token_match,
-                        (verify_token_expires_at > NOW()) as not_expired
-                FROM password_reset_otps
-                WHERE verify_token = ?
+            $otpRow = DB::selectOne(
+                'SELECT * FROM password_reset_otps
+                WHERE verify_token            = ?
+                AND verify_token_expires_at > NOW()
+                AND used                   = 1
                 LIMIT 1',
-                [$verifyToken, $verifyToken]
+                [$verifyToken]
             );
 
-            Log::warning('[Register] OTP introuvable', [
-                'token_recu'   => substr($verifyToken, 0, 10) . '...',
-                'token_length' => strlen($verifyToken),
-                'debug_row'    => $debug,
-                'server_now'   => now()->toDateTimeString(),
-                'db_now'       => DB::selectOne('SELECT NOW() as now')->now,
+            if (! $otpRow) {
+                $debug = DB::selectOne(
+                    'SELECT id, used, verify_token_expires_at,
+                            (verify_token = ?) as token_match,
+                            (verify_token_expires_at > NOW()) as not_expired
+                    FROM password_reset_otps
+                    WHERE verify_token = ?
+                    LIMIT 1',
+                    [$verifyToken, $verifyToken]
+                );
+
+                return response()->json([
+                    'success'    => false,
+                    'message'    => 'TOKEN_INVALID',
+                    'code'       => 'TOKEN_INVALID',
+                    'debug'      => [
+                        'token_recu'   => substr($verifyToken, 0, 10) . '...',
+                        'token_length' => strlen($verifyToken),
+                        'token_full'   => $verifyToken,   // ← on veut voir le token complet
+                        'debug_row'    => $debug,
+                        'server_now'   => now()->toDateTimeString(),
+                        'db_now'       => DB::selectOne('SELECT NOW() as now')->now,
+                        'php_timezone' => date_default_timezone_get(),
+                    ],
+                ], 422);
+            }
+
+            $identifier = $otpRow->identifier;
+            $type       = $otpRow->identifier_type;
+            $column     = $type === 'email' ? 'email' : 'phone';
+
+            if (User::where($column, $identifier)->exists()) {
+                $this->invalidateToken($otpRow->id);
+                return response()->json([
+                    'success' => false,
+                    'message' => $type === 'email'
+                        ? 'Cette adresse email est déjà associée à un compte.'
+                        : 'Ce numéro de téléphone est déjà associé à un compte.',
+                    'code'    => 'ALREADY_USED',
+                ], 422);
+            }
+
+            $userData = [
+                'name'     => $request->name,
+                'password' => Hash::make($request->password),
+                'role'     => 'client',
+            ];
+
+            if ($type === 'email') {
+                $userData['email']             = $identifier;
+                $userData['email_verified_at'] = now();
+                $userData['phone']             = null;
+                $userData['phone_verified_at'] = null;
+            } else {
+                $userData['phone']             = $identifier;
+                $userData['phone_verified_at'] = now();
+                $userData['email']             = null;
+                $userData['email_verified_at'] = null;
+            }
+
+            $user = User::create($userData);
+            $this->invalidateToken($otpRow->id);
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+            event(new Registered($user));
+            Auth::login($user);
+
+            if ($type === 'phone' && ! empty($user->phone)) {
+                $this->sendWelcomeNotifications($user);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Inscription réussie',
+                'user'    => [
+                    'id'         => $user->id,
+                    'name'       => $user->name,
+                    'email'      => $user->email,
+                    'phone'      => $user->phone,
+                    'role'       => $user->role,
+                    'created_at' => $user->created_at,
+                ],
+                'token' => $token,
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Erreurs de validation Laravel
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur de validation',
+                'code'    => 'VALIDATION_ERROR',
+                'errors'  => $e->errors(),
+            ], 422);
+
+        } catch (\Exception $e) {
+            // TOUTE autre erreur : on expose tout pour déboguer
+            Log::error('[Register] Exception', [
+                'message' => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'trace'   => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => "La vérification a expiré : " .now()->toDateTimeString() . " " . DB::selectOne('SELECT NOW() as now')->now . ",  Veuillez recommencer.",
-                'code'    => 'TOKEN_INVALID',
-            ], 422);
+                'message' => 'Server Error',
+                'code'    => 'SERVER_ERROR',
+                'debug'   => [
+                    'exception' => get_class($e),
+                    'message'   => $e->getMessage(),
+                    'file'      => $e->getFile(),
+                    'line'      => $e->getLine(),
+                ],
+            ], 500);
         }
-
-        $identifier = $otpRow->identifier;      // email ou téléphone normalisé
-        $type       = $otpRow->identifier_type; // 'email' | 'phone'
-
-        $column = $type === 'email' ? 'email' : 'phone';
-
-        if (User::where($column, $identifier)->exists()) {
-            $this->invalidateToken($otpRow->id);
-
-            return response()->json([
-                'success' => false,
-                'message' => $type === 'email'
-                    ? 'Cette adresse email est déjà associée à un compte.'
-                    : 'Ce numéro de téléphone est déjà associé à un compte.',
-                'code'    => 'ALREADY_USED',
-            ], 422);
-        }
-
-        // ── 4. Construire les données utilisateur ─────────────────────────────
-        $userData = [
-            'name'     => $request->name,
-            'password' => Hash::make($request->password),
-            'role'     => 'client',
-        ];
-
-        if ($type === 'email') {
-            $userData['email']             = $identifier;
-            $userData['email_verified_at'] = now();
-            $userData['phone']             = null;
-            $userData['phone_verified_at'] = null;
-        } else {
-            $userData['phone']             = $identifier;
-            $userData['phone_verified_at'] = now();
-            $userData['email']             = null;
-            $userData['email_verified_at'] = null;
-        }
-
-        // ── 5. Créer l'utilisateur ────────────────────────────────────────────
-        $user = User::create($userData);
-
-        // ── 6. Invalider immédiatement le token (usage unique) ────────────────
-        $this->invalidateToken($otpRow->id);
-
-        // ── 7. Token API Sanctum + login automatique ──────────────────────────
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        event(new Registered($user));
-        Auth::login($user);
-
-        // ── 8. Notifications de bienvenue (phone uniquement) ──────────────────
-        if ($type === 'phone' && ! empty($user->phone)) {
-            $this->sendWelcomeNotifications($user);
-        }
-
-        // ── 9. Réponse ────────────────────────────────────────────────────────
-        return response()->json([
-            'success' => true,
-            'message' => 'Inscription réussie',
-            'user'    => [
-                'id'         => $user->id,
-                'name'       => $user->name,
-                'email'      => $user->email,
-                'phone'      => $user->phone,
-                'role'       => $user->role,
-                'created_at' => $user->created_at,
-            ],
-            'token'   => $token,
-        ], 201);
     }
 
     /** Invalide le verify_token après utilisation (usage unique). */
