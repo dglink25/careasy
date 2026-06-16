@@ -18,28 +18,53 @@ class RegisteredUserController extends Controller
     // POST /register
     // Body : verify_token, name, password, password_confirmation
     // =========================================================================
-    public function stor(Request $request)
+    public function store(Request $request)
     {
-        // ── 1. Valider les champs soumis ──────────────────────────────────────
         $request->validate([
             'verify_token' => ['required', 'string'],
             'name'         => ['required', 'string', 'min:2', 'max:255'],
             'password'     => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // ── 2. Récupérer la ligne OTP liée au verify_token ────────────────────
-        //    Conditions strictes :
-        //    - verify_token correspond
-        //    - verify_token_expires_at non expiré
-        //    - used = true  (le code OTP a bien été validé dans /check)
+        // Nettoyer le token (espaces, encodage URL éventuels)
+        $verifyToken = trim(urldecode($request->verify_token));
+
+        // Query défensive : used = 1 explicite + cast + log si null
         $otpRow = DB::selectOne(
             'SELECT * FROM password_reset_otps
-             WHERE verify_token            = ?
-               AND verify_token_expires_at > ?
-               AND used                   = true
-             LIMIT 1',
-            [$request->verify_token, now()->toDateTimeString()]
+            WHERE verify_token            = ?
+            AND verify_token_expires_at > NOW()
+            AND used                   = 1
+            LIMIT 1',
+            [$verifyToken]
         );
+
+        // Log pour déboguer en production sans APP_DEBUG
+        if (! $otpRow) {
+            $debug = DB::selectOne(
+                'SELECT id, used, verify_token_expires_at,
+                        (verify_token = ?) as token_match,
+                        (verify_token_expires_at > NOW()) as not_expired
+                FROM password_reset_otps
+                WHERE verify_token = ?
+                LIMIT 1',
+                [$verifyToken, $verifyToken]
+            );
+
+            Log::warning('[Register] OTP introuvable', [
+                'token_recu'   => substr($verifyToken, 0, 10) . '...',
+                'token_length' => strlen($verifyToken),
+                'debug_row'    => $debug,
+                'server_now'   => now()->toDateTimeString(),
+                'db_now'       => DB::selectOne('SELECT NOW() as now')->now,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => "La vérification a expiré : " .now()->toDateTimeString() . " " . DB::selectOne('SELECT NOW() as now')->now . ",  Veuillez recommencer.",
+                'code'    => 'TOKEN_INVALID',
+            ], 422);
+        }
 
         $identifier = $otpRow->identifier;      // email ou téléphone normalisé
         $type       = $otpRow->identifier_type; // 'email' | 'phone'
