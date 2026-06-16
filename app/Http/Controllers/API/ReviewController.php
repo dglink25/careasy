@@ -144,17 +144,9 @@ class ReviewController extends Controller
         }
     }
 
-<<<<<<< HEAD
-    public function forService(int $serviceId)
-    {
-=======
-<<<<<<< HEAD
+
     public function forService(int $serviceId){
-=======
-    public function forService(int $serviceId)
-    {
->>>>>>> b33ee66 (add pages siganlement abonnement & prestatire admin)
->>>>>>> e3c7e29 (Conflit de branch)
+
         try {
             $reviews = Review::with(['client:id,name,profile_photo_path'])
                 ->whereHas('rendezVous', function ($q) use ($serviceId) {
@@ -181,7 +173,8 @@ class ReviewController extends Controller
 
             return response()->json($reviews);
 
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             Log::error('Erreur forService reviews:', ['error' => $e->getMessage()]);
             return response()->json([], 200); // retourner tableau vide plutôt qu'erreur
         }

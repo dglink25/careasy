@@ -46,8 +46,6 @@ Route::middleware('throttle:10,1')->group(function () {
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    Route::delete('conversation/{id}', [MessageController::class, 'destroyConversation']);
-
     Route::put('/user/phone', [UserSettingsController::class, 'updatePhone']);
 
     // ── Pusher broadcasting auth ──────────────────────────────────────────
@@ -88,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('conversation/service/{serviceId}/start',               [MessageController::class, 'startServiceConversationMobile']);
     Route::post('conversation/service',                                 [MessageController::class, 'startServiceConversation']);
     Route::get('conversation/{id}',                                     [MessageController::class, 'getMessages']);
+    Route::delete('conversation/{id}',                                  [MessageController::class, 'destroyConversation']);
     Route::post('conversation/{id}/send',                               [MessageController::class, 'sendMessage']);
     Route::post('conversation/{id}/send-mobile',                        [MessageController::class, 'sendMessageMobile']);
     Route::post('conversation/{id}/mark-read',                          [MessageController::class, 'markAsRead']);
