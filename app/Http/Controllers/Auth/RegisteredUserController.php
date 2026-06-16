@@ -69,8 +69,6 @@ class RegisteredUserController extends Controller
         $identifier = $otpRow->identifier;      // email ou téléphone normalisé
         $type       = $otpRow->identifier_type; // 'email' | 'phone'
 
-        // ── 3. Vérifier que l'identifiant n'est pas déjà pris ─────────────────
-        //    (peut arriver si deux inscriptions concurrentes avec le même contact)
         $column = $type === 'email' ? 'email' : 'phone';
 
         if (User::where($column, $identifier)->exists()) {
