@@ -46,6 +46,8 @@ Route::middleware('throttle:10,1')->group(function () {
 
 Route::middleware('auth:sanctum')->group(function () {
 
+    Route::delete('conversation/{id}', [MessageController::class, 'destroyConversation']);
+
     Route::put('/user/phone', [UserSettingsController::class, 'updatePhone']);
 
     // ── Pusher broadcasting auth ──────────────────────────────────────────

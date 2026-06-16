@@ -1338,4 +1338,43 @@ class MessageController extends Controller{
         return response()->json(['message' => 'Message supprimé']);
     }
 
+    public function destroyConversation(int $id): \Illuminate\Http\JsonResponse{
+        $conv = Conversation::find($id);
+        if (!$conv) {
+            return response()->json(['message' => 'Conversation introuvable'], 404);
+        }           
+
+        $userId = Auth::id();
+        if (!$this->isMember($conv, $userId)) {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        // Supprimer les fichiers Cloudinary/local liés aux messages
+        $messages = Message::where('conversation_id', $id)
+            ->whereNotNull('file_path')
+            ->get();
+
+        foreach ($messages as $msg) {
+            $this->deleteFile($msg->file_path);
+        }
+
+        Message::where('conversation_id', $id)->delete();
+        $conv->delete();
+
+        // Notifier l'autre participant via Pusher
+        $otherUserId = $conv->user_one_id === $userId
+            ? $conv->user_two_id
+            : $conv->user_one_id;
+
+        if ($otherUserId) {
+            $this->triggerPusher(
+                'private-user.' . $otherUserId,
+                'conversation-deleted',
+                ['conversation_id' => $id]
+            );
+        }
+
+        return response()->json(['message' => 'Conversation supprimée', 'success' => true]);
+    }
+
 }
