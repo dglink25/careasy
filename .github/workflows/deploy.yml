@@ -15,31 +15,28 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            set -e
             cd /var/www/careasy
 
-            # ── 1. Code ────────────────────────────────────────────────
             git fetch origin main
             git reset --hard origin/main
 
-            # ── 2. .env — supprimer et recréer depuis .env.example ─────
             rm -f .env
             cp .env.example .env
-            echo "✅ .env recréé depuis .env.example ($(wc -l < .env) lignes)"
+            echo "✅ .env recréé ($(wc -l < .env) lignes)"
 
-            # Vérification
-            DB_CONN=$(grep "^DB_CONNECTION=" .env | cut -d= -f2 | tr -d ' \r')
-            APP_URL_VAL=$(grep "^APP_URL=" .env | cut -d= -f2 | tr -d ' \r')
-            echo "   DB=$DB_CONN | URL=$APP_URL_VAL"
-            if [ -z "$DB_CONN" ]; then
-              echo "❌ DB_CONNECTION vide dans .env.example"
+            # ── Dépendances — verbose pour voir l'erreur exacte ────────
+            rm -rf vendor/
+            composer install --no-dev --optimize-autoloader 2>&1
+            COMPOSER_EXIT=$?
+            if [ $COMPOSER_EXIT -ne 0 ]; then
+              echo "❌ composer install a échoué (code $COMPOSER_EXIT)"
+              echo "--- Vérification PHP et extensions ---"
+              php --version
+              php -m | grep -i "pgsql\|pdo"
+              echo "--- Dernières lignes du log Laravel ---"
+              tail -20 storage/logs/laravel.log 2>/dev/null || echo "Pas de log Laravel"
               exit 1
             fi
-
-            # ── 3. Dépendances ─────────────────────────────────────────
-            # Nettoyer vendor/ pour éviter les erreurs package:discover
-            rm -rf vendor/
-            composer install --no-dev --optimize-autoloader --quiet
 
             # ── 4. Migrations ──────────────────────────────────────────
             php artisan migrate --force
