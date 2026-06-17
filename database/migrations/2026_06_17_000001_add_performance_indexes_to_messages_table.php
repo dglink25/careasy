@@ -3,37 +3,35 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
-            // Éviter les doublons si les index existent déjà (environnements existants)
-            $sm = Schema::getConnection()->getDoctrineSchemaManager();
-            $indexes = array_keys($sm->listTableIndexes('messages'));
+        // Index 1
+        DB::statement("
+            CREATE INDEX IF NOT EXISTS messages_conv_created_idx
+            ON messages (conversation_id, created_at)
+        ");
 
-            if (!in_array('messages_conv_created_idx', $indexes)) {
-                $table->index(['conversation_id', 'created_at'], 'messages_conv_created_idx');
-            }
+        // Index 2
+        DB::statement("
+            CREATE INDEX IF NOT EXISTS messages_conv_sender_read_idx
+            ON messages (conversation_id, sender_id, read_at)
+        ");
 
-            if (!in_array('messages_conv_sender_read_idx', $indexes)) {
-                $table->index(['conversation_id', 'sender_id', 'read_at'], 'messages_conv_sender_read_idx');
-            }
-
-            if (!in_array('messages_sender_idx', $indexes)) {
-                $table->index('sender_id', 'messages_sender_idx');
-            }
-        });
+        // Index 3
+        DB::statement("
+            CREATE INDEX IF NOT EXISTS messages_sender_idx
+            ON messages (sender_id)
+        ");
     }
 
     public function down(): void
     {
-        Schema::table('messages', function (Blueprint $table) {
-            $table->dropIndex('messages_conv_created_idx');
-            $table->dropIndex('messages_conv_sender_read_idx');
-            $table->dropIndex('messages_sender_idx');
-        });
+        DB::statement("DROP INDEX IF EXISTS messages_conv_created_idx");
+        DB::statement("DROP INDEX IF EXISTS messages_conv_sender_read_idx");
+        DB::statement("DROP INDEX IF EXISTS messages_sender_idx");
     }
 };
