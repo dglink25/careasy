@@ -11,47 +11,37 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@master
         with:
-          host:     ${{ secrets.VPS_HOST }}
+          host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
-          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true  # ← CRITIQUE : arrête au premier échec
           script: |
-            set -e
+            set -e  # ← arrête le script si une commande échoue
+
             cd /var/www/careasy
 
+            # Force la mise à jour sans se bloquer sur les fichiers locaux
             git fetch origin main
             git reset --hard origin/main
 
-            rm -f .env
-            cp .env.example .env
-            echo "✅ .env recréé ($(wc -l < .env) lignes)"
+            # Dépendances
+            composer install --no-dev --optimize-autoloader
 
-            # ── 3. Dépendances ─────────────────────────────────────────
-            rm -rf vendor/
-            composer install --no-dev --optimize-autoloader --quiet
-
-            # ── 4. Migrations ──────────────────────────────────────────
+            # Migrations
             php artisan migrate --force
 
-            # ── 5. Storage ─────────────────────────────────────────────
-            mkdir -p storage/app/public/messages storage/app/public/uploads storage/logs
-            chmod -R 775 storage bootstrap/cache
-            chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
-            rm -f public/storage && php artisan storage:link
-
-            # ── 6. Cache ───────────────────────────────────────────────
+            # Vider les caches AVANT de les regénérer
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
-            php artisan event:clear
+            php artisan storage:link
+
+            # Regénérer les caches
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
-            # ── 7. Queue + PHP-FPM ─────────────────────────────────────
-            php artisan queue:restart
-            sudo systemctl reload php8.2-fpm 2>/dev/null || \
-            sudo systemctl reload php8.1-fpm 2>/dev/null || \
-            sudo systemctl reload php-fpm    2>/dev/null || \
-            pkill -USR2 php-fpm 2>/dev/null || true
+            # Redémarrer les workers si tu as des queues
+            # php artisan queue:restart
 
-            echo "✅ Déploiement réussi — $APP_URL_VAL"
+            echo " Déploiement réussi"
