@@ -51,7 +51,7 @@ SESSION_DOMAIN=careasy.cap-epac.bj
 GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
 GOOGLE_REDIRECT_URI=https://careasy.cap-epac.bj/auth/google/callback
-
+                    
 DB_CONNECTION=pgsql
 DB_HOST=${DB_HOST}
 DB_PORT=${DB_PORT}
