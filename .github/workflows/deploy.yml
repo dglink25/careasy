@@ -14,17 +14,7 @@ jobs:
           host:     ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: >-
-            APP_KEY,
-            DB_HOST,DB_PORT,DB_DATABASE,DB_USERNAME,DB_PASSWORD,
-            PUSHER_APP_ID,PUSHER_APP_KEY,PUSHER_APP_SECRET,PUSHER_APP_CLUSTER,
-            MAIL_USERNAME,MAIL_PASSWORD,
-            FEDAPAY_SECRET_KEY,FEDAPAY_PUBLIC_KEY,FEDAPAY_WEBHOOK_SECRET,
-            FIREBASE_CREDENTIALS,
-            VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,
-            WHATSAPP_API_SECRET,
-            SMS_GATEWAY_USER,SMS_GATEWAY_PASS,
-            GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET
+          envs:     ENV_PRODUCTION
           script: |
             set -e
             cd /var/www/careasy
@@ -33,107 +23,21 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # ── 2. Supprimer l'ancien .env et réécrire le nouveau ──────
+            # ── 2. Supprimer l'ancien .env et réécrire depuis base64 ───
+            # ENV_PRODUCTION = contenu du .env encodé en base64 (une ligne)
+            # Cela évite tous les problèmes de sauts de ligne GitHub Secrets
             rm -f .env
-
-            cat > .env << ENVEOF
-APP_NAME="CarEasy"
-APP_ENV=production
-APP_DEBUG=false
-APP_KEY=${APP_KEY}
-APP_URL=https://careasy.cap-epac.bj
-APP_LOCALE=fr
-APP_FALLBACK_LOCALE=fr
-APP_MAINTENANCE_DRIVER=file
-
-FRONTEND_URL=https://careasy26.vercel.app
-SANCTUM_STATEFUL_DOMAINS=careasy26.vercel.app,careasy.cap-epac.bj
-SESSION_DOMAIN=careasy.cap-epac.bj
-
-GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-GOOGLE_REDIRECT_URI=https://careasy.cap-epac.bj/auth/google/callback
-
-DB_CONNECTION=pgsql
-DB_HOST=${DB_HOST}
-DB_PORT=${DB_PORT}
-DB_DATABASE=${DB_DATABASE}
-DB_USERNAME=${DB_USERNAME}
-DB_PASSWORD=${DB_PASSWORD}
-DB_SSLMODE=require
-
-SESSION_DRIVER=database
-SESSION_LIFETIME=120
-SESSION_ENCRYPT=false
-SESSION_PATH=/
-QUEUE_CONNECTION=database
-CACHE_STORE=database
-FILESYSTEM_DISK=public
-
-BROADCAST_DRIVER=pusher
-BROADCAST_CONNECTION=pusher
-PUSHER_APP_ID=${PUSHER_APP_ID}
-PUSHER_APP_KEY=${PUSHER_APP_KEY}
-PUSHER_APP_SECRET=${PUSHER_APP_SECRET}
-PUSHER_APP_CLUSTER=${PUSHER_APP_CLUSTER}
-PUSHER_HOST=api-eu.pusher.com
-PUSHER_PORT=443
-PUSHER_SCHEME=https
-
-LOG_CHANNEL=stack
-LOG_STACK=single
-LOG_LEVEL=warning
-
-MAIL_MAILER=smtp
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=${MAIL_USERNAME}
-MAIL_PASSWORD=${MAIL_PASSWORD}
-MAIL_ENCRYPTION=tls
-MAIL_FROM_ADDRESS="${MAIL_USERNAME}"
-MAIL_FROM_NAME="CarEasy"
-
-FEDAPAY_URL=https://api.fedapay.com/v1
-FEDAPAY_SECRET_KEY=${FEDAPAY_SECRET_KEY}
-FEDAPAY_PUBLIC_KEY=${FEDAPAY_PUBLIC_KEY}
-FEDAPAY_ENVIRONMENT=live
-FEDAPAY_CURRENCY=XOF
-FEDAPAY_WEBHOOK_SECRET=${FEDAPAY_WEBHOOK_SECRET}
-FEDAPAY_CALLBACK_URL=https://careasy.cap-epac.bj/api/paiements/callback
-FEDAPAY_RETURN_URL=https://careasy26.vercel.app/paiement/success
-FEDAPAY_CANCEL_URL=https://careasy26.vercel.app/paiement/cancel
-
-FIREBASE_CREDENTIALS=${FIREBASE_CREDENTIALS}
-
-VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
-VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
-VAPID_SUBJECT=mailto:${MAIL_USERNAME}
-
-WHATSAPP_GATEWAY_URL=https://campus357.alwaysdata.net
-WHATSAPP_API_SECRET=${WHATSAPP_API_SECRET}
-WHATSAPP_ENABLED=true
-WHATSAPP_SENDER=+22999955078
-
-SMS_GATEWAY_URL=https://api.sms-gate.app
-SMS_GATEWAY_USER=${SMS_GATEWAY_USER}
-SMS_GATEWAY_PASS=${SMS_GATEWAY_PASS}
-SMS_SENDER_PHONE=+2290194119476
-SMS_ENABLED=true
-
-CARAI_SERVICE_URL=https://careasyaiservice.onrender.com
-BCRYPT_ROUNDS=12
-ENVEOF
+            echo "$ENV_PRODUCTION" | tr -d ' \n\r' | base64 -d > .env
 
             # Vérification
             DB_CONN=$(grep "^DB_CONNECTION=" .env | cut -d= -f2 | tr -d ' \r')
             APP_URL_VAL=$(grep "^APP_URL=" .env | cut -d= -f2 | tr -d ' \r')
-            echo "✅ .env réécrit"
-            echo "   DB_CONNECTION = $DB_CONN"
-            echo "   APP_URL       = $APP_URL_VAL"
-            echo "   Lignes        = $(wc -l < .env)"
-
+            echo "✅ .env réécrit ($(wc -l < .env) lignes)"
+            echo "   DB  = $DB_CONN"
+            echo "   URL = $APP_URL_VAL"
             if [ -z "$DB_CONN" ]; then
-              echo "❌ DB_CONNECTION vide — vérifie les secrets GitHub"
+              echo "❌ DB_CONNECTION vide"
+              head -10 .env
               exit 1
             fi
 
@@ -169,5 +73,4 @@ ENVEOF
             sudo systemctl reload php-fpm    2>/dev/null || \
             pkill -USR2 php-fpm 2>/dev/null || true
 
-            echo ""
             echo "✅ Déploiement réussi"
