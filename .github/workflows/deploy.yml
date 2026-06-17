@@ -33,8 +33,8 @@ jobs:
             # ── Permissions storage ────────────────────────────────────
             # Assure que le dossier de stockage des médias est accessible
             mkdir -p storage/app/public/messages
-            chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || \
-              chmod -R 775 storage bootstrap/cache
+            sudo chown -R www-data:www-data storage bootstrap/cache || true
+            sudo chmod -R 775 storage bootstrap/cache || true
 
             # ── Symlink public/storage ─────────────────────────────────
             # Recrée systématiquement pour éviter un symlink cassé
