@@ -218,7 +218,7 @@ class MessageController extends Controller
         $validator = Validator::make($request->all(), [
             'type'         => 'required|in:text,image,video,vocal,document',
             'content'      => 'nullable|string|max:10000',
-            // vidéo : 100 Mo max ; autres médias : 20 Mo max
+            // Tous les médias : 100 Mo max (102400 Ko)
             'file'         => 'nullable|file|max:102400',
             'latitude'     => 'nullable|numeric',
             'longitude'    => 'nullable|numeric',
@@ -227,7 +227,10 @@ class MessageController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json([
+                'errors'  => $validator->errors(),
+                'message' => $validator->errors()->first(),
+            ], 422);
         }
 
         $conv = Conversation::find($conversationId);
