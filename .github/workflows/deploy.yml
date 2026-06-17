@@ -15,6 +15,7 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
             cd /var/www/careasy
 
             git fetch origin main
@@ -24,19 +25,9 @@ jobs:
             cp .env.example .env
             echo "✅ .env recréé ($(wc -l < .env) lignes)"
 
-            # ── Dépendances — verbose pour voir l'erreur exacte ────────
+            # ── 3. Dépendances ─────────────────────────────────────────
             rm -rf vendor/
-            composer install --no-dev --optimize-autoloader 2>&1
-            COMPOSER_EXIT=$?
-            if [ $COMPOSER_EXIT -ne 0 ]; then
-              echo "❌ composer install a échoué (code $COMPOSER_EXIT)"
-              echo "--- Vérification PHP et extensions ---"
-              php --version
-              php -m | grep -i "pgsql\|pdo"
-              echo "--- Dernières lignes du log Laravel ---"
-              tail -20 storage/logs/laravel.log 2>/dev/null || echo "Pas de log Laravel"
-              exit 1
-            fi
+            composer install --no-dev --optimize-autoloader --quiet
 
             # ── 4. Migrations ──────────────────────────────────────────
             php artisan migrate --force
