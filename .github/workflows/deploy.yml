@@ -26,14 +26,24 @@ jobs:
 
             # ── 2. Écriture du .env depuis le secret GitHub ────────────
             # ENV_PRODUCTION est injecté par appleboy/ssh-action via envs:
-            printf '%s' "$ENV_PRODUCTION" > .env
-            echo "" >> .env
+            # On écrit chaque ligne proprement pour éviter les problèmes
+            # de caractères spéciaux et de sauts de ligne
+            echo "$ENV_PRODUCTION" > .env
             echo "✅ .env écrit depuis le secret ENV_PRODUCTION"
 
+            # Debug : afficher les 5 premières lignes pour vérifier
+            echo "--- Début du .env ---"
+            head -5 .env
+            echo "---"
+
             # Vérification que DB_CONNECTION est défini
-            DB_CONN=$(grep "^DB_CONNECTION=" .env | cut -d= -f2 | tr -d ' ')
+            DB_CONN=$(grep "^DB_CONNECTION=" .env | cut -d= -f2 | tr -d ' \r')
+            echo "DB_CONN détecté : '$DB_CONN'"
             if [ -z "$DB_CONN" ]; then
               echo "❌ DB_CONNECTION vide — secret ENV_PRODUCTION mal configuré"
+              echo "Contenu brut du secret (masqué) :"
+              wc -l .env
+              grep -c "DB_" .env || echo "Aucune ligne DB_ trouvée"
               exit 1
             fi
             echo "✅ DB_CONNECTION=$DB_CONN"
