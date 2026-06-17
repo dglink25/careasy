@@ -14,34 +14,53 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true  # ← CRITIQUE : arrête au premier échec
+          script_stop: true
           script: |
-            set -e  # ← arrête le script si une commande échoue
+            set -e
 
             cd /var/www/careasy
 
-            # Force la mise à jour sans se bloquer sur les fichiers locaux
+            # ── Mise à jour du code ────────────────────────────────────
             git fetch origin main
             git reset --hard origin/main
 
-            # Dépendances
+            # ── Dépendances ────────────────────────────────────────────
             composer install --no-dev --optimize-autoloader
 
-            # Migrations
+            # ── Migrations ────────────────────────────────────────────
             php artisan migrate --force
 
-            # Vider les caches AVANT de les regénérer
+            # ── Permissions storage ────────────────────────────────────
+            # Assure que le dossier de stockage des médias est accessible
+            mkdir -p storage/app/public/messages
+            chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || \
+              chmod -R 775 storage bootstrap/cache
+
+            # ── Symlink public/storage ─────────────────────────────────
+            # Recrée systématiquement pour éviter un symlink cassé
+            rm -f public/storage
+            php artisan storage:link
+
+            # ── Vider les caches ───────────────────────────────────────
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
-            php artisan storage:link
+            php artisan event:clear
 
-            # Regénérer les caches
+            # ── Regénérer les caches (production) ─────────────────────
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
-            # Redémarrer les workers si tu as des queues
-            # php artisan queue:restart
+            # ── Redémarrer les queue workers ───────────────────────────
+            # OBLIGATOIRE pour FCM, notifications async, etc.
+            php artisan queue:restart
+
+            # ── Recharger PHP-FPM ──────────────────────────────────────
+            # Applique les nouveaux paramètres de config sans downtime
+            sudo systemctl reload php8.2-fpm 2>/dev/null || \
+              sudo systemctl reload php8.1-fpm 2>/dev/null || \
+              sudo systemctl reload php-fpm    2>/dev/null || \
+              echo "PHP-FPM reload skipped (check manually)"
 
             echo " Déploiement réussi"

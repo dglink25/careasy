@@ -15,6 +15,7 @@ return [
         'api/*',
         'sanctum/csrf-cookie',
         'broadcasting/auth',   // ← obligatoire pour Pusher
+        'storage/*',           // ← obligatoire pour accéder aux médias uploadés
     ],
 
     'allowed_methods' => ['*'],

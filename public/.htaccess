@@ -25,5 +25,6 @@
 </IfModule>
 
 # Limites upload PHP — EN DEHORS du bloc IfModule
-#php_value upload_max_filesize 20M
-#php_value post_max_size 25M
+php_value upload_max_filesize 100M
+php_value post_max_size 105M
+php_value max_execution_time 300
