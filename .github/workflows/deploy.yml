@@ -51,14 +51,8 @@ jobs:
             PHP_V=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
             PHP_INI="/etc/php/${PHP_V}/fpm/conf.d/99-careasy.ini"
             if [ ! -f "$PHP_INI" ] || ! grep -q "upload_max_filesize = 100M" "$PHP_INI"; then
-              sudo tee "$PHP_INI" > /dev/null << 'PHPEOF'
-upload_max_filesize = 100M
-post_max_size       = 105M
-max_execution_time  = 300
-max_input_time      = 300
-memory_limit        = 256M
-PHPEOF
-              echo " PHP-FPM limits set to 100M"
+              printf '%s\n' 'upload_max_filesize = 100M' 'post_max_size       = 105M' 'max_execution_time  = 300' 'max_input_time      = 300' 'memory_limit        = 256M' | sudo tee "$PHP_INI" > /dev/null
+              echo "PHP-FPM limits set to 100M"
             fi
 
             # ── 8. Nginx — client_max_body_size ───────────────────────
@@ -66,15 +60,13 @@ PHPEOF
             if [ -f "$NGINX_CONF" ]; then
               if ! grep -q "client_max_body_size" "$NGINX_CONF"; then
                 sudo sed -i '/server {/a\    client_max_body_size 105M;' "$NGINX_CONF"
-                echo " client_max_body_size 105M ajouté dans Nginx"
+                echo "client_max_body_size 105M ajouté dans Nginx"
               fi
               sudo nginx -t && sudo systemctl reload nginx
             fi
 
             # ── 9. Queue + PHP-FPM ─────────────────────────────────────
             php artisan queue:restart
-            sudo systemctl reload php${PHP_V}-fpm 2>/dev/null || \
-            sudo systemctl reload php-fpm         2>/dev/null || \
-            pkill -USR2 php-fpm 2>/dev/null || true
+            sudo systemctl reload php${PHP_V}-fpm 2>/dev/null || sudo systemctl reload php-fpm 2>/dev/null || pkill -USR2 php-fpm 2>/dev/null || true
 
-            echo " Déploiement réussi"
+            echo "Deploiement reussi"
