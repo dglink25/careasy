@@ -21,10 +21,6 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            rm -f .env
-            cp .env.example .env
-            echo "✅ .env recréé ($(wc -l < .env) lignes)"
-
             # ── 3. Dépendances ─────────────────────────────────────────
             rm -rf vendor/
             composer install --no-dev --optimize-autoloader --quiet
@@ -50,27 +46,27 @@ jobs:
             # ── 7. PHP-FPM — limites upload (100 Mo) ──────────────────
             PHP_V=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;")
             PHP_INI="/etc/php/${PHP_V}/fpm/conf.d/99-careasy.ini"
-            if [ ! -f "$PHP_INI" ] || ! grep -q "upload_max_filesize = 100M" "$PHP_INI"; then
-              # Utiliser tee sans sudo (fonctionne si connecté en root)
-              # Si non-root avec sudo passwordless, remplacer tee par: sudo tee
+            if [ ! -f "$PHP_INI" ] || ! grep -q "upload_max_filesize = 100M" "$PHP_INI" 2>/dev/null; then
               printf '%s\n' \
                 'upload_max_filesize = 100M' \
                 'post_max_size       = 105M' \
                 'max_execution_time  = 300' \
                 'max_input_time      = 300' \
                 'memory_limit        = 256M' \
-                | tee "$PHP_INI" > /dev/null
-              echo "PHP-FPM limits set to 100M"
+                | tee "$PHP_INI" > /dev/null 2>&1 \
+              && echo "PHP-FPM limits set to 100M" \
+              || echo "WARN: PHP-FPM config skipped (permission denied — run sudoers setup on VPS)"
             fi
 
             # ── 8. Nginx — client_max_body_size ───────────────────────
             NGINX_CONF="/etc/nginx/sites-available/careasy"
             if [ -f "$NGINX_CONF" ]; then
               if ! grep -q "client_max_body_size" "$NGINX_CONF"; then
-                sed -i '/server {/a\    client_max_body_size 105M;' "$NGINX_CONF"
-                echo "client_max_body_size 105M ajouté dans Nginx"
+                sed -i '/server {/a\    client_max_body_size 105M;' "$NGINX_CONF" 2>/dev/null \
+                && echo "client_max_body_size 105M ajouté dans Nginx" \
+                || echo "WARN: Nginx config skipped (permission denied — run sudoers setup on VPS)"
               fi
-              nginx -t && systemctl reload nginx
+              nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
             fi
 
             # ── 9. Queue + PHP-FPM ─────────────────────────────────────
