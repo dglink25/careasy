@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Cloudinary\Cloudinary;
 use Illuminate\Support\Str;
 use Pusher\Pusher;
 use Exception;
@@ -648,49 +647,23 @@ class MessageController extends Controller{
         return $conv->user_one_id === $userId || $conv->user_two_id === $userId;
     }
 
+    /**
+     * Retourne l'URL publique complète d'un fichier stocké localement.
+     * Le chemin stocké en base est toujours un chemin relatif (ex: messages/12/image/uuid.jpg).
+     */
     private function getFileUrl(?string $filePath): ?string
     {
         if (!$filePath) return null;
-        if (filter_var($filePath, FILTER_VALIDATE_URL)) return $filePath;
         return Storage::disk('public')->url($filePath);
     }
 
-    private function uploadFile($file, int $convId, string $type): string {
-        $folderPath = "messages/{$convId}/{$type}";
-        return $this->isCloudStorageEnabled()
-            ? $this->uploadToCloudinary($file, $folderPath)
-            : $this->uploadToLocalStorage($file, $folderPath);
-    }
-
-    private function isCloudStorageEnabled(): bool  {
-        return !empty(env('CLOUDINARY_CLOUD_NAME'))
-            && !empty(env('CLOUDINARY_API_KEY'))
-            && !empty(env('CLOUDINARY_API_SECRET'));
-    }
-
-    private function uploadToCloudinary($file, string $folderPath): string
+    /**
+     * Sauvegarde le fichier sur le disque public local.
+     * Retourne le chemin relatif stocké en base (ex: messages/12/image/uuid.jpg).
+     */
+    private function uploadFile($file, int $convId, string $type): string
     {
-        try {
-            $cloudinary = new Cloudinary([
-                'cloud' => [
-                    'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
-                    'api_key'    => env('CLOUDINARY_API_KEY'),
-                    'api_secret' => env('CLOUDINARY_API_SECRET'),
-                ],
-                'url' => ['secure' => true],
-            ]);
-            $result = $cloudinary->uploadApi()->upload(
-                $file->getRealPath(),
-                ['folder' => $folderPath, 'resource_type' => 'auto']
-            );
-            return $result['secure_url'];
-        } catch (\Exception $e) {
-            Log::error('Cloudinary upload error: ' . $e->getMessage());
-            throw new \Exception('Erreur upload Cloudinary');
-        }
-    }
-
-    private function uploadToLocalStorage($file, string $folderPath): string{
+        $folderPath = "messages/{$convId}/{$type}";
         try {
             Storage::disk('public')->makeDirectory($folderPath);
             $fileName = Str::uuid() . '.' . $file->getClientOriginalExtension();
@@ -698,29 +671,18 @@ class MessageController extends Controller{
             return $folderPath . '/' . $fileName;
         } catch (\Exception $e) {
             Log::error('Erreur upload local: ' . $e->getMessage());
-            throw new \Exception('Erreur upload local');
+            throw new \Exception('Erreur upload fichier');
         }
     }
 
+    /**
+     * Supprime un fichier du disque public local.
+     */
     private function deleteFile(?string $filePath): void
     {
         if (!$filePath) return;
         try {
-            if (filter_var($filePath, FILTER_VALIDATE_URL)) {
-                if ($this->isCloudStorageEnabled()) {
-                    $cloudinary = new Cloudinary([
-                        'cloud' => [
-                            'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
-                            'api_key'    => env('CLOUDINARY_API_KEY'),
-                            'api_secret' => env('CLOUDINARY_API_SECRET'),
-                        ],
-                    ]);
-                    $publicId = pathinfo(parse_url($filePath, PHP_URL_PATH), PATHINFO_FILENAME);
-                    $cloudinary->uploadApi()->destroy($publicId);
-                }
-            } else {
-                Storage::disk('public')->delete($filePath);
-            }
+            Storage::disk('public')->delete($filePath);
         } catch (\Exception $e) {
             Log::error('Erreur suppression fichier: ' . $e->getMessage());
         }
@@ -1328,6 +1290,7 @@ class MessageController extends Controller{
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
+        $this->deleteFile($message->file_path);
         $message->delete();
 
         return response()->json(['message' => 'Message supprimé']);
@@ -1344,7 +1307,7 @@ class MessageController extends Controller{
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        // Supprimer les fichiers Cloudinary/local liés aux messages
+        // Supprimer les fichiers locaux liés aux messages
         $messages = Message::where('conversation_id', $id)
             ->whereNotNull('file_path')
             ->get();

@@ -49,7 +49,10 @@ class Message extends BaseModel {
     protected function fileUrl(): Attribute {
         return Attribute::get(function () {
             if (!$this->file_path) return null;
+            // Compatibilité rétroactive : si l'ancien enregistrement contient
+            // déjà une URL complète (ex: Cloudinary), on la retourne telle quelle.
             if (filter_var($this->file_path, FILTER_VALIDATE_URL)) return $this->file_path;
+            // Chemin relatif local → URL complète publique
             return Storage::disk('public')->url($this->file_path);
         });
     }
