@@ -1,44 +1,34 @@
 #!/bin/bash
 # =============================================================================
-# À exécuter UNE SEULE FOIS sur le serveur via SSH
-# Installe le .env de production dans /etc/careasy/.env
-# Le workflow le copie automatiquement à chaque déploiement
+# Installation du .env de production sur le serveur
+# À exécuter UNE SEULE FOIS depuis ton poste local
 #
 # Usage :
-#   scp scripts/env.production user@serveur:/tmp/env.production
-#   ssh user@serveur "bash -s" < scripts/install-env-production.sh
+#   chmod +x scripts/install-env-production.sh
+#   ./scripts/install-env-production.sh user@careasy.cap-epac.bj
 # =============================================================================
 
-set -e
+SERVER="${1:-}"
 
-echo "Installation du .env de production CarEasy..."
-
-# Créer le répertoire sécurisé
-sudo mkdir -p /etc/careasy
-sudo chmod 700 /etc/careasy
-
-# Copier le .env
-if [ -f /tmp/env.production ]; then
-  sudo cp /tmp/env.production /etc/careasy/.env
-  sudo chmod 600 /etc/careasy/.env
-  rm -f /tmp/env.production
-  echo " /etc/careasy/.env installé"
-elif [ -f /var/www/careasy/scripts/env.production ]; then
-  sudo cp /var/www/careasy/scripts/env.production /etc/careasy/.env
-  sudo chmod 600 /etc/careasy/.env
-  echo " /etc/careasy/.env installé depuis scripts/env.production"
-else
-  echo " Fichier source introuvable."
-  echo "   Place le fichier env.production dans /tmp/ et réessaie."
+if [ -z "$SERVER" ]; then
+  echo "Usage : ./scripts/install-env-production.sh user@careasy.cap-epac.bj"
   exit 1
 fi
 
-# Vérification rapide
-echo ""
-echo "Vérification :"
-grep "^DB_CONNECTION=" /etc/careasy/.env
-grep "^APP_URL=" /etc/careasy/.env
-grep "^FILESYSTEM_DISK=" /etc/careasy/.env
+ENV_FILE="$(dirname "$0")/../.env.production"
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "❌ Fichier .env.production introuvable : $ENV_FILE"
+  exit 1
+fi
+
+echo "📤 Envoi du .env.production vers $SERVER:/var/www/careasy/.env ..."
+scp "$ENV_FILE" "$SERVER:/var/www/careasy/.env"
+
+echo "🔒 Sécurisation des permissions..."
+ssh "$SERVER" "chmod 600 /var/www/careasy/.env"
 
 echo ""
-echo " Installation terminée. Le prochain git push déploiera correctement."
+echo "✅ .env installé sur le serveur."
+echo "   Vérification :"
+ssh "$SERVER" "grep '^DB_CONNECTION=\|^APP_URL=\|^APP_ENV=' /var/www/careasy/.env"
