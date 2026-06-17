@@ -14,7 +14,16 @@ jobs:
           host:     ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key:      ${{ secrets.SSH_PRIVATE_KEY }}
-          envs:     ENV_PRODUCTION
+          envs: >-
+            APP_KEY,
+            DB_HOST,DB_PORT,DB_DATABASE,DB_USERNAME,DB_PASSWORD,
+            PUSHER_APP_SECRET,
+            MAIL_PASSWORD,
+            FEDAPAY_SECRET_KEY,FEDAPAY_PUBLIC_KEY,FEDAPAY_WEBHOOK_SECRET,
+            VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY,
+            WHATSAPP_API_SECRET,
+            SMS_GATEWAY_PASS,
+            GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET
           script: |
             set -e
             cd /var/www/careasy
@@ -23,39 +32,111 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # ── 2. Supprimer l'ancien .env et réécrire depuis base64 ───
-            # ENV_PRODUCTION = contenu du .env encodé en base64 (une ligne)
-            # Cela évite tous les problèmes de sauts de ligne GitHub Secrets
+            # ── 2. Écrire le .env de production ────────────────────────
             rm -f .env
-            echo "$ENV_PRODUCTION" | tr -d ' \n\r' | base64 -d > .env
+            cat > .env << EOF
+APP_NAME="CarEasy"
+APP_ENV=production
+APP_DEBUG=false
+APP_KEY=${APP_KEY}
+APP_URL=https://careasy.cap-epac.bj
+APP_LOCALE=fr
+APP_FALLBACK_LOCALE=fr
+APP_MAINTENANCE_DRIVER=file
 
-            # Vérification
-            DB_CONN=$(grep "^DB_CONNECTION=" .env | cut -d= -f2 | tr -d ' \r')
-            APP_URL_VAL=$(grep "^APP_URL=" .env | cut -d= -f2 | tr -d ' \r')
-            echo "✅ .env réécrit ($(wc -l < .env) lignes)"
-            echo "   DB  = $DB_CONN"
-            echo "   URL = $APP_URL_VAL"
-            if [ -z "$DB_CONN" ]; then
-              echo "❌ DB_CONNECTION vide"
-              head -10 .env
-              exit 1
-            fi
+FRONTEND_URL=https://careasy26.vercel.app
+SANCTUM_STATEFUL_DOMAINS=careasy26.vercel.app,careasy.cap-epac.bj
+SESSION_DOMAIN=careasy.cap-epac.bj
 
-            # ── 3. Dépendances PHP ─────────────────────────────────────
+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+GOOGLE_REDIRECT_URI=https://careasy.cap-epac.bj/auth/google/callback
+
+DB_CONNECTION=pgsql
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_DATABASE=${DB_DATABASE}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}
+DB_SSLMODE=require
+
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+QUEUE_CONNECTION=database
+CACHE_STORE=database
+FILESYSTEM_DISK=public
+
+BROADCAST_DRIVER=pusher
+BROADCAST_CONNECTION=pusher
+PUSHER_APP_ID=2123851
+PUSHER_APP_KEY=cab84ca4d5eac6def57e
+PUSHER_APP_SECRET=${PUSHER_APP_SECRET}
+PUSHER_APP_CLUSTER=eu
+PUSHER_HOST=api-eu.pusher.com
+PUSHER_PORT=443
+PUSHER_SCHEME=https
+
+LOG_CHANNEL=stack
+LOG_STACK=single
+LOG_LEVEL=warning
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=careasy26@gmail.com
+MAIL_PASSWORD=${MAIL_PASSWORD}
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="careasy26@gmail.com"
+MAIL_FROM_NAME="CarEasy"
+
+FEDAPAY_URL=https://api.fedapay.com/v1
+FEDAPAY_SECRET_KEY=${FEDAPAY_SECRET_KEY}
+FEDAPAY_PUBLIC_KEY=${FEDAPAY_PUBLIC_KEY}
+FEDAPAY_ENVIRONMENT=live
+FEDAPAY_CURRENCY=XOF
+FEDAPAY_WEBHOOK_SECRET=${FEDAPAY_WEBHOOK_SECRET}
+FEDAPAY_CALLBACK_URL=https://careasy.cap-epac.bj/api/paiements/callback
+FEDAPAY_RETURN_URL=https://careasy26.vercel.app/paiement/success
+FEDAPAY_CANCEL_URL=https://careasy26.vercel.app/paiement/cancel
+
+FIREBASE_CREDENTIALS=storage/app/firebase/careasy-90edd-firebase-adminsdk-fbsvc-ec0e87759c.json
+
+VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+VAPID_SUBJECT=mailto:careasy26@gmail.com
+
+WHATSAPP_GATEWAY_URL=https://campus357.alwaysdata.net
+WHATSAPP_API_SECRET=${WHATSAPP_API_SECRET}
+WHATSAPP_ENABLED=true
+WHATSAPP_SENDER=+22999955078
+
+SMS_GATEWAY_URL=https://api.sms-gate.app
+SMS_GATEWAY_USER=VPL3CT
+SMS_GATEWAY_PASS=${SMS_GATEWAY_PASS}
+SMS_SENDER_PHONE=+2290194119476
+SMS_ENABLED=true
+
+CARAI_SERVICE_URL=https://careasyaiservice.onrender.com
+BCRYPT_ROUNDS=12
+EOF
+
+            DB_CONN=$(grep "^DB_CONNECTION=" .env | cut -d= -f2)
+            echo "✅ .env écrit ($(wc -l < .env) lignes, DB=$DB_CONN)"
+            if [ -z "$DB_CONN" ]; then echo "❌ Échec"; exit 1; fi
+
+            # ── 3. Dépendances ─────────────────────────────────────────
             composer install --no-dev --optimize-autoloader --quiet
 
             # ── 4. Migrations ──────────────────────────────────────────
             php artisan migrate --force
 
-            # ── 5. Storage + permissions ───────────────────────────────
-            mkdir -p storage/app/public/messages
-            mkdir -p storage/app/public/uploads
-            mkdir -p storage/logs
+            # ── 5. Storage ─────────────────────────────────────────────
+            mkdir -p storage/app/public/messages storage/app/public/uploads storage/logs
             chmod -R 775 storage bootstrap/cache
             chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
-            rm -f public/storage
-            php artisan storage:link
-            echo "✅ Symlink : $(readlink public/storage)"
+            rm -f public/storage && php artisan storage:link
 
             # ── 6. Cache ───────────────────────────────────────────────
             php artisan config:clear
@@ -73,4 +154,4 @@ jobs:
             sudo systemctl reload php-fpm    2>/dev/null || \
             pkill -USR2 php-fpm 2>/dev/null || true
 
-            echo "✅ Déploiement réussi"
+            echo "✅ Déploiement réussi — $(grep '^APP_URL=' .env | cut -d= -f2)"
