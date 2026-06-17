@@ -37,6 +37,8 @@ jobs:
             fi
 
             # ── 3. Dépendances ─────────────────────────────────────────
+            # Nettoyer vendor/ pour éviter les erreurs package:discover
+            rm -rf vendor/
             composer install --no-dev --optimize-autoloader --quiet
 
             # ── 4. Migrations ──────────────────────────────────────────
