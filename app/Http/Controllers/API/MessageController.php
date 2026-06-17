@@ -396,7 +396,7 @@ class MessageController extends Controller
             ]);
         }
 
-        $conversation->load(['userOne', 'userTwo']);
+        $conversation->load(['userOne:id,name,email,profile_photo_path,last_seen_at', 'userTwo:id,name,email,profile_photo_path,last_seen_at']);
         return response()->json($conversation);
     }
 
@@ -477,7 +477,7 @@ class MessageController extends Controller
         })
         ->where('user_one_id', '!=', 1)
         ->where('user_two_id', '!=', 1)
-        ->with(['latestMessage.sender', 'userOne', 'userTwo'])
+        ->with(['latestMessage.sender', 'userOne:id,name,email,profile_photo_path,last_seen_at,fcm_token', 'userTwo:id,name,email,profile_photo_path,last_seen_at,fcm_token'])
         ->withCount([
             'messages as unread_count' => function ($q) use ($userId) {
                 $q->where('sender_id', '!=', $userId)->whereNull('read_at');
@@ -496,8 +496,6 @@ class MessageController extends Controller
     public function getMessages(int $conversationId): \Illuminate\Http\JsonResponse
     {
         $conv = Conversation::with([
-            'messages.sender',
-            'messages.replyTo.sender',
             'service',
         ])->find($conversationId);
 
@@ -509,7 +507,27 @@ class MessageController extends Controller
 
         if (!$this->isMember($conv, $userId)) return response()->json(['message' => 'Non autorisé'], 403);
 
-        $otherUser = $conv->user_one_id === $userId ? $conv->userTwo : $conv->userOne;
+        $otherUser = $conv->user_one_id === $userId
+            ? User::find($conv->user_two_id)
+            : User::find($conv->user_one_id);
+
+        // ── Pagination : 60 derniers messages par défaut ────────────────────
+        $limit  = (int) request()->get('limit', 60);
+        $before = request()->get('before'); // ID pivot pour la pagination infinie
+
+        $query = Message::with(['sender:id,name,profile_photo_path', 'replyTo.sender:id,name,profile_photo_path'])
+            ->where('conversation_id', $conversationId)
+            ->orderBy('created_at', 'desc')
+            ->limit(min($limit, 100)); // cap à 100 pour éviter les abus
+
+        if ($before) {
+            $pivot = Message::find($before);
+            if ($pivot) {
+                $query->where('created_at', '<', $pivot->created_at);
+            }
+        }
+
+        $messages = $query->get()->reverse()->values();
 
         // Marquer comme lus
         Message::where('conversation_id', $conversationId)
@@ -517,10 +535,13 @@ class MessageController extends Controller
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
-        $response               = $conv->toArray();
-        $response['other_user'] = $otherUser ? $otherUser->toArray() : null;
-
-        return response()->json($response);
+        return response()->json([
+            'id'         => $conv->id,
+            'messages'   => $messages,
+            'other_user' => $otherUser,
+            'service'    => $conv->service,
+            'has_more'   => $messages->count() >= $limit,
+        ]);
     }
 
     // =========================================================================

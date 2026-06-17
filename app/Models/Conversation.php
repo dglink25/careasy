@@ -13,7 +13,7 @@ class Conversation extends BaseModel {
         'entreprise_name'
     ];
 
-    protected $with = ['userOne', 'userTwo'];
+    protected $with = []; // eager-load explicite uniquement quand nécessaire
 
     public function messages()
     {
