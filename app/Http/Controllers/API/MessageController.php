@@ -658,11 +658,6 @@ class MessageController extends Controller
         }
     }
 
-    /**
-     * Retourne l'URL publique complète depuis un chemin relatif.
-     * Hardcodée sur le vrai domaine — indépendant de APP_URL.
-     * ex: messages/3/image/uuid.jpg → https://careasy.cap-epac.bj/api/storage/messages/3/image/uuid.jpg
-     */
     private const STORAGE_BASE_URL = 'https://careasy.cap-epac.bj/api/storage';
 
     private function getFileUrl(?string $filePath): ?string

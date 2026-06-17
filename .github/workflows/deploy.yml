@@ -11,56 +11,70 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.VPS_HOST }}
+          host:     ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          # ENV_PRODUCTION contient tout le contenu du .env de production
+          envs:     ENV_PRODUCTION
           script: |
             set -e
-
             cd /var/www/careasy
 
-            # ── Mise à jour du code ────────────────────────────────────
+            # ── 1. Mise à jour du code ─────────────────────────────────
             git fetch origin main
             git reset --hard origin/main
 
-            # ── Dépendances ────────────────────────────────────────────
-            composer install --no-dev --optimize-autoloader
+            # ── 2. Écriture du .env depuis le secret GitHub ────────────
+            # ENV_PRODUCTION est injecté par appleboy/ssh-action via envs:
+            printf '%s' "$ENV_PRODUCTION" > .env
+            echo "" >> .env
+            echo "✅ .env écrit depuis le secret ENV_PRODUCTION"
 
-            # ── Migrations ────────────────────────────────────────────
+            # Vérification que DB_CONNECTION est défini
+            DB_CONN=$(grep "^DB_CONNECTION=" .env | cut -d= -f2 | tr -d ' ')
+            if [ -z "$DB_CONN" ]; then
+              echo "❌ DB_CONNECTION vide — secret ENV_PRODUCTION mal configuré"
+              exit 1
+            fi
+            echo "✅ DB_CONNECTION=$DB_CONN"
+
+            # ── 3. Dépendances PHP ─────────────────────────────────────
+            composer install --no-dev --optimize-autoloader --quiet
+
+            # ── 4. Migrations ──────────────────────────────────────────
             php artisan migrate --force
 
-            # ── Permissions storage ────────────────────────────────────
-            # Assure que le dossier de stockage des médias est accessible
+            # ── 5. Storage + permissions ───────────────────────────────
             mkdir -p storage/app/public/messages
-            sudo chown -R www-data:www-data storage bootstrap/cache || true
-            sudo chmod -R 775 storage bootstrap/cache || true
+            mkdir -p storage/app/public/uploads
+            mkdir -p storage/logs
+            chmod -R 775 storage bootstrap/cache
+            chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 
-            # ── Symlink public/storage ─────────────────────────────────
-            # Recrée systématiquement pour éviter un symlink cassé
             rm -f public/storage
             php artisan storage:link
+            echo "✅ Symlink : public/storage → $(readlink public/storage)"
 
-            # ── Vider les caches ───────────────────────────────────────
+            # ── 6. Cache ───────────────────────────────────────────────
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear
             php artisan event:clear
-
-            # ── Regénérer les caches (production) ─────────────────────
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
 
-            # ── Redémarrer les queue workers ───────────────────────────
-            # OBLIGATOIRE pour FCM, notifications async, etc.
+            # ── 7. Queue workers ───────────────────────────────────────
             php artisan queue:restart
 
-            # ── Recharger PHP-FPM ──────────────────────────────────────
-            # Applique les nouveaux paramètres de config sans downtime
+            # ── 8. Reload PHP-FPM ──────────────────────────────────────
             sudo systemctl reload php8.2-fpm 2>/dev/null || \
-              sudo systemctl reload php8.1-fpm 2>/dev/null || \
-              sudo systemctl reload php-fpm    2>/dev/null || \
-              echo "PHP-FPM reload skipped (check manually)"
+            sudo systemctl reload php8.1-fpm 2>/dev/null || \
+            sudo systemctl reload php-fpm    2>/dev/null || \
+            pkill -USR2 php-fpm 2>/dev/null || true
 
-            echo " Déploiement réussi"
+            echo ""
+            echo "✅ Déploiement réussi"
+            echo "   APP_URL : $(grep '^APP_URL=' .env | cut -d= -f2)"
+            echo "   Symlink : public/storage → $(readlink public/storage)"
+            echo "   Médias  : https://careasy.cap-epac.bj/storage/ (hardcodé)"
