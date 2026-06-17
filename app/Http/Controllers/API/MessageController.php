@@ -640,8 +640,7 @@ class MessageController extends Controller
      * Upload un fichier sur le disque public local.
      * Retourne le chemin relatif (ex: messages/12/image/uuid.jpg).
      */
-    private function uploadFile($file, int $convId, string $type): string
-    {
+    private function uploadFile($file, int $convId, string $type): string {
         $extension  = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin');
         $folderPath = "messages/{$convId}/{$type}";
         $fileName   = Str::uuid() . '.' . $extension;
@@ -661,13 +660,17 @@ class MessageController extends Controller
 
     /**
      * Retourne l'URL publique complète depuis un chemin relatif.
+     * Hardcodée sur le vrai domaine — indépendant de APP_URL.
+     * ex: messages/3/image/uuid.jpg → https://careasy.cap-epac.bj/api/storage/messages/3/image/uuid.jpg
      */
+    private const STORAGE_BASE_URL = 'https://careasy.cap-epac.bj/api/storage';
+
     private function getFileUrl(?string $filePath): ?string
     {
         if (!$filePath) return null;
-        // Si c'est déjà une URL complète (migration legacy), on la retourne telle quelle
+        // Déjà une URL complète (legacy) → retourner telle quelle
         if (filter_var($filePath, FILTER_VALIDATE_URL)) return $filePath;
-        return Storage::disk('public')->url($filePath);
+        return self::STORAGE_BASE_URL . '/' . ltrim($filePath, '/');
     }
 
     /**
