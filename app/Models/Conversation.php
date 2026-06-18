@@ -15,8 +15,7 @@ class Conversation extends BaseModel {
 
     protected $with = []; // eager-load explicite uniquement quand nécessaire
 
-    public function messages()
-    {
+    public function messages() {
         return $this->hasMany(Message::class)->orderBy('created_at', 'asc');
     }
 

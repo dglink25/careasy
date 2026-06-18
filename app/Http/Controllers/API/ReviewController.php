@@ -10,10 +10,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class ReviewController extends Controller
-{
-    public function store(Request $request, $rendezVousId)
-    {
+class ReviewController extends Controller{
+    public function store(Request $request, $rendezVousId) {
         $user = Auth::user();
 
         $validated = $request->validate([

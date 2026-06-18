@@ -22,8 +22,7 @@ class RendezVousController extends Controller{
         $this->whatsApp = $whatsApp;
     }
 
-    public function getAvailableSlots($serviceId, $date)
-    {
+    public function getAvailableSlots($serviceId, $date)  {
         try {
             $service = Service::with('entreprise')->findOrFail($serviceId);
             if (!$service->entreprise || $service->entreprise->status !== 'validated') {

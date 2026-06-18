@@ -17,8 +17,7 @@ use Kreait\Laravel\Firebase\Facades\Firebase;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification;
 
-class MessageController extends Controller
-{
+class MessageController extends Controller{
     private ?Pusher $pusher = null;
     private bool $pusherEnabled = false;
 
@@ -182,23 +181,12 @@ class MessageController extends Controller
         return response()->json(['success' => true]);
     }
 
-    // =========================================================================
-    //  ENVOI DE MESSAGE (route mobile + route générique)
-    // =========================================================================
 
-    /**
-     * POST /api/conversation/{id}/send-mobile
-     */
-    public function sendMessageMobile(Request $request, int $conversationId): \Illuminate\Http\JsonResponse
-    {
+    public function sendMessageMobile(Request $request, int $conversationId): \Illuminate\Http\JsonResponse {
         return $this->handleSend($request, $conversationId, isMobile: true);
     }
 
-    /**
-     * POST /api/conversation/{id}/send
-     */
-    public function sendMessage(Request $request, int $conversationId): \Illuminate\Http\JsonResponse
-    {
+    public function sendMessage(Request $request, int $conversationId): \Illuminate\Http\JsonResponse {
         return $this->handleSend($request, $conversationId, isMobile: false);
     }
 
@@ -411,33 +399,42 @@ class MessageController extends Controller
         $serviceId = (int) $request->service_id;
         $service   = Service::with('entreprise.prestataire')->find($serviceId);
 
-        if (!$service || !$service->entreprise) return response()->json(['message' => 'Service introuvable'], 404);
+        if (!$service || !$service->entreprise) {
+            return response()->json(['message' => 'Service introuvable'], 404);
+        }
 
         $receiverId = $service->entreprise->prestataire_id;
         if ($userId === $receiverId) {
             return response()->json(['message' => 'Vous ne pouvez pas vous contacter vous-même'], 422);
         }
 
-        $conversation = Conversation::where(function ($q) use ($userId, $receiverId) {
-            $q->where('user_one_id', $userId)->where('user_two_id', $receiverId);
-        })->orWhere(function ($q) use ($userId, $receiverId) {
-            $q->where('user_one_id', $receiverId)->where('user_two_id', $userId);
-        })->first();
-
-        $convData = [
-            'service_id'      => $serviceId,
-            'service_name'    => $service->name,
-            'entreprise_name' => $service->entreprise->name,
-        ];
+        // ──────────────────────────────────────────────────────────────────────
+        // RÈGLE MÉTIER : une conversation = (client, prestataire, service)
+        // Chaque service a son propre fil de discussion. Chercher d'abord
+        // une conversation existante pour ce triplet exact.
+        // ──────────────────────────────────────────────────────────────────────
+        $conversation = Conversation::where('service_id', $serviceId)
+            ->where(function ($q) use ($userId, $receiverId) {
+                $q->where(function ($inner) use ($userId, $receiverId) {
+                    $inner->where('user_one_id', $userId)
+                          ->where('user_two_id', $receiverId);
+                })->orWhere(function ($inner) use ($userId, $receiverId) {
+                    $inner->where('user_one_id', $receiverId)
+                          ->where('user_two_id', $userId);
+                });
+            })
+            ->first();
 
         if (!$conversation) {
-            $conversation = Conversation::create(array_merge([
-                'user_one_id' => $userId,
-                'user_two_id' => $receiverId,
-            ], $convData));
-        } else {
-            $conversation->update($convData);
+            $conversation = Conversation::create([
+                'user_one_id'    => $userId,
+                'user_two_id'    => $receiverId,
+                'service_id'     => $serviceId,
+                'service_name'   => $service->name,
+                'entreprise_name'=> $service->entreprise->name,
+            ]);
         }
+        // Ne jamais écraser le service_id d'une conversation existante
 
         if ($request->filled('message')) {
             return $this->handleSend(
@@ -446,32 +443,45 @@ class MessageController extends Controller
             );
         }
 
-        $conversation->load(['userOne', 'userTwo', 'service']);
+        $conversation->load([
+            'userOne:id,name,email,profile_photo_path,last_seen_at',
+            'userTwo:id,name,email,profile_photo_path,last_seen_at',
+            'service:id,name',
+        ]);
+
         return response()->json($conversation);
     }
 
-    public function myConversations(): \Illuminate\Http\JsonResponse
-    {
+    public function myConversations(): \Illuminate\Http\JsonResponse {
         $userId = Auth::id();
         $user   = User::find($userId);
         $user->update(['last_seen_at' => now()]);
 
         $conversations = Conversation::where(function ($q) use ($userId) {
-            $q->where('user_one_id', $userId)->orWhere('user_two_id', $userId);
-        })
-        ->where('user_one_id', '!=', 1)
-        ->where('user_two_id', '!=', 1)
-        ->with(['latestMessage.sender', 'userOne:id,name,email,profile_photo_path,last_seen_at,fcm_token', 'userTwo:id,name,email,profile_photo_path,last_seen_at,fcm_token'])
-        ->withCount([
-            'messages as unread_count' => function ($q) use ($userId) {
-                $q->where('sender_id', '!=', $userId)->whereNull('read_at');
-            }
-        ])
-        ->latest('updated_at')
-        ->get()
-        ->map(function ($conv) use ($userId) {
-            $conv->other_user = $conv->user_one_id == $userId ? $conv->userTwo : $conv->userOne;
-            return $conv;
+                $q->where('user_one_id', $userId)
+                ->orWhere('user_two_id', $userId);
+            })
+            ->where('user_one_id', '!=', 1)
+            ->where('user_two_id', '!=', 1)
+            ->with([
+                'latestMessage.sender',
+                'userOne:id,name,email,profile_photo_path,last_seen_at,fcm_token',
+                'userTwo:id,name,email,profile_photo_path,last_seen_at,fcm_token'
+            ])
+            ->withCount([
+                'messages as unread_count' => function ($q) use ($userId) {
+                    $q->where('sender_id', '!=', $userId)
+                    ->whereNull('read_at');
+                }
+            ])
+            ->latest('updated_at')
+            ->get()
+            ->map(function ($conv) use ($userId) {
+                $conv->other_user = $conv->user_one_id == $userId
+                    ? $conv->userTwo
+                    : $conv->userOne;
+
+                return $conv;
         });
 
         return response()->json($conversations);
