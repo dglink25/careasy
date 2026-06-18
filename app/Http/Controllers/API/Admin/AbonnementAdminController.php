@@ -60,6 +60,19 @@ class AbonnementAdminController extends Controller{
 
         $abonnements = $query->orderBy('created_at', 'desc')->get();
 
+        $abonnements->each(function ($abonnement) {
+            $nouveauStatut = $abonnement->statut_reel;
+
+            if (
+                $abonnement->statut !== $nouveauStatut &&
+                !in_array($abonnement->statut, ['annule', 'suspendu'])
+            ) {
+                $abonnement->update([
+                    'statut' => $nouveauStatut
+                ]);
+            }
+        });
+
         $data = $abonnements->map(function ($abonnement) {
             return [
                 'id' => $abonnement->id,
@@ -78,7 +91,9 @@ class AbonnementAdminController extends Controller{
                 ] : null,
                 'date_debut' => $abonnement->date_debut?->format('d/m/Y'),
                 'date_fin' => $abonnement->date_fin?->format('d/m/Y'),
-                'statut' => $abonnement->statut,
+                
+                'statut' => $abonnement->statut_reel,
+
                 'statut_libelle' => $abonnement->statut_libelle,
                 'statut_color' => $abonnement->statut_color,
                 'jours_restants' => $abonnement->jours_restants,
@@ -99,11 +114,23 @@ class AbonnementAdminController extends Controller{
 
         // Statistiques
         $stats = [
-            'total' => $abonnements->count(),
-            'actifs' => $abonnements->where('statut', 'actif')->count(),
+        'total' => $abonnements->count(),
+
+            'actifs' => $abonnements->filter(
+                fn ($a) => $a->statut_reel === 'actif'
+            )->count(),
+
             'trial' => $abonnements->where('type', 'trial')->count(),
-            'paid' => $abonnements->where('type', '!=', 'trial')->where('statut', 'actif')->count(),
-            'expire' => $abonnements->whereIn('statut', ['expire', 'expiré'])->count(),
+
+            'paid' => $abonnements->filter(
+                fn ($a) =>
+                    $a->type !== 'trial' &&
+                    $a->statut_reel === 'actif'
+            )->count(),
+
+            'expire' => $abonnements->filter(
+                fn ($a) => $a->statut_reel === 'expire'
+            )->count(),
         ];
 
         return response()->json([
@@ -114,9 +141,6 @@ class AbonnementAdminController extends Controller{
         ]);
     }
 
-    /**
-     * Détails d'un abonnement spécifique
-     */
     public function show(Request $request, $id) {
         $this->ensureAdmin();
 
@@ -158,7 +182,9 @@ class AbonnementAdminController extends Controller{
                 ] : null,
                 'date_debut' => $abonnement->date_debut?->format('d/m/Y H:i'),
                 'date_fin' => $abonnement->date_fin?->format('d/m/Y H:i'),
-                'statut' => $abonnement->statut,
+                
+                'statut' => $abonnement->statut_reel,
+
                 'statut_libelle' => $abonnement->statut_libelle,
                 'jours_restants' => $abonnement->jours_restants,
                 'est_actif' => $abonnement->estActif(),
