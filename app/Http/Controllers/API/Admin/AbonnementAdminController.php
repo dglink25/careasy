@@ -7,8 +7,7 @@ use App\Models\Abonnement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
-class AbonnementAdminController extends Controller
-{
+class AbonnementAdminController extends Controller{
     protected function ensureAdmin()
     {
         $user = Auth::user();
@@ -20,8 +19,7 @@ class AbonnementAdminController extends Controller
     /**
      * Liste tous les abonnements de tous les utilisateurs
      */
-    public function index(Request $request)
-    {
+    public function index(Request $request) {
         $this->ensureAdmin();
 
         $query = Abonnement::with([
@@ -119,8 +117,7 @@ class AbonnementAdminController extends Controller
     /**
      * Détails d'un abonnement spécifique
      */
-    public function show(Request $request, $id)
-    {
+    public function show(Request $request, $id) {
         $this->ensureAdmin();
 
         $abonnement = Abonnement::with([

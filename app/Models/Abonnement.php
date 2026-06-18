@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Abonnement extends Model{
+class Abonnement extends BaseModel {
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
@@ -64,15 +64,6 @@ class Abonnement extends Model{
         return $query->where('user_id', $userId);
     }
 
-    // Méthodes
-    public function estActif() {
-        return $this->statut === 'actif' && $this->date_fin->isFuture();
-    }
-
-    public function estExpire() {
-        return $this->statut === 'actif' && $this->date_fin->isPast();
-    }
-
     public function joursRestants() {
         if (!$this->estActif()) {
             return 0;
@@ -116,5 +107,31 @@ class Abonnement extends Model{
         $random = strtoupper(substr(uniqid(), -6));
         
         return $prefix . $date . $random;
+    }
+
+    public function getStatutReelAttribute() {
+        if (!$this->date_fin) {
+            return 'inconnu';
+        }
+
+        if ($this->statut === 'annule') {
+            return 'annule';
+        }
+
+        if ($this->statut === 'suspendu') {
+            return 'suspendu';
+        }
+
+        return $this->date_fin->isFuture()
+            ? 'actif'
+            : 'expire';
+    }
+
+    public function estActif(){
+        return $this->statut_reel === 'actif';
+    }
+
+    public function estExpire() {
+        return $this->statut_reel === 'expire'; 
     }
 }
