@@ -34,7 +34,7 @@ return [
     | Callback URLs
     |--------------------------------------------------------------------------
     */
-    'callback_url' => env('APP_URL') . 'api/paiements/callback',
+    'callback_url' => env('APP_URL') . 'paiements/callback',
     'return_url' => env('APP_URL') . '/paiement/success',
     'cancel_url' => env('APP_URL') . '/paiement/cancel',
 ];
