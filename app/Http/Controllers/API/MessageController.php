@@ -22,17 +22,11 @@ class MessageController extends Controller
     private ?Pusher $pusher = null;
     private bool $pusherEnabled = false;
 
-    public function __construct()
-    {
+    public function __construct(){
         $this->initPusher();
     }
 
-    // =========================================================================
-    //  PUSHER
-    // =========================================================================
-
-    private function initPusher(): void
-    {
+    private function initPusher(): void {
         try {
             if (env('PUSHER_APP_ID') && env('PUSHER_APP_KEY') && env('PUSHER_APP_SECRET')) {
                 $this->pusher = new Pusher(
@@ -52,8 +46,7 @@ class MessageController extends Controller
         }
     }
 
-    private function triggerPusher(string $channel, string $event, array $data): bool
-    {
+    private function triggerPusher(string $channel, string $event, array $data): bool {
         if (!$this->pusherEnabled || !$this->pusher) return false;
         try {
             $this->pusher->trigger($channel, $event, $data);
@@ -68,8 +61,7 @@ class MessageController extends Controller
     //  FCM
     // =========================================================================
 
-    private function sendFCMNotification(User $recipient, array $payload): void
-    {
+    private function sendFCMNotification(User $recipient, array $payload): void{
         if (empty($recipient->fcm_token)) return;
 
         try {
@@ -94,10 +86,10 @@ class MessageController extends Controller
     private function getNotificationBody(Message $message): string
     {
         return match ($message->type) {
-            'image'    => '📷 Photo',
-            'video'    => '🎥 Vidéo',
-            'vocal'    => '🎤 Message vocal',
-            'document' => '📎 Document',
+            'image'    => 'Photo',
+            'video'    => 'Vidéo',
+            'vocal'    => 'Message vocal',
+            'document' => 'Document',
             default    => mb_strlen($message->content ?? '') > 100
                 ? mb_substr($message->content, 0, 100) . '…'
                 : ($message->content ?? ''),
@@ -210,11 +202,8 @@ class MessageController extends Controller
         return $this->handleSend($request, $conversationId, isMobile: false);
     }
 
-    /**
-     * Logique commune d'envoi de message (texte + médias).
-     */
-    private function handleSend(Request $request, int $conversationId, bool $isMobile = true): \Illuminate\Http\JsonResponse
-    {
+
+    private function handleSend(Request $request, int $conversationId, bool $isMobile = true): \Illuminate\Http\JsonResponse {
         $validator = Validator::make($request->all(), [
             'type'         => 'required|in:text,image,video,vocal,document',
             'content'      => 'nullable|string|max:10000',
@@ -334,12 +323,7 @@ class MessageController extends Controller
         }
     }
 
-    // =========================================================================
-    //  MARQUER LU
-    // =========================================================================
-
-    public function markAsRead(int $conversationId): \Illuminate\Http\JsonResponse
-    {
+    public function markAsRead(int $conversationId): \Illuminate\Http\JsonResponse  {
         $conv = Conversation::find($conversationId);
         if (!$conv) return response()->json(['message' => 'Conversation introuvable'], 404);
 
