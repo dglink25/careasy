@@ -12,6 +12,7 @@ class Paiement extends Model{
         'reference',
         'user_id',
         'plan_id',
+        'entreprise_id',
         'montant',
         'devise',
         'methode_paiement',
@@ -92,4 +93,9 @@ class Paiement extends Model{
         
         return $prefix . $date . $random;
     }
+
+    public function entreprise() {
+        return $this->belongsTo(Entreprise::class);
+    }
+
 }

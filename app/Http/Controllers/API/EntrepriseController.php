@@ -14,19 +14,12 @@ use Illuminate\Support\Facades\Http;
 use Cloudinary\Configuration\Configuration;
 use Cloudinary\Api\Upload\UploadApi;
 
-class EntrepriseController extends Controller
-{
-    public function __construct()
-    {
+class EntrepriseController extends Controller{
+    public function __construct() {
         $this->initCloudinary();
     }
 
-    // =========================================================================
-    // CLOUDINARY
-    // =========================================================================
-
-    private function initCloudinary(): void
-    {
+    private function initCloudinary(): void  {
         Configuration::instance([
             'cloud' => [
                 'cloud_name' => config('cloudinary.cloud.cloud_name'),
@@ -35,14 +28,9 @@ class EntrepriseController extends Controller
             ],
             'url' => ['secure' => true],
         ]);
-
-        Log::info('Cloudinary initialise avec succes', [
-            'cloud_name' => config('cloudinary.cloud.cloud_name'),
-        ]);
     }
 
-    private function uploadToCloudinary($file, string $folder, ?string $subfolder = null): string
-    {
+    private function uploadToCloudinary($file, string $folder, ?string $subfolder = null): string {
         if (!$file || !$file->isValid()) {
             throw new \RuntimeException("Fichier invalide pour le champ {$folder}");
         }

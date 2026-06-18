@@ -15,14 +15,12 @@ class PaiementController extends Controller{
     protected $fedapayService;
     protected $frontendUrl;
 
-    public function __construct(FedaPayService $fedapayService)
-    {
+    public function __construct(FedaPayService $fedapayService)  {
         $this->fedapayService = $fedapayService;
         $this->frontendUrl    = env('FRONTEND_URL', 'https://careasy.cap-epac.bj');
     }
 
-    public function initierPaiement(Request $request, $planId)
-    {
+    public function initierPaiement(Request $request, $planId) {
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
@@ -46,6 +44,7 @@ class PaiementController extends Controller{
                 'reference'        => Paiement::genererReference(),
                 'user_id'          => $user->id,
                 'plan_id'          => $plan->id,
+                'entreprise_id'    => $request->entreprise_id,
                 'montant'          => $plan->price,
                 'devise'           => 'XOF',
                 'methode_paiement' => $request->methode_paiement,
@@ -85,7 +84,8 @@ class PaiementController extends Controller{
                 ],
             ]);
 
-        } catch (\Exception $e) {
+        } 
+        catch (\Exception $e) {
             Log::error('Erreur initiation paiement', [
                 'error'   => $e->getMessage(),
                 'user_id' => $user->id,
@@ -176,13 +176,11 @@ class PaiementController extends Controller{
         return redirect($this->frontendUrl . '/paiement/success?reference=' . $request->get('reference'));
     }
 
-    public function cancel(Request $request)
-    {
+    public function cancel(Request $request)  {
         return redirect($this->frontendUrl . '/paiement/cancel?reference=' . $request->get('reference'));
     }
 
-    public function verifierStatut(Request $request, $reference)
-    {
+    public function verifierStatut(Request $request, $reference) {
         $paiement = Paiement::with(['plan', 'abonnement'])
             ->where('reference', $reference)
             ->first();
@@ -218,8 +216,7 @@ class PaiementController extends Controller{
         ]);
     }
 
-    private function creerAbonnement(Paiement $paiement)
-    {
+    private function creerAbonnement(Paiement $paiement) {
         // Éviter les doublons si le callback est appelé deux fois
         $existing = Abonnement::where('paiement_id', $paiement->id)->first();
         if ($existing) {
@@ -233,6 +230,7 @@ class PaiementController extends Controller{
             'user_id'            => $paiement->user_id,
             'plan_id'            => $plan->id,
             'paiement_id'        => $paiement->id,
+            'entreprise_id'       => $paiement->entreprise_id, 
             'date_debut'         => now(),
             'date_fin'           => now()->addDays($plan->duration_days),
             'statut'             => 'actif',

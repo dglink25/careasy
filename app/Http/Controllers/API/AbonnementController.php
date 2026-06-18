@@ -7,8 +7,7 @@ use App\Models\Abonnement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-class AbonnementController extends Controller
-{
+class AbonnementController extends Controller {
     
     public function index(Request $request){
         $user = $request->user();
@@ -27,7 +26,7 @@ class AbonnementController extends Controller
                     'type' => $abonnement->type ?? 'standard',
                     'entreprise_id' => $abonnement->entreprise_id,
                     'entreprise_name' => $abonnement->entreprise->name ?? null,
-                    'plan' => [
+                    'plan' => $abonnement->plan ? [
                         'id' => $abonnement->plan->id,
                         'name' => $abonnement->plan->name,
                         'code' => $abonnement->plan->code,
@@ -36,8 +35,8 @@ class AbonnementController extends Controller
                         'features_list' => $abonnement->plan->features_list,
                         'max_services' => $abonnement->plan->max_services,
                         'max_employees' => $abonnement->plan->max_employees,
-                        'has_api_access' => $abonnement->plan->has_api_access
-                    ],
+                        'has_api_access' => $abonnement->plan->has_api_access,
+                    ] : null,
                     'date_debut' => $abonnement->date_debut->format('d/m/Y'),
                     'date_fin' => $abonnement->date_fin->format('d/m/Y'),
                     'date_fin_obj' => $abonnement->date_fin,
@@ -226,3 +225,4 @@ class AbonnementController extends Controller
         }
     }
 }
+

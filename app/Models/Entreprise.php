@@ -142,8 +142,7 @@ class Entreprise extends BaseModel {
         return $this->isInTrialPeriod();
     }
 
-    public function isTrialExpired(): bool
-    {
+    public function isTrialExpired(): bool {
         if (!$this->trial_ends_at) {
             return false;
         }
@@ -151,11 +150,8 @@ class Entreprise extends BaseModel {
         return now()->gt($this->trial_ends_at);
     }
 
-    /**
-     * Obtenir le nombre de jours restants dans l'essai
-     */
-    public function getTrialDaysRemainingAttribute(): int
-    {
+ 
+    public function getTrialDaysRemainingAttribute(): int  {
         if (!$this->isInTrialPeriod()) {
             return 0;
         }
@@ -166,8 +162,7 @@ class Entreprise extends BaseModel {
     /**
      * Vérifier si l'entreprise peut ajouter un nouveau service
      */
-    public function canAddService(): bool
-    {
+    public function canAddService(): bool  {
         if (!$this->isInTrialPeriod()) {
             return false;
         }
@@ -221,4 +216,8 @@ class Entreprise extends BaseModel {
             'message' => 'Période d\'essai disponible',
         ];
     }
+    public function paiements() {
+        return $this->hasMany(Paiement::class);
+    }
+
 }
