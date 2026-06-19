@@ -372,7 +372,7 @@ class ServiceController extends Controller{
 
     public function show($id)   {
         $service = Service::with('entreprise', 'domaine')
-                ->where('is_visibility', true)
+                ->whereRaw('"is_visibility" = true')
                 ->whereHas('entreprise', fn($q) =>
                     $q->where('status', 'validated')->visible()
                 )
@@ -879,10 +879,6 @@ class ServiceController extends Controller{
         }
     }
 
-    /**
-     * Correction des booléens PostgreSQL.
-     * Convertit les clés boolean d'un tableau en 't'/'f' pour PostgreSQL.
-     */
     private function pgsqlBools(array $data, array $boolKeys): array
     {
         foreach ($boolKeys as $key) {
