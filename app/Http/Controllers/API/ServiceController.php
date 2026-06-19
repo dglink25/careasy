@@ -325,6 +325,17 @@ class ServiceController extends Controller{
             }
 
             $service = Service::create($data);
+            // Forcer les booléens directement via DB pour PostgreSQL
+            \Illuminate\Support\Facades\DB::table('services')
+                ->where('id', $service->id)
+                ->update($this->pgsqlBools([
+                    'is_price_on_request' => $data['is_price_on_request'],
+                    'has_promo'           => $data['has_promo'],
+                    'is_always_open'      => $data['is_always_open'] ?? false,
+                    'is_open_24h'         => $data['is_open_24h'] ?? false,
+                    'is_visibility'       => $data['is_visibility'],
+                ], ['is_price_on_request', 'has_promo', 'is_always_open', 'is_open_24h', 'is_visibility']));
+            $service->refresh();
             $service->load('entreprise', 'domaine');
 
             return response()->json([
@@ -418,11 +429,22 @@ class ServiceController extends Controller{
             }
         }
 
-        // ── 5. Appliquer la modification ───────────────────────────────────
-        $service->is_visibility = $newVisibility;
-        $service->save();
+        // ── 5. Appliquer la modification via DB direct (bypass PDO bool issue) ──
+        // PDO lie les bool PHP comme integers (0/1) sur pgsql.
+        // DB::update avec CAST::boolean force le bon type.
+        \Illuminate\Support\Facades\DB::update(
+            'UPDATE services SET is_visibility = ?, updated_at = ? WHERE id = ?',
+            [
+                $newVisibility ? 't' : 'f',   // 't'/'f' accepté par PostgreSQL boolean
+                now()->toDateTimeString(),
+                $service->id,
+            ]
+        );
 
-        $message = $newVisibility
+        // Rafraîchir l'objet en mémoire depuis la base
+        $service->refresh();
+
+        $message = $service->is_visibility
             ? 'Service rendu visible — les clients peuvent maintenant le voir'
             : 'Service masqué — les clients ne peuvent plus le voir';
 
@@ -616,6 +638,16 @@ class ServiceController extends Controller{
             $service->fill($data);
             $service->save();
 
+            // Forcer les booléens via DB::table pour bypasser le bug PDO pgsql
+            $boolKeys = ['is_price_on_request', 'has_promo', 'is_always_open', 'is_open_24h', 'is_visibility'];
+            $boolUpdates = array_intersect_key($data, array_flip($boolKeys));
+            if (!empty($boolUpdates)) {
+                \Illuminate\Support\Facades\DB::table('services')
+                    ->where('id', $service->id)
+                    ->update($this->pgsqlBools($boolUpdates, $boolKeys));
+                $service->refresh();
+            }
+
             $service->load('entreprise', 'domaine');
 
             return response()->json([
@@ -771,6 +803,17 @@ class ServiceController extends Controller{
 
             $service->fill($data);
             $service->save();
+
+            // Forcer les booléens via DB::table pour bypasser le bug PDO pgsql
+            $boolKeys = ['is_price_on_request', 'has_promo', 'is_always_open', 'is_open_24h', 'is_visibility'];
+            $boolUpdates = array_intersect_key($data, array_flip($boolKeys));
+            if (!empty($boolUpdates)) {
+                \Illuminate\Support\Facades\DB::table('services')
+                    ->where('id', $service->id)
+                    ->update($this->pgsqlBools($boolUpdates, $boolKeys));
+                $service->refresh();
+            }
+
             $service->load('entreprise', 'domaine');
 
             return response()->json([
@@ -815,6 +858,20 @@ class ServiceController extends Controller{
             Log::error('Erreur suppression service:', ['error' => $e->getMessage()]);
             return response()->json(['message' => 'Erreur interne'], 500);
         }
+    }
+
+    /**
+     * Correction des booléens PostgreSQL.
+     * Convertit les clés boolean d'un tableau en 't'/'f' pour PostgreSQL.
+     */
+    private function pgsqlBools(array $data, array $boolKeys): array
+    {
+        foreach ($boolKeys as $key) {
+            if (array_key_exists($key, $data)) {
+                $data[$key] = $data[$key] ? 't' : 'f';
+            }
+        }
+        return $data;
     }
 
     private function uploadToCloudinary($file, $folder, $subfolder = null) {
