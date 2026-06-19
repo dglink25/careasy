@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\Paiement;
 use App\Models\Abonnement;
+use App\Models\Service;
 use App\Services\FedaPayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -225,16 +226,38 @@ class PaiementController extends Controller{
 
         $plan = $paiement->plan;
 
-        return Abonnement::create([
-            'reference'          => Abonnement::genererReference(),
-            'user_id'            => $paiement->user_id,
-            'plan_id'            => $plan->id,
-            'paiement_id'        => $paiement->id,
-            'entreprise_id'       => $paiement->entreprise_id, 
-            'date_debut'         => now(),
-            'date_fin'           => now()->addDays($plan->duration_days),
-            'statut'             => 'actif',
-            'renouvellement_auto'=> false,
+        $abonnement = Abonnement::create([
+            'reference'           => Abonnement::genererReference(),
+            'user_id'             => $paiement->user_id,
+            'plan_id'             => $plan->id,
+            'paiement_id'         => $paiement->id,
+            'entreprise_id'       => $paiement->entreprise_id,
+            'date_debut'          => now(),
+            'date_fin'            => now()->addDays($plan->duration_days),
+            'statut'              => 'actif',
+            'renouvellement_auto' => false,
         ]);
+
+        if ($paiement->entreprise_id) {
+            try {
+                $updated = Service::where('entreprise_id', $paiement->entreprise_id)
+                    ->where('is_visibility', false)
+                    ->update(['is_visibility' => true]);
+
+                Log::info('Services rendus visibles après paiement', [
+                    'entreprise_id'  => $paiement->entreprise_id,
+                    'abonnement_id'  => $abonnement->id,
+                    'services_count' => $updated,
+                ]);
+            } catch (\Exception $e) {
+                // Non bloquant : l'abonnement est créé, on logue simplement l'erreur
+                Log::error('Erreur activation visibilité services après paiement', [
+                    'entreprise_id' => $paiement->entreprise_id,
+                    'error'         => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $abonnement;
     }
 }

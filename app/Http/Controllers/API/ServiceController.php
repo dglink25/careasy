@@ -12,6 +12,7 @@ use Cloudinary\Configuration\Configuration;
 use Cloudinary\Api\Upload\UploadApi;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use App\Models\Domaine;
+use App\Models\Abonnement;
 
 class ServiceController extends Controller{
     public function __construct(){
@@ -231,6 +232,14 @@ class ServiceController extends Controller{
                 }
             }
 
+            $hasPaidSubscription = Abonnement::where('entreprise_id', $entreprise->id)
+                ->where('statut', 'actif')
+                ->where('date_fin', '>', now())
+                ->where(function ($q) {
+                    $q->where('type', '!=', 'trial')->orWhereNull('type');
+                })
+                ->exists();
+
             $data = [
                 'entreprise_id' => $entreprise->id,
                 'prestataire_id' => $user->id,
@@ -245,6 +254,7 @@ class ServiceController extends Controller{
                 'descriptions' => $request->descriptions ?? '',
                 'medias' => $medias,
                 'is_always_open' => $request->boolean('is_always_open', false),
+                'is_visibility' => $hasPaidSubscription, // true si abonnement payant, false sinon
             ];
 
             if ($data['is_price_on_request']) {
