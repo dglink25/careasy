@@ -344,7 +344,9 @@ class ServiceController extends Controller{
     public function toggleVisibility(Request $request, $id)  {
         $user = Auth::user();
 
-        $service = Service::where('id', $id)
+        // ── 1. Vérifier que le service appartient bien au prestataire ──────
+        $service = Service::with('entreprise')
+            ->where('id', $id)
             ->where('prestataire_id', $user->id)
             ->first();
 
@@ -355,13 +357,54 @@ class ServiceController extends Controller{
             ], 404);
         }
 
-        // Déterminer la nouvelle valeur :
+        // ── 2. Récupérer l'entreprise associée ─────────────────────────────
+        $entreprise = $service->entreprise;
+
+        if (!$entreprise) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible de retrouver l\'entreprise associée à ce service',
+            ], 422);
+        }
+
+        // ── 3. Déterminer la nouvelle valeur souhaitée ─────────────────────
         //  • Si 'is_visibility' est fourni dans le body → utiliser cette valeur
         //  • Sinon → inverser l'état actuel (toggle pur)
         $newVisibility = $request->has('is_visibility')
             ? $request->boolean('is_visibility')
             : !$service->is_visibility;
 
+        // ── 4. Vérifier l'accès uniquement pour rendre visible ─────────────
+        // Le masquage (visible=false) est toujours autorisé.
+        // La visibilité (visible=true) nécessite essai actif OU abonnement actif.
+        if ($newVisibility) {
+            $hasTrialActif = $entreprise->isInTrialPeriod();
+
+            $hasAbonnementActif = \App\Models\Abonnement::where('entreprise_id', $entreprise->id)
+                ->where('statut', 'actif')
+                ->where('date_fin', '>', now())
+                ->exists();
+
+            if (!$hasTrialActif && !$hasAbonnementActif) {
+                $raison = $entreprise->isTrialExpired()
+                    ? 'Votre période d\'essai gratuit a expiré'
+                    : ($entreprise->has_used_trial
+                        ? 'Votre période d\'essai a déjà été utilisée'
+                        : 'Votre entreprise n\'a pas d\'abonnement actif');
+
+                return response()->json([
+                    'success'         => false,
+                    'code'            => 'NO_ACTIVE_SUBSCRIPTION',
+                    'message'         => "$raison. Souscrivez à un plan pour rendre vos services visibles.",
+                    'entreprise_id'   => $entreprise->id,
+                    'entreprise_name' => $entreprise->name,
+                    'has_used_trial'  => (bool) $entreprise->has_used_trial,
+                    'trial_expired'   => $entreprise->isTrialExpired(),
+                ], 403);
+            }
+        }
+
+        // ── 5. Appliquer la modification ───────────────────────────────────
         $service->is_visibility = $newVisibility;
         $service->save();
 
