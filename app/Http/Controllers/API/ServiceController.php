@@ -372,27 +372,72 @@ class ServiceController extends Controller{
             return response()->json(['message' => 'Service introuvable ou non autorisé'], 404);
         }
 
-        $validator = Validator::make($request->all(), [
-            'name'          => 'sometimes|string|max:255',
-            'price'         => 'nullable|numeric',
-            'price_promo'   => 'nullable|numeric|lt:price',
-            'is_price_on_request' => 'boolean',
-            'has_promo'     => 'boolean',
-            'promo_start_date' => 'nullable|date',
-            'promo_end_date'   => 'nullable|date|after:promo_start_date',
-            'descriptions'  => 'nullable|string',
-            'is_always_open' => 'nullable|boolean',
-            'is_visibility'  => 'nullable|boolean',
-            'schedule'      => 'nullable|array',
-            'schedule.*.is_open' => 'boolean',
-            'schedule.*.start' => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i',
-            'schedule.*.end'   => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i|after:schedule.*.start',
-            'medias.*'      => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
-            'deleted_medias.*' => 'nullable|string'
-        ]);
+
+        $validator = Validator::make(
+            $request->all(),
+            [
+                'name'          => 'sometimes|string|max:255',
+                'price'         => 'nullable|numeric',
+                'price_promo'   => 'nullable|numeric|lt:price',
+                'is_price_on_request' => 'boolean',
+                'has_promo'     => 'boolean',
+                'promo_start_date' => 'nullable|date',
+                'promo_end_date'   => 'nullable|date|after:promo_start_date',
+                'descriptions'  => 'nullable|string',
+             
+                'is_visibility'  => 'nullable|boolean',
+
+                'schedule'      => 'nullable|array',
+                'schedule.*.is_open' => 'boolean',
+                'schedule.*.start' => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i',
+                'schedule.*.end'   => 'required_if:schedule.*.is_open,true|nullable|date_format:H:i|after:schedule.*.start',
+
+                'medias.*'      => 'nullable|file|mimes:jpg,jpeg,png,webp|max:2048',
+                'deleted_medias.*' => 'nullable|string'
+            ],
+            [
+                'name.string' => 'Le nom doit être une chaîne de caractères.',
+                'name.max' => 'Le nom ne doit pas dépasser 255 caractères.',
+
+                'price.numeric' => 'Le prix doit être un nombre.',
+
+                'price_promo.numeric' => 'Le prix promotionnel doit être un nombre.',
+                'price_promo.lt' => 'Le prix promotionnel doit être inférieur au prix normal.',
+
+                'promo_start_date.date' => 'La date de début de promotion est invalide.',
+                'promo_end_date.date' => 'La date de fin de promotion est invalide.',
+                'promo_end_date.after' => 'La date de fin doit être postérieure à la date de début.',
+
+                'schedule.array' => 'Les horaires doivent être envoyés sous forme de tableau.',
+
+                'schedule.*.start.required_if' => 'L\'heure d\'ouverture est obligatoire lorsque le jour est ouvert.',
+                'schedule.*.start.date_format' => 'L\'heure d\'ouverture doit être au format HH:MM.',
+
+                'schedule.*.end.required_if' => 'L\'heure de fermeture est obligatoire lorsque le jour est ouvert.',
+                'schedule.*.end.date_format' => 'L\'heure de fermeture doit être au format HH:MM.',
+                'schedule.*.end.after' => 'L\'heure de fermeture doit être après l\'heure d\'ouverture.',
+
+                'medias.*.mimes' => 'Les images doivent être au format jpg, jpeg, png ou webp.',
+                'medias.*.max' => 'Chaque image ne doit pas dépasser 2 Mo.',
+            ]
+        );
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+
+            $errors = [];
+
+            foreach ($validator->errors()->toArray() as $field => $messages) {
+                $errors[] = [
+                    'field' => $field,
+                    'message' => $messages[0]
+                ];
+            }
+
+            return response()->json([
+                'message' => 'Validation échouée',
+                'errors' => $errors,
+                'first_error' => $validator->errors()->first()
+            ], 422);
         }
 
         try {
