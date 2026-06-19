@@ -13,17 +13,48 @@ abstract class BaseModel extends Model
      *
      * Pourquoi : Laravel est configuré sur Africa/Porto-Novo (UTC+1).
      * Sans cette méthode, les dates sont émises en JSON sans suffixe timezone
-     * (ex: "2026-06-18 20:40:05"), ce qui est ambigu. Le client mobile
-     * interprète alors la chaîne comme UTC et ajoute 1h de décalage.
-     *
-     * En convertissant vers UTC et en ajoutant le suffixe Z, tous les clients
-     * (mobile, web) peuvent faire toLocal() de façon fiable quel que soit
-     * leur fuseau horaire.
+     * ce qui cause des décalages horaires côté mobile.
      */
     protected function serializeDate(DateTimeInterface $date): string
     {
         return Carbon::instance($date)
             ->utc()
             ->format('Y-m-d\TH:i:s\Z');
+    }
+
+    /**
+     * Corriger le binding PDO des booléens pour PostgreSQL.
+     *
+     * Problème : PDO avec le driver pgsql lie les bool PHP en tant qu'integers
+     * (PDO::PARAM_INT), ce qui cause :
+     *   "column X is of type boolean but expression is of type integer"
+     *
+     * Solution : intercepter les attributs avant l'envoi en base et convertir
+     * les colonnes déclarées comme 'boolean' en string 'true'/'false' que
+     * PostgreSQL accepte nativement pour ses colonnes boolean.
+     *
+     * Cette méthode est appelée via le hook `saving` enregistré dans boot().
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::saving(function (self $model) {
+            $casts = $model->getCasts();
+
+            foreach ($model->getAttributes() as $key => $value) {
+                if (
+                    isset($casts[$key]) &&
+                    in_array($casts[$key], ['boolean', 'bool'], true) &&
+                    $value !== null
+                ) {
+                    // Forcer la valeur en string 'true'/'false'
+                    // PDO ne cast pas ces strings en int → PostgreSQL les accepte
+                    $model->attributes[$key] = filter_var($value, FILTER_VALIDATE_BOOLEAN)
+                        ? 'true'
+                        : 'false';
+                }
+            }
+        });
     }
 }
