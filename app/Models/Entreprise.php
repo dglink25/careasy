@@ -72,7 +72,7 @@ class Entreprise extends BaseModel {
 
     public function service() {
         return $this->hasMany(Service::class)
-                    ->where('is_visibility', true);
+                    ->whereRaw('"is_visibility" = true');
     }
 
     public function abonnements() {
@@ -98,18 +98,20 @@ class Entreprise extends BaseModel {
     }
 
     public function scopeVisible($query) {
-        return $query->where(function ($q) {
+        $now = now();
+        return $query->where(function ($q) use ($now) {
             // Essai gratuit en cours
-            $q->where(function ($sub) {
+            $q->where(function ($sub) use ($now) {
                 $sub->whereNotNull('trial_starts_at')
                     ->whereNotNull('trial_ends_at')
-                    ->where('trial_starts_at', '<=', now())
-                    ->where('trial_ends_at', '>', now());
+                    ->where('trial_starts_at', '<=', $now)
+                    ->where('trial_ends_at', '>', $now);
             })
             // OU abonnement actif
-            ->orWhereHas('abonnements', function ($sub) {
+            ->orWhereHas('abonnements', function ($sub) use ($now) {
                 $sub->where('statut', 'actif')
-                    ->where('date_fin', '>', now());
+                    ->where('date_fin', '>', $now)
+                    ->whereNull('deleted_at');
             });
         });
     }

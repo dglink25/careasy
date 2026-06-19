@@ -44,9 +44,9 @@ class ServiceController extends Controller{
 
     public function index(){
         $services = Service::with(['entreprise', 'domaine', 'reviews'])
-            ->where('is_visibility', true) 
-            ->whereHas('entreprise', fn($q) => 
-                $q->where('status', 'validated')->visible() 
+            ->whereRaw('"is_visibility" = true')
+            ->whereHas('entreprise', fn($q) =>
+                $q->where('status', 'validated')->visible()
             )
             ->orderBy('created_at', 'desc')
             ->get()
@@ -117,7 +117,7 @@ class ServiceController extends Controller{
                     $q->where('name', 'LIKE', "%{$query}%")
                     ->orWhere('descriptions', 'LIKE', "%{$query}%");
                 })
-                ->where('is_visibility', true) 
+                ->whereRaw('"is_visibility" = true')
                 ->whereHas('entreprise', function($q) {
                     $q->where('status', 'validated')->visible();
                 })
