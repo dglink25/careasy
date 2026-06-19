@@ -241,20 +241,20 @@ class ServiceController extends Controller{
                 ->exists();
 
             $data = [
-                'entreprise_id' => $entreprise->id,
-                'prestataire_id' => $user->id,
-                'domaine_id' => $request->domaine_id,
-                'name' => $request->name,
-                'price' => $request->price,
-                'price_promo' => $request->price_promo,
-                'is_price_on_request' => $request->boolean('is_price_on_request', false),
-                'has_promo' => $request->boolean('has_promo', false),
-                'promo_start_date' => $request->promo_start_date,
-                'promo_end_date' => $request->promo_end_date,
-                'descriptions' => $request->descriptions ?? '',
-                'medias' => $medias,
-                'is_always_open' => $request->boolean('is_always_open', false),
-                'is_visibility' => $hasPaidSubscription, // true si abonnement payant, false sinon
+                'entreprise_id'       => (int) $entreprise->id,
+                'prestataire_id'      => (int) $user->id,
+                'domaine_id'          => (int) $request->domaine_id,
+                'name'                => $request->name,
+                'price'               => $request->price,
+                'price_promo'         => $request->price_promo,
+                'is_price_on_request' => (bool) $request->boolean('is_price_on_request', false),
+                'has_promo'           => (bool) $request->boolean('has_promo', false),
+                'promo_start_date'    => $request->promo_start_date,
+                'promo_end_date'      => $request->promo_end_date,
+                'descriptions'        => $request->descriptions ?? '',
+                'medias'              => $medias,
+                'is_always_open'      => (bool) $request->boolean('is_always_open', false),
+                'is_visibility'       => (bool) $hasPaidSubscription,
             ];
 
             if ($data['is_price_on_request']) {
@@ -278,32 +278,46 @@ class ServiceController extends Controller{
             // Gestion des horaires
             if ($request->boolean('is_always_open')) {
                 $data['is_open_24h'] = true;
-                $data['schedule'] = null;
-                $data['start_time'] = null;
-                $data['end_time'] = null;
-            } 
+                $data['is_always_open'] = true;
+                $data['schedule']    = null;
+                $data['start_time']  = null;
+                $data['end_time']    = null;
+            }
             else if ($request->has('schedule')) {
-                $data['schedule'] = $request->schedule;
+                // Normaliser les is_open du schedule : "0"/"1"/0/1/"true"/"false" → bool PHP
+                $rawSchedule      = $request->schedule;
+                $normalizedSchedule = [];
+                foreach ($rawSchedule as $day => $dayData) {
+                    $isOpen = filter_var($dayData['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    $normalizedSchedule[$day] = [
+                        'is_open' => $isOpen,
+                        'start'   => $isOpen ? ($dayData['start'] ?? null) : null,
+                        'end'     => $isOpen ? ($dayData['end']   ?? null) : null,
+                    ];
+                }
+                $data['schedule']    = $normalizedSchedule;
                 $data['is_open_24h'] = false;
-                
-                $firstOpenDay = collect($request->schedule)->firstWhere('is_open', true);
+                $data['is_always_open'] = false;
+
+                $firstOpenDay = collect($normalizedSchedule)->firstWhere('is_open', true);
                 if ($firstOpenDay) {
                     $data['start_time'] = $firstOpenDay['start'];
-                    $data['end_time'] = $firstOpenDay['end'];
+                    $data['end_time']   = $firstOpenDay['end'];
                 }
             }
             else {
-                $data['is_open_24h'] = $request->boolean('is_open_24h', false);
-                $data['start_time'] = $request->start_time;
-                $data['end_time'] = $request->end_time;
-                
+                $data['is_open_24h']    = $request->boolean('is_open_24h', false);
+                $data['is_always_open'] = false;
+                $data['start_time']     = $request->start_time;
+                $data['end_time']       = $request->end_time;
+
                 if (!$data['is_open_24h'] && $request->start_time && $request->end_time) {
                     $schedule = [];
                     foreach (Service::DAYS as $day => $label) {
                         $schedule[$day] = [
                             'is_open' => true,
-                            'start' => $request->start_time,
-                            'end' => $request->end_time
+                            'start'   => $request->start_time,
+                            'end'     => $request->end_time,
                         ];
                     }
                     $data['schedule'] = $schedule;
@@ -578,13 +592,24 @@ class ServiceController extends Controller{
             }
 
             if ($request->has('schedule') && !$request->boolean('is_always_open')) {
-                $data['schedule'] = $request->schedule;
+                // Normaliser les is_open du schedule : "0"/"1"/0/1 → bool PHP
+                $rawSchedule        = $request->schedule;
+                $normalizedSchedule = [];
+                foreach ($rawSchedule as $day => $dayData) {
+                    $isOpen = filter_var($dayData['is_open'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    $normalizedSchedule[$day] = [
+                        'is_open' => $isOpen,
+                        'start'   => $isOpen ? ($dayData['start'] ?? null) : null,
+                        'end'     => $isOpen ? ($dayData['end']   ?? null) : null,
+                    ];
+                }
+                $data['schedule']    = $normalizedSchedule;
                 $data['is_open_24h'] = false;
-                                
-                $firstOpenDay = collect($request->schedule)->firstWhere('is_open', true);
+
+                $firstOpenDay = collect($normalizedSchedule)->firstWhere('is_open', true);
                 if ($firstOpenDay) {
                     $data['start_time'] = $firstOpenDay['start'];
-                    $data['end_time'] = $firstOpenDay['end'];
+                    $data['end_time']   = $firstOpenDay['end'];
                 }
             }
 
