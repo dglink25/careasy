@@ -33,7 +33,7 @@ class ServiceController extends Controller{
 
         $services = Service::with(['entreprise', 'domaine'])
             ->where('prestataire_id', $user->id)
-            ->orderBy('created_at', 'desc')
+            ->orderBy('updated_at', 'desc')
             ->get()
             ->map(function ($service) {
                 return $this->formatServiceResponse($service);
@@ -43,12 +43,31 @@ class ServiceController extends Controller{
     }
 
     public function index(){
+        $now = now();
+
+        // Sous-requête : abonnement actif payant (plan_id NOT NULL) avec le prix du plan
+        $abonnementSub = \App\Models\Abonnement::select([
+                'abonnements.entreprise_id',
+                'plans.price as plan_price',
+            ])
+            ->leftJoin('plans', 'abonnements.plan_id', '=', 'plans.id')
+            ->where('abonnements.statut', 'actif')
+            ->where('abonnements.date_fin', '>', $now)
+            ->whereNull('abonnements.deleted_at')
+            ->whereNotNull('abonnements.plan_id'); // exclut les essais gratuits
+
         $services = Service::with(['entreprise', 'domaine', 'reviews'])
             ->whereRaw('"is_visibility" = true')
             ->whereHas('entreprise', fn($q) =>
                 $q->where('status', 'validated')->visible()
             )
-            ->orderBy('created_at', 'desc')
+            ->leftJoinSub($abonnementSub, 'abo_payant', function ($join) {
+                $join->on('services.entreprise_id', '=', 'abo_payant.entreprise_id');
+            })
+            ->orderByRaw('CASE WHEN abo_payant.entreprise_id IS NOT NULL THEN 0 ELSE 1 END') // payant avant gratuit
+            ->orderByRaw('COALESCE(abo_payant.plan_price, 0) DESC')                          // plus cher en premier
+            ->orderBy('services.updated_at', 'desc')                                          // puis plus récent
+            ->select('services.*')
             ->get()
             ->map(fn($service) => $this->formatServiceResponse($service));
 
