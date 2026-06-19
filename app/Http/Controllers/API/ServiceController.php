@@ -341,24 +341,41 @@ class ServiceController extends Controller{
         return response()->json($this->formatServiceResponse($service));
     }
 
-    public function toggleVisibility(Request $request, $id) {
-            $user = Auth::user();
-            
-            $service = Service::where('id', $id)
-                ->where('prestataire_id', $user->id)
-                ->first();
-                
-            if (!$service) {
-                return response()->json(['message' => 'Service non trouvé'], 404);
-            }
-            
-            $service->is_visibility = $request->boolean('is_visibility', !$service->is_visibility);
-            $service->save();
-            
+    public function toggleVisibility(Request $request, $id)  {
+        $user = Auth::user();
+
+        $service = Service::where('id', $id)
+            ->where('prestataire_id', $user->id)
+            ->first();
+
+        if (!$service) {
             return response()->json([
-                'message' => 'Visibilité mise à jour',
-                'is_visibility' => $service->is_visibility
-            ]);
+                'success' => false,
+                'message' => 'Service introuvable ou accès non autorisé',
+            ], 404);
+        }
+
+        // Déterminer la nouvelle valeur :
+        //  • Si 'is_visibility' est fourni dans le body → utiliser cette valeur
+        //  • Sinon → inverser l'état actuel (toggle pur)
+        $newVisibility = $request->has('is_visibility')
+            ? $request->boolean('is_visibility')
+            : !$service->is_visibility;
+
+        $service->is_visibility = $newVisibility;
+        $service->save();
+
+        $message = $newVisibility
+            ? 'Service rendu visible — les clients peuvent maintenant le voir'
+            : 'Service masqué — les clients ne peuvent plus le voir';
+
+        return response()->json([
+            'success'       => true,
+            'is_visibility' => $service->is_visibility,
+            'message'       => $message,
+            'service_id'    => $service->id,
+            'service_name'  => $service->name,
+        ]);
     }
 
     public function update(Request $request, $id){
