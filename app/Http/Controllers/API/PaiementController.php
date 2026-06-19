@@ -32,7 +32,7 @@ class PaiementController extends Controller{
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
         }
 
-        $plan = Plan::where('id', $planId)->where('is_active', true)->first();
+        $plan = Plan::active()->where('id', $planId)->first();
 
         if (!$plan) {
             return response()->json(['success' => false, 'message' => 'Plan non trouvé ou inactif'], 404);

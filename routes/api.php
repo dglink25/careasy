@@ -153,6 +153,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/abonnements',                     [AbonnementController::class, 'index']);
     Route::get('/abonnements/actif',               [AbonnementController::class, 'actif']);
     Route::get('/abonnements/{id}',                [AbonnementController::class, 'show']);
+     Route::post('/abonnements/{id}/annuler',     [AbonnementController::class, 'annuler']);
 
     // ── Domaines & Recherche ──────────────────────────────────────────────
     Route::get('/domaines', [ServiceController::class, 'domaines']);

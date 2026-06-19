@@ -59,24 +59,23 @@ class Plan extends Model
     }
 
     // Scopes
-    public function scopeActive($query)
-    {
-        return $query->where('is_active', true);
+    public function scopeActive($query) {
+        // Utiliser whereRaw avec cast explicite pour compatibilité PostgreSQL
+        // where('is_active', true) envoie parfois `= 1` (integer) sur certains
+        // drivers pgsql, ce qui lève "operator does not exist: boolean = integer"
+        return $query->whereRaw('"is_active" = TRUE');
     }
 
-    public function scopeOrdered($query)
-    {
+    public function scopeOrdered($query){
         return $query->orderBy('sort_order');
     }
 
     // Accesseurs
-    public function getFormattedPriceAttribute()
-    {
+    public function getFormattedPriceAttribute()  {
         return number_format($this->price, 0, ',', ' ') . ' F CFA';
     }
 
-    public function getDurationTextAttribute()
-    {
+    public function getDurationTextAttribute() {
         if ($this->duration_days < 30) {
             return $this->duration_days . ' jour' . ($this->duration_days > 1 ? 's' : '');
         } elseif ($this->duration_days == 30) {

@@ -12,10 +12,9 @@ class PlanController extends Controller
     /**
      * Afficher tous les plans actifs
      */
-    public function index()
-    {
+    public function index() {
         try {
-            $plans = Plan::where('is_active', true)
+            $plans = Plan::active()
                 ->orderBy('sort_order')
                 ->get();
             
@@ -36,7 +35,7 @@ class PlanController extends Controller
 
     public function show($id) {
         try {
-            $plan = Plan::where('is_active', true)
+            $plan = Plan::active()
                 ->where('id', $id)
                 ->first();
             
@@ -67,7 +66,7 @@ class PlanController extends Controller
      */
     public function compare() {
         try {
-            $plans = Plan::where('is_active', true)
+            $plans = Plan::active()
                 ->orderBy('sort_order')
                 ->get();
             
