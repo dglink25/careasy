@@ -15,12 +15,12 @@ use App\Models\Domaine;
 use App\Models\Abonnement;
 
 class ServiceController extends Controller{
-    public function __construct(){
+    public function __construct() {
         Configuration::instance([
             'cloud' => [
-                'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
-                'api_key'    => env('CLOUDINARY_API_KEY'),
-                'api_secret' => env('CLOUDINARY_API_SECRET'),
+                'cloud_name' => env('CLOUDINARY_CLOUD_NAME') ?: 'dsumeoiga',
+                'api_key'    => env('CLOUDINARY_API_KEY') ?: '571431578845174',
+                'api_secret' => env('CLOUDINARY_API_SECRET') ?: 'JUkkERciRqqYAset1e3XBuCuzuE',
             ],
             'url' => [
                 'secure' => true,
