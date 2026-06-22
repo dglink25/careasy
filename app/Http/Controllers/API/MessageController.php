@@ -27,18 +27,26 @@ class MessageController extends Controller{
 
     private function initPusher(): void {
         try {
-            if (env('PUSHER_APP_ID') && env('PUSHER_APP_KEY') && env('PUSHER_APP_SECRET')) {
+            $appId  = config('broadcasting.connections.pusher.app_id');
+            $key    = config('broadcasting.connections.pusher.key');
+            $secret = config('broadcasting.connections.pusher.secret');
+            $cluster = config('broadcasting.connections.pusher.options.cluster', 'eu');
+
+            if ($appId && $key && $secret) {
                 $this->pusher = new Pusher(
-                    env('PUSHER_APP_KEY'),
-                    env('PUSHER_APP_SECRET'),
-                    env('PUSHER_APP_ID'),
+                    $key,
+                    $secret,
+                    $appId,
                     [
-                        'cluster' => env('PUSHER_APP_CLUSTER', 'eu'),
+                        'cluster' => $cluster,
                         'useTLS'  => true,
                         'timeout' => 30,
                     ]
                 );
                 $this->pusherEnabled = true;
+            } 
+            else {
+                Log::warning('Pusher: credentials manquants dans config/broadcasting.php');
             }
         } catch (\Exception $e) {
             Log::error('Pusher non disponible: ' . $e->getMessage());
