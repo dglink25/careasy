@@ -541,11 +541,13 @@ class MessageController extends Controller{
             ->update(['read_at' => now()]);
 
         return response()->json([
-            'id'         => $conv->id,
-            'messages'   => $messages,
-            'other_user' => $otherUser,
-            'service'    => $conv->service,
-            'has_more'   => $messages->count() >= $limit,
+            'id'              => $conv->id,
+            'messages'        => $messages,
+            'other_user'      => $otherUser,
+            'service'         => $conv->service,
+            'service_name'    => $conv->service_name,
+            'entreprise_name' => $conv->entreprise_name,
+            'has_more'        => $messages->count() >= $limit,
         ]);
     }
 
