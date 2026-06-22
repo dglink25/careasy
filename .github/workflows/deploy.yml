@@ -17,9 +17,14 @@ jobs:
           script: |
             set -e
             cd /var/www/careasy
-
+            
+            # ── 1. Code ───────────────────────────────────────────────
             git fetch origin main
             git reset --hard origin/main
+
+            # ── 2. Réinitialisation du .env ───────────────────────
+            rm -f .env
+            cp .env.example .env
 
             # ── 3. Dépendances ─────────────────────────────────────────
             rm -rf vendor/
