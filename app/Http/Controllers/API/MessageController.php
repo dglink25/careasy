@@ -264,7 +264,10 @@ class MessageController extends Controller{
             // Construire la réponse JSON
             $messageData             = $message->toArray();
             $messageData['file_url'] = $fileUrl ?? $message->file_url;
-            $messageData['is_me']    = true;
+            // is_me est calculé côté client selon sender_id — ne pas l'inclure dans Pusher
+            // (sinon le récepteur croit que c'est son propre message)
+            $messageDataForHttp          = $messageData;
+            $messageDataForHttp['is_me'] = true;  // uniquement pour la réponse HTTP à l'émetteur
 
             // ── Notification Pusher + FCM ───────────────────────────────
             $receiverId = $conv->user_one_id === $userId
@@ -307,7 +310,7 @@ class MessageController extends Controller{
                 }
             }
 
-            return response()->json($messageData, 201);
+            return response()->json($messageDataForHttp, 201);
 
         } catch (\Exception $e) {
             // Nettoyage si le fichier a été uploadé mais le message non sauvegardé
