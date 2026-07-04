@@ -14,8 +14,7 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\API\AiServiceController;
 
 
-class CarAIController extends Controller
-{
+class CarAIController extends Controller{
     /**
      * URL du micro-service Python CarAI.
      * Configurable via CARAI_SERVICE_URL dans .env
@@ -24,7 +23,7 @@ class CarAIController extends Controller
 
     public function __construct()
     {
-        $this->caraiUrl = env('CARAI_SERVICE_URL', 'https://careasyaiservice.onrender.com');
+        $this->caraiUrl = env('CARAI_SERVICE_URL', 'https://careasy.cap-epac.bj/ai-service');
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -172,6 +171,7 @@ class CarAIController extends Controller
         }
 
         $limit    = (int) $request->input('limit', 30);
+        $userId   = $user->id;
         $messages = Message::where('conversation_id', $conversationId)
             ->orderByDesc('created_at')
             ->limit($limit)
@@ -180,7 +180,8 @@ class CarAIController extends Controller
             ->values()
             ->map(fn($m) => [
                 'id'          => $m->id,
-                'role'        => $m->sender_id ? 'user' : 'assistant',
+                // L'assistant a sender_id = 1 (bot) ou null, l'utilisateur a son propre ID
+                'role'        => ($m->sender_id === $userId) ? 'user' : 'assistant',
                 'content'     => $m->content,
                 'ai_metadata' => $m->ai_metadata,
                 'created_at'  => $m->created_at->toIso8601String(),
