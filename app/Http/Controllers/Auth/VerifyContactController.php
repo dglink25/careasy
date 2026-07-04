@@ -103,15 +103,24 @@ class VerifyContactController extends Controller
         try {
             $otp = PasswordResetOtp::generateFor($identifier, $type);
             $code = $otp->code;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('[VerifyContact] Erreur sauvegarde OTP', [
                 'error'      => $e->getMessage(),
+                'trace'      => substr($e->getTraceAsString(), 0, 500),
+                'file'       => $e->getFile() . ':' . $e->getLine(),
                 'identifier' => $this->redact($identifier),
+                'type'       => $type,
+                'db_driver'  => config('database.default'),
             ]);
+
+            // En dev : retourner le vrai message d'erreur pour debug
+            $message = app()->isLocal()
+                ? 'Erreur DB : ' . $e->getMessage()
+                : 'Erreur serveur lors de la génération du code. Réessayez.';
 
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur serveur lors de la génération du code. Réessayez.',
+                'message' => $message,
                 'code'    => 'SERVER_ERROR',
             ], 500);
         }
