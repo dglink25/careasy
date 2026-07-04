@@ -71,13 +71,6 @@ class EntrepriseController extends Controller{
         ]);
     }
 
-    public function index() {
-        return Entreprise::with(['domaines', 'services' => fn($q) => $q->where('is_visibility', true)])
-            ->where('status', 'validated')
-            ->visible()
-            ->get();
-    }
-
     public function mine() {
         $user = Auth::user();
 
@@ -117,6 +110,13 @@ class EntrepriseController extends Controller{
                 ->with('domaines', 'services')
                 ->get()
         );
+    }
+
+    public function index() {
+        return Entreprise::with(['domaines', 'service'])  // uses the pre-filtered `service()` relation
+            ->where('status', 'validated')
+            ->visible()
+            ->get();
     }
 
     public function search(Request $request) {

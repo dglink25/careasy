@@ -65,8 +65,7 @@ class Entreprise extends BaseModel {
         return $this->belongsToMany(Domaine::class, 'entreprise_domaine');
     }
 
-    public function services()
-    {
+    public function services() {
         return $this->hasMany(Service::class);
     }
 
