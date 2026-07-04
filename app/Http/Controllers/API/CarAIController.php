@@ -21,8 +21,7 @@ class CarAIController extends Controller{
      */
     private string $caraiUrl;
 
-    public function __construct()
-    {
+    public function __construct()  {
         $this->caraiUrl = env('CARAI_SERVICE_URL', 'https://careasy.cap-epac.bj/ai-service');
     }
 
