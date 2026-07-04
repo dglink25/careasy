@@ -99,24 +99,10 @@ class VerifyContactController extends Controller
             }
         }
 
-        // ── Générer le code OTP ───────────────────────────────────────────────
-        $code      = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $expiresAt = now()->addMinutes(PasswordResetOtp::TTL_MINUTES)->toDateTimeString();
-        $now       = now()->toDateTimeString();
-
-        // ── Supprimer les anciens OTP pour cet identifiant puis insérer ────────
+        // ── Générer le code OTP via le modèle (gère les types correctement) ────
         try {
-            DB::statement(
-                'DELETE FROM password_reset_otps WHERE identifier = ? AND identifier_type = ?',
-                [$identifier, $type]
-            );
-
-            DB::statement(
-                'INSERT INTO password_reset_otps
-                    (identifier, identifier_type, code, used, expires_at, attempts, created_at, updated_at, verify_token, verify_token_expires_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [$identifier, $type, $code, false, $expiresAt, 0, $now, $now, null, null]
-            );
+            $otp = PasswordResetOtp::generateFor($identifier, $type);
+            $code = $otp->code;
         } catch (\Exception $e) {
             Log::error('[VerifyContact] Erreur sauvegarde OTP', [
                 'error'      => $e->getMessage(),
