@@ -153,6 +153,7 @@ class RendezVousController extends Controller{
         if ($rendezVous->prestataire_id !== $user->id) {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
+        
         if (!$rendezVous->isPending()) {
             return response()->json(['message' => 'Ce rendez-vous ne peut pas être confirmé'], 422);
         }

@@ -72,9 +72,9 @@ class EntrepriseController extends Controller{
     }
 
     public function index() {
-        return Entreprise::with('domaines', 'service')
+        return Entreprise::with(['domaines', 'services' => fn($q) => $q->where('is_visibility', true)])
             ->where('status', 'validated')
-            ->visible() 
+            ->visible()
             ->get();
     }
 
@@ -270,8 +270,7 @@ class EntrepriseController extends Controller{
     }
     
 
-    public function completeProfile(Request $request, $id)
-    {
+    public function completeProfile(Request $request, $id){
         $user = Auth::user();
 
         $entreprise = Entreprise::where('id', $id)
