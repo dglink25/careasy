@@ -35,6 +35,7 @@ jobs:
             rm -f public/storage && php artisan storage:link
 
             # ── 6. Cache ───────────────────────────────────────────────
+            php artisan optimize:clear
             php artisan config:clear
             php artisan route:clear
             php artisan view:clear

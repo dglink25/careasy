@@ -80,19 +80,18 @@ class PasswordResetOtp extends Model{
             ->where('identifier_type', $type)
             ->delete();
 
-        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $code      = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expiresAt = now()->addMinutes(self::TTL_MINUTES)->toDateTimeString();
+        $now       = now()->toDateTimeString();
 
-        // Utiliser DB::insert pour contourner le problème de cast boolean/integer avec PostgreSQL
-        \Illuminate\Support\Facades\DB::table('password_reset_otps')->insert([
-            'identifier'      => $identifier,
-            'identifier_type' => $type,
-            'code'            => $code,
-            'used'            => false,         // PDO::PARAM_BOOL via binding
-            'expires_at'      => now()->addMinutes(self::TTL_MINUTES)->toDateTimeString(),
-            'attempts'        => 0,
-            'created_at'      => now()->toDateTimeString(),
-            'updated_at'      => now()->toDateTimeString(),
-        ]);
+        // Utiliser un INSERT brut avec cast SQL explicite pour PostgreSQL
+        // PDO convertit false → 0 (integer) ce que PostgreSQL refuse pour boolean
+        \Illuminate\Support\Facades\DB::statement(
+            'INSERT INTO password_reset_otps
+                (identifier, identifier_type, code, used, expires_at, attempts, created_at, updated_at)
+             VALUES (?, ?, ?, false, ?, 0, ?, ?)',
+            [$identifier, $type, $code, $expiresAt, $now, $now]
+        );
 
         return self::where('identifier', $identifier)
             ->where('identifier_type', $type)
