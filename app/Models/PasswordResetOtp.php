@@ -82,14 +82,22 @@ class PasswordResetOtp extends Model{
 
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
-        return self::create([
+        // Utiliser DB::insert pour contourner le problème de cast boolean/integer avec PostgreSQL
+        \Illuminate\Support\Facades\DB::table('password_reset_otps')->insert([
             'identifier'      => $identifier,
             'identifier_type' => $type,
             'code'            => $code,
-            'used'            => false,
-            'expires_at'      => now()->addMinutes(self::TTL_MINUTES),
+            'used'            => false,         // PDO::PARAM_BOOL via binding
+            'expires_at'      => now()->addMinutes(self::TTL_MINUTES)->toDateTimeString(),
             'attempts'        => 0,
+            'created_at'      => now()->toDateTimeString(),
+            'updated_at'      => now()->toDateTimeString(),
         ]);
+
+        return self::where('identifier', $identifier)
+            ->where('identifier_type', $type)
+            ->orderByDesc('id')
+            ->firstOrFail();
     }
 
     /**
