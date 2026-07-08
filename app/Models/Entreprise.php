@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\CastsBooleansProperly;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
 
 class Entreprise extends BaseModel {
-    use HasFactory;
+    use HasFactory, CastsBooleansProperly;
 
     protected $fillable = [
         'name',
